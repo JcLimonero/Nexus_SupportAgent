@@ -80,6 +80,14 @@ export default function AdminPage() {
               Sube PDFs y videos para que el agente los indexe y pueda responder preguntas sobre
               ellos.
             </p>
+            {user?.is_admin && (
+              <button
+                onClick={() => router.push("/admin/users")}
+                className="mt-2 text-xs text-blue-600 hover:underline"
+              >
+                Gestionar usuarios →
+              </button>
+            )}
           </div>
           <button
             onClick={() => router.push("/chat")}

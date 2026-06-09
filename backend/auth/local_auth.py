@@ -1,34 +1,38 @@
-"""
-Local dev auth — simple JWT, no Firebase needed.
-Any email/password combo works; the token identifies the user by email.
-"""
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from passlib.context import CryptContext
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_settings
+from db.connection import get_db
+from db.models import User
 
 settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str  # accepted as-is in local dev — not validated against a real store
+# ── Password helpers ─────────────────────────────────────────────────────────
+
+def hash_password(plain: str) -> str:
+    return pwd_context.hash(plain)
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    email: str
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
 
 
-def create_token(email: str) -> str:
+# ── Token helpers ────────────────────────────────────────────────────────────
+
+def create_token(user: User) -> str:
     payload = {
-        "uid": email,          # matches the "uid" field the rest of the app reads
-        "email": email,
+        "uid": str(user.id),
+        "email": user.email,
+        "is_admin": user.is_admin,
         "exp": datetime.now(timezone.utc) + timedelta(hours=settings.local_jwt_expire_hours),
     }
     return jwt.encode(payload, settings.local_jwt_secret, algorithm="HS256")
@@ -43,7 +47,32 @@ def verify_local_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
+# ── Schemas ──────────────────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    email: str
+    is_admin: bool
+
+
+# ── Routes ───────────────────────────────────────────────────────────────────
+
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest):
-    token = create_token(body.email)
-    return TokenResponse(access_token=token, email=body.email)
+async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.is_active or not verify_password(body.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+    return TokenResponse(
+        access_token=create_token(user),
+        email=user.email,
+        is_admin=user.is_admin,
+    )

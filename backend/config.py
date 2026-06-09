@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # ── Local auth ──────────────────────────────────────────────────────────
     local_jwt_secret: str = "local-dev-secret-change-in-production"
     local_jwt_expire_hours: int = 72
+    initial_admin_email: str = "admin@nexus.local"
+    initial_admin_password: str = "ChangeMe123!"
 
     # ── Local storage ───────────────────────────────────────────────────────
     local_storage_path: str = "/data"
