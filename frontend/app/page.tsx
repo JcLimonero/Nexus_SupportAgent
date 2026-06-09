@@ -5,8 +5,8 @@ import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogin, clearLocalToken } from "@/lib/auth";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("dev@nexus.local");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("admin@nexus.local");
+  const [password, setPassword] = useState("ChangeMe123!");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
@@ -96,7 +96,7 @@ export default function LoginPage() {
 
         {IS_LOCAL && (
           <p className="text-center text-xs text-gray-400 mt-4">
-            Modo local: cualquier correo y contraseña funcionan
+            Admin por defecto: admin@nexus.local / ChangeMe123!
           </p>
         )}
       </div>
