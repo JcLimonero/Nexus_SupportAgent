@@ -1,5 +1,3 @@
-import json
-
 import google.auth
 import google.auth.transport.requests
 import httpx
@@ -19,8 +17,8 @@ Reglas que debes seguir siempre:
 6. Cuando el contexto provenga de un video de capacitación, puedes mencionarlo al usuario."""
 
 _ENDPOINT = (
-    "https://{location}-aiplatform.googleapis.com/v1/projects/{project}"
-    "/locations/{location}/publishers/google/models/{model}:generateContent"
+    "https://aiplatform.googleapis.com/v1/projects/{project}"
+    "/locations/global/publishers/google/models/{model}:generateContent"
 )
 
 
@@ -35,7 +33,6 @@ def _get_token() -> str:
 def ask_gemini(history: list[dict], question: str, context: str) -> str:
     """Synchronous — call via asyncio.to_thread from async context."""
     url = _ENDPOINT.format(
-        location=settings.vertex_ai_location,
         project=settings.vertex_ai_project,
         model=settings.gemini_model,
     )
