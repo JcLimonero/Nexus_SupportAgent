@@ -16,6 +16,10 @@ sys.modules.setdefault("google.auth.transport", MagicMock())
 sys.modules.setdefault("google.auth.transport.requests", MagicMock())
 sys.modules.setdefault("httpx", __import__("httpx"))
 
+# Pre-import db.connection so patch("db.connection.*") resolves correctly in CI.
+# Creating the engine object is safe — no actual DB connection is made until queries run.
+import db.connection  # noqa: E402
+
 def _jwt_secret() -> str:
     from config import get_settings
     return get_settings().local_jwt_secret
