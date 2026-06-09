@@ -1,0 +1,63 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: nexus_agent
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: nexusdev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://nexus:nexusdev@db:5432/nexus_agent
+      # Provider switches — all local, no cloud needed
+      AUTH_PROVIDER: local
+      STORAGE_PROVIDER: local
+      EMBEDDING_PROVIDER: local
+      EMBEDDING_DIMENSIONS: "384"
+      LOCAL_JWT_SECRET: local-dev-secret
+      LOCAL_STORAGE_PATH: /data
+      # GCP project for Vertex AI (embeddings in production)
+      VERTEX_AI_PROJECT: nexus-support-agent
+      VERTEX_AI_LOCATION: us-central1
+      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+    volumes:
+      - ./backend:/app
+      - nexus_data:/data
+      # Mounts your local gcloud credentials so Vertex AI works inside the container
+      - ${APPDATA}/gcloud:/root/.config/gcloud:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_LOCAL_DEV: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  nexus_data:
