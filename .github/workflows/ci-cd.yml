@@ -1,0 +1,141 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: nexus-support-agent
+  REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo
+
+jobs:
+  # ── Tests ────────────────────────────────────────────────────────────────────
+  test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            fastapi==0.115.0 \
+            httpx==0.27.2 \
+            pydantic==2.8.2 \
+            pydantic-settings==2.4.0 \
+            PyJWT==2.9.0 \
+            sqlalchemy[asyncio]==2.0.35 \
+            python-multipart==0.0.12 \
+            pytest==8.3.2 \
+            pytest-asyncio==0.23.8 \
+            anyio==4.4.0
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          AUTH_PROVIDER: local
+          STORAGE_PROVIDER: local
+          EMBEDDING_PROVIDER: local
+          DATABASE_URL: sqlite+aiosqlite:///./test.db
+        run: pytest tests/ -v --tb=short
+
+  # ── Build & Deploy (main branch only) ────────────────────────────────────────
+  deploy:
+    name: Build & Deploy
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # ── Backend ──────────────────────────────────────────────────────────────
+      - name: Build & push backend
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/backend:${{ github.sha }} \
+            -t ${{ env.REGISTRY }}/backend:latest \
+            ./backend
+          docker push ${{ env.REGISTRY }}/backend:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/backend:latest
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy nexus-backend \
+            --image=${{ env.REGISTRY }}/backend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --service-account=nexus-cloudrun@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:nexus-db \
+            --set-secrets="DATABASE_URL=nexus-database-url:latest,LOCAL_JWT_SECRET=nexus-jwt-secret:latest" \
+            --set-env-vars="AUTH_PROVIDER=local,STORAGE_PROVIDER=gcs,EMBEDDING_PROVIDER=vertexai,EMBEDDING_DIMENSIONS=768,GCS_BUCKET_NAME=nexus-agent-docs-988042937611,VERTEX_AI_PROJECT=${{ env.PROJECT_ID }},VERTEX_AI_LOCATION=${{ env.REGION }}" \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=10 \
+            --memory=2Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --quiet
+
+      # ── Frontend ─────────────────────────────────────────────────────────────
+      - name: Get backend URL
+        id: backend-url
+        run: |
+          URL=$(gcloud run services describe nexus-backend \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --format="value(status.url)")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Build & push frontend
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=${{ steps.backend-url.outputs.url }} \
+            -t ${{ env.REGISTRY }}/frontend:${{ github.sha }} \
+            -t ${{ env.REGISTRY }}/frontend:latest \
+            ./frontend
+          docker push ${{ env.REGISTRY }}/frontend:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/frontend:latest
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          gcloud run deploy nexus-frontend \
+            --image=${{ env.REGISTRY }}/frontend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --set-env-vars="NEXT_PUBLIC_API_URL=${{ steps.backend-url.outputs.url }}" \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=5 \
+            --memory=512Mi \
+            --cpu=1 \
+            --quiet
+
+      - name: Print deployment URLs
+        run: |
+          echo "Backend: $(gcloud run services describe nexus-backend --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} --format='value(status.url)')"
+          echo "Frontend: $(gcloud run services describe nexus-frontend --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} --format='value(status.url)')"
