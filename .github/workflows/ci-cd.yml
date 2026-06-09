@@ -44,6 +44,9 @@ jobs:
             PyJWT==2.9.0 \
             sqlalchemy[asyncio]==2.0.35 \
             python-multipart==0.0.12 \
+            passlib[bcrypt]==1.7.4 \
+            bcrypt==4.0.1 \
+            aiosqlite==0.20.0 \
             pytest==8.3.2 \
             pytest-asyncio==0.23.8 \
             anyio==4.4.0
