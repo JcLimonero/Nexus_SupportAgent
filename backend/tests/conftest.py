@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 sys.modules.setdefault("sentence_transformers", MagicMock())
 sys.modules.setdefault("faster_whisper", MagicMock())
 sys.modules.setdefault("fitz", MagicMock())
+sys.modules.setdefault("google", MagicMock())
 sys.modules.setdefault("google.auth", MagicMock())
 sys.modules.setdefault("google.auth.transport", MagicMock())
 sys.modules.setdefault("google.auth.transport.requests", MagicMock())
