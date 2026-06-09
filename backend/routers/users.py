@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,9 +24,16 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
 class CreateUserRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     is_admin: bool = False
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Email inválido")
+        return v.lower().strip()
 
 
 class UpdateUserRequest(BaseModel):
