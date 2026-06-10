@@ -2,12 +2,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { IS_LOCAL, localLogin, clearLocalToken } from "@/lib/auth";
+import { IS_LOCAL, localLogin } from "@/lib/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@nexus.local");
-  const [password, setPassword] = useState("ChangeMe123!");
-  const [error, setError] = useState("");
+  const [email, setEmail]         = useState("admin@nexus.local");
+  const [password, setPassword]   = useState("ChangeMe123!");
+  const [error, setError]         = useState("");
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const { user, loading, refresh } = useAuth();
@@ -32,7 +33,7 @@ export default function LoginPage() {
         router.push("/chat");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
+      setError(err instanceof Error ? err.message : "Credenciales incorrectas");
     } finally {
       setSubmitting(false);
     }
@@ -40,65 +41,114 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <span className="text-gray-400 text-sm">Cargando...</span>
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
+        <span style={{ color: "var(--text-muted)", fontSize: 12, letterSpacing: 2, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600 }}>
+          CARGANDO...
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-md">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Nexus Support Agent</h1>
-          <p className="text-gray-500 text-sm mt-1">Asistente de soporte TotalDealer</p>
+    <div
+      className="flex items-center justify-center min-h-screen relative"
+      style={{ backgroundColor: "var(--bg-page)" }}
+    >
+      {/* Theme toggle — top right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle className="p-2 transition-colors" style={{ color: "var(--text-muted)" } as React.CSSProperties} />
+      </div>
+
+      <div
+        className="w-full max-w-sm"
+        style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+      >
+        {/* Card header — always dark */}
+        <div className="px-8 pt-8 pb-6" style={{ backgroundColor: "var(--gv-black, #222222)" }}>
+          <div style={{ width: 36, height: 2, backgroundColor: "#98989A", marginBottom: 16 }} />
+          <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 44, color: "#ffffff", textTransform: "uppercase", letterSpacing: "-0.5px", lineHeight: 1 }}>
+            NEXUS
+          </div>
+          <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 12, color: "#98989A", textTransform: "uppercase", letterSpacing: 3, marginTop: 4 }}>
+            SUPPORT AGENT
+          </div>
           {IS_LOCAL && (
-            <span className="inline-block mt-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
-              Modo desarrollo local
+            <span style={{ display: "inline-block", marginTop: 12, fontSize: 10, color: "#777", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", border: "1px solid #444", padding: "2px 8px" }}>
+              DEV LOCAL
             </span>
           )}
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Correo electrónico
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            />
-          </div>
+        {/* Form body */}
+        <div className="px-8 py-8">
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="gv-label block mb-1.5">Correo electrónico</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-3 py-2.5 text-sm font-light focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: "var(--input-bg)",
+                  border: "1px solid var(--input-border)",
+                  color: "var(--text-primary)",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
+              />
+            </div>
+            <div>
+              <label className="gv-label block mb-1.5">Contraseña</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-3 py-2.5 text-sm font-light focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: "var(--input-bg)",
+                  border: "1px solid var(--input-border)",
+                  color: "var(--text-primary)",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
+              />
+            </div>
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && (
+              <p className="text-xs" style={{ color: "#c0392b" }}>{error}</p>
+            )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium text-sm transition-colors"
-          >
-            {submitting ? "Iniciando sesión..." : "Iniciar sesión"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full py-3 transition-colors disabled:opacity-40"
+              style={{
+                fontFamily: '"Barlow Condensed", sans-serif',
+                fontWeight: 700,
+                fontSize: 12,
+                letterSpacing: "2.5px",
+                textTransform: "uppercase",
+                backgroundColor: submitting ? "var(--btn-primary-bg)" : "var(--btn-primary-bg)",
+                color: "var(--btn-primary-text)",
+                border: "none",
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+              onMouseEnter={(e) => { if (!submitting) (e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"); }}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
+            >
+              {submitting ? "INICIANDO SESIÓN..." : "INICIAR SESIÓN"}
+            </button>
+          </form>
 
-        {IS_LOCAL && (
-          <p className="text-center text-xs text-gray-400 mt-4">
-            Admin por defecto: admin@nexus.local / ChangeMe123!
-          </p>
-        )}
+          {IS_LOCAL && (
+            <p className="mt-5 text-center" style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+              admin@nexus.local · ChangeMe123!
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
