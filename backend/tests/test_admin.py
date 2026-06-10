@@ -71,3 +71,43 @@ async def test_documents_list_returns_array(client):
     )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+@pytest.mark.anyio
+async def test_excerpt_requires_auth(client):
+    import uuid
+    response = await client.get(f"/api/admin/documents/excerpt/{uuid.uuid4()}")
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_excerpt_returns_404_for_missing_chunk(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    response = await client.get(
+        f"/api/admin/documents/excerpt/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_excerpt_returns_422_for_invalid_id(client):
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        "/api/admin/documents/excerpt/not-a-uuid",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_serve_requires_auth(client):
+    response = await client.get("/api/admin/documents/serve/pdfs/test.pdf")
+    assert response.status_code == 403

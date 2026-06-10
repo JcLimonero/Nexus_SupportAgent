@@ -124,3 +124,44 @@ async def delete_document(
     await db.execute(delete(DocumentChunk).where(DocumentChunk.file_name == file_name))
     await db.commit()
     return {"status": "deleted", "file_name": file_name}
+
+
+@router.get("/documents/excerpt/{chunk_id}")
+async def get_excerpt(
+    chunk_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    try:
+        cid = uuid.UUID(chunk_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de fragmento inválido")
+    result = await db.execute(select(DocumentChunk).where(DocumentChunk.id == cid))
+    chunk = result.scalar_one_or_none()
+    if not chunk:
+        raise HTTPException(status_code=404, detail="Fragmento no encontrado")
+    return {
+        "chunk_id": str(chunk.id),
+        "file_name": chunk.file_name,
+        "source_type": chunk.source_type,
+        "page_number": chunk.page_number,
+        "content": chunk.content,
+    }
+
+
+@router.get("/documents/serve/{file_path:path}")
+async def serve_document(
+    file_path: str,
+    user: dict = Depends(get_current_user),
+):
+    if settings.storage_provider != "local":
+        raise HTTPException(status_code=501, detail="Solo disponible en almacenamiento local")
+    base = Path(settings.local_storage_path).resolve()
+    target = (base / file_path).resolve()
+    if not str(target).startswith(str(base) + os.sep):
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    from fastapi.responses import FileResponse
+    media = "application/pdf" if target.suffix.lower() == ".pdf" else "video/mp4"
+    return FileResponse(str(target), media_type=media, filename=target.name)

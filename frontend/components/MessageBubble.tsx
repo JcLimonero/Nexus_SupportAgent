@@ -3,12 +3,19 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 
+export interface PdfSource {
+  chunk_id?: string;
+  file_name: string;
+  page_number: number | null;
+  gcs_url: string;
+}
+
 export interface Message {
   id?: string;
   role: "user" | "assistant";
   content: string;
   sources?: {
-    pdfs:   Array<{ file_name: string; page_number: number | null; gcs_url: string }>;
+    pdfs:   PdfSource[];
     videos: Array<{ file_name: string; gcs_url: string }>;
   };
   follow_ups?: string[];
@@ -96,9 +103,11 @@ const mdComponents: Components = {
 export function MessageBubble({
   message,
   onFollowUp,
+  onOpenSource,
 }: {
   message: Message;
   onFollowUp?: (text: string) => void;
+  onOpenSource?: (pdf: PdfSource) => void;
 }) {
   const isUser = message.role === "user";
   const hasSources =
@@ -134,13 +143,11 @@ export function MessageBubble({
         {!isUser && hasSources && (
           <div className="flex flex-wrap gap-1.5 px-1">
             {message.sources!.pdfs.map((pdf, i) => (
-              <a
+              <button
                 key={i}
-                href={pdf.gcs_url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={() => onOpenSource ? onOpenSource(pdf) : window.open(pdf.gcs_url, "_blank")}
                 className="flex items-center gap-1.5 transition-colors"
-                style={{ fontSize: 10, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", backgroundColor: "var(--bg-muted)", color: "var(--text-muted)", border: "1px solid var(--border-default)", padding: "3px 8px", textDecoration: "none" }}
+                style={{ fontSize: 10, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", backgroundColor: "var(--bg-muted)", color: "var(--text-muted)", border: "1px solid var(--border-default)", padding: "3px 8px", cursor: "pointer", background: "var(--bg-muted)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-muted)"; e.currentTarget.style.color = "var(--text-muted)"; }}
               >
@@ -148,7 +155,7 @@ export function MessageBubble({
                 <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {pdf.file_name}{pdf.page_number != null ? ` · p.${pdf.page_number}` : ""}
                 </span>
-              </a>
+              </button>
             ))}
             {message.sources!.videos.map((video, i) => (
               <a

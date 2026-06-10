@@ -56,3 +56,27 @@ export async function deleteDocument(fileName: string) {
   if (!res.ok) throw new Error("Error al eliminar el documento");
   return res.json();
 }
+
+export async function getExcerpt(chunkId: string) {
+  const res = await fetch(`${API_URL}/api/admin/documents/excerpt/${chunkId}`, {
+    headers: await headers(),
+  });
+  if (!res.ok) throw new Error("Error al obtener el fragmento");
+  return res.json() as Promise<{
+    chunk_id: string;
+    file_name: string;
+    source_type: string;
+    page_number: number | null;
+    content: string;
+  }>;
+}
+
+export async function getDocumentBlobUrl(gcsUrl: string): Promise<string> {
+  const path = gcsUrl.replace(/^\/data\//, "");
+  const res = await fetch(`${API_URL}/api/admin/documents/serve/${path}`, {
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("Error al obtener el documento");
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
