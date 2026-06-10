@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, "phase-*"]
   # Deploy only runs when manually triggered from the Actions tab
   workflow_dispatch:
     inputs:

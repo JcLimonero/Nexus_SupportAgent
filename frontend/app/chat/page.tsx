@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
 import { sendMessage, getSessions, getSessionMessages } from "@/lib/api";
 import { MessageBubble, type Message } from "@/components/MessageBubble";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Session {
   id: string;
@@ -14,12 +15,14 @@ interface Session {
 export default function ChatPage() {
   const { user, loading, refresh } = useAuth();
   const router = useRouter();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions]               = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [messages, setMessages]               = useState<Message[]>([]);
+  const [input, setInput]                     = useState("");
+  const [sending, setSending]                 = useState(false);
+  const [sidebarOpen, setSidebarOpen]         = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push("/");
@@ -39,10 +42,15 @@ export default function ChatPage() {
 
   const openSession = async (id: string) => {
     setCurrentSessionId(id);
+    setSidebarOpen(false);
     try { setMessages(await getSessionMessages(id)); } catch {}
   };
 
-  const newChat = () => { setCurrentSessionId(null); setMessages([]); };
+  const newChat = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
+    setSidebarOpen(false);
+  };
 
   const handleLogout = async () => {
     if (IS_LOCAL) {
@@ -50,14 +58,14 @@ export default function ChatPage() {
       refresh();
     } else {
       const { signOut } = await import("firebase/auth");
-      const { auth } = await import("@/lib/firebase");
+      const { auth }    = await import("@/lib/firebase");
       await signOut(auth);
     }
     router.push("/");
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const text = input.trim();
     if (!text || sending) return;
     setInput("");
@@ -68,76 +76,231 @@ export default function ChatPage() {
       setCurrentSessionId(res.session_id);
       setMessages((p) => [
         ...p,
-        { role: "assistant", content: res.answer, sources: { pdfs: res.pdf_sources, videos: res.video_sources } },
+        {
+          role: "assistant",
+          content: res.answer,
+          sources: { pdfs: res.pdf_sources, videos: res.video_sources },
+        },
       ]);
       loadSessions();
     } catch {
-      setMessages((p) => [...p, { role: "assistant", content: "Ocurrió un error. Por favor intenta de nuevo." }]);
+      setMessages((p) => [
+        ...p,
+        { role: "assistant", content: "Ocurrió un error. Por favor intenta de nuevo." },
+      ]);
     } finally {
       setSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
   const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    new Date(iso).toLocaleDateString("es-MX", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-  if (loading) return <div className="flex items-center justify-center h-screen bg-gray-100"><span className="text-gray-400">Cargando...</span></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
+        <span className="gv-label">Cargando...</span>
+      </div>
+    );
+  }
 
-  return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white flex flex-col shrink-0">
-        <div className="px-4 py-5 border-b border-gray-700">
-          <h1 className="font-bold text-base">Nexus Support</h1>
-          <p className="text-xs text-gray-400 mt-0.5">TotalDealer Assistant</p>
+  const sidebar = (
+    <aside
+      className="flex flex-col h-full"
+      style={{ backgroundColor: "var(--bg-sidebar)", width: 256, flexShrink: 0 }}
+    >
+      {/* Brand header */}
+      <div className="px-5 py-5" style={{ borderBottom: "1px solid #333" }}>
+        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 18, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1 }}>
+          NEXUS SUPPORT
         </div>
-        <div className="p-3">
-          <button onClick={newChat} className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium">
-            + Nueva conversación
-          </button>
+        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#98989A", textTransform: "uppercase", letterSpacing: 3, marginTop: 2 }}>
+          TOTALDEALDER
         </div>
-        <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
-          {sessions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => openSession(s.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs truncate transition-colors ${
-                currentSessionId === s.id ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
-              }`}
-            >
-              {fmt(s.created_at)}
-            </button>
-          ))}
-        </nav>
-        <div className="p-3 border-t border-gray-700 space-y-1">
-          {user && <p className="text-xs text-gray-500 truncate px-1 mb-1">{user.email}</p>}
-          <button onClick={() => router.push("/admin")} className="w-full py-2 px-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-200">
-            Administrar documentos
+      </div>
+
+      {/* New chat */}
+      <div className="px-4 py-3" style={{ borderBottom: "1px solid #333" }}>
+        <button
+          onClick={newChat}
+          className="w-full py-2.5 px-3 text-center transition-colors"
+          style={{
+            fontFamily: '"Barlow Condensed", sans-serif',
+            fontWeight: 700,
+            fontSize: 11,
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            backgroundColor: "#ffffff",
+            color: "#222222",
+            border: "none",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f0f0f0")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+        >
+          + NUEVA CONVERSACIÓN
+        </button>
+      </div>
+
+      {/* Session list */}
+      <nav className="flex-1 overflow-y-auto py-2">
+        {sessions.length === 0 && (
+          <p style={{ padding: "12px 16px", fontSize: 10, color: "#555", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase" }}>
+            Sin conversaciones
+          </p>
+        )}
+        {sessions.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => openSession(s.id)}
+            className="w-full text-left px-4 py-2.5 transition-colors"
+            style={{
+              fontFamily: '"Barlow Condensed", sans-serif',
+              fontSize: 11,
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
+              backgroundColor: currentSessionId === s.id ? "#444444" : "transparent",
+              color: currentSessionId === s.id ? "#ffffff" : "#777777",
+              border: "none",
+            }}
+            onMouseEnter={(e) => {
+              if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "#333333";
+              if (currentSessionId !== s.id) e.currentTarget.style.color = "#e8e8e8";
+            }}
+            onMouseLeave={(e) => {
+              if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "transparent";
+              if (currentSessionId !== s.id) e.currentTarget.style.color = "#777777";
+            }}
+          >
+            {fmt(s.created_at)}
           </button>
-          <button onClick={handleLogout} className="w-full py-1.5 text-xs text-gray-500 hover:text-gray-300">
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-4 py-4 space-y-2" style={{ borderTop: "1px solid #333" }}>
+        {user && (
+          <p style={{ fontSize: 10, color: "#555", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {user.email}
+          </p>
+        )}
+        <button
+          onClick={() => router.push("/admin")}
+          className="w-full py-2 px-3 text-center transition-colors"
+          style={{
+            fontFamily: '"Barlow Condensed", sans-serif',
+            fontWeight: 600,
+            fontSize: 10,
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            backgroundColor: "#333",
+            color: "#999",
+            border: "none",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#444"; e.currentTarget.style.color = "#ccc"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#333"; e.currentTarget.style.color = "#999"; }}
+        >
+          Administrar documentos
+        </button>
+        <div className="flex items-center justify-between pt-1">
+          <button
+            onClick={handleLogout}
+            style={{ fontSize: 10, color: "#555", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#888")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
+          >
             Cerrar sesión
           </button>
+          <ThemeToggle
+            className="transition-colors p-1"
+            style={{ color: "#555", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
+          />
         </div>
-      </aside>
+      </div>
+    </aside>
+  );
 
-      {/* Chat */}
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
+      {/* Sidebar — desktop */}
+      <div className="hidden md:flex flex-col h-full">
+        {sidebar}
+      </div>
+
+      {/* Sidebar — mobile overlay */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="flex flex-col h-full" style={{ width: 256 }}>
+            {sidebar}
+          </div>
+          <div
+            className="flex-1"
+            style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        </div>
+      )}
+
+      {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+        {/* Mobile top bar */}
+        <div
+          className="md:hidden flex items-center gap-3 px-4 py-3"
+          style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+            NEXUS SUPPORT
+          </span>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3">
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center text-gray-400 max-w-sm">
-                <p className="text-lg font-medium text-gray-600 mb-1">¿En qué puedo ayudarte?</p>
-                <p className="text-sm">Pregunta sobre configuración, procesos o funciones de TotalDealer.</p>
+              <div className="text-center" style={{ maxWidth: 360 }}>
+                <div style={{ width: 36, height: 2, backgroundColor: "#98989A", margin: "0 auto 16px" }} />
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
+                  ¿EN QUÉ PUEDO<br />AYUDARTE?
+                </p>
+                <p className="mt-3 font-light" style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.65 }}>
+                  Pregunta sobre configuración, procesos o funciones de TotalDealer.
+                </p>
               </div>
             </div>
           )}
+
           {messages.map((msg, i) => <MessageBubble key={i} message={msg} />)}
+
           {sending && (
             <div className="flex justify-start">
-              <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm border border-gray-100">
+              <div className="px-4 py-3" style={{ backgroundColor: "var(--bubble-ai-bg)", border: "1px solid var(--bubble-ai-border)" }}>
                 <div className="flex space-x-1.5 items-center h-4">
                   {[0, 150, 300].map((d) => (
-                    <span key={d} className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                    <span
+                      key={d}
+                      className="w-1.5 h-1.5 rounded-full animate-bounce"
+                      style={{ backgroundColor: "var(--text-muted)", animationDelay: `${d}ms` }}
+                    />
                   ))}
                 </div>
               </div>
@@ -145,20 +308,61 @@ export default function ChatPage() {
           )}
           <div ref={bottomRef} />
         </div>
-        <div className="bg-white border-t px-4 py-4">
-          <form onSubmit={handleSend} className="flex gap-3 max-w-3xl mx-auto">
-            <input
-              type="text"
+
+        {/* Input bar */}
+        <div
+          className="px-4 md:px-8 py-4"
+          style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+        >
+          <form onSubmit={handleSend} className="flex gap-2 max-w-3xl mx-auto items-end">
+            <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Escribe tu pregunta sobre TotalDealer..."
               disabled={sending}
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+              rows={1}
+              className="flex-1 px-3 py-2.5 text-sm font-light focus:outline-none resize-none transition-colors"
+              style={{
+                backgroundColor: "var(--input-bg)",
+                border: "1px solid var(--input-border)",
+                color: "var(--text-primary)",
+                maxHeight: 120,
+                lineHeight: 1.5,
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
+              onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
+              onInput={(e) => {
+                const t = e.currentTarget;
+                t.style.height = "auto";
+                t.style.height = Math.min(t.scrollHeight, 120) + "px";
+              }}
             />
-            <button type="submit" disabled={sending || !input.trim()} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-40">
+            <button
+              type="submit"
+              disabled={sending || !input.trim()}
+              className="px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
+              style={{
+                fontFamily: '"Barlow Condensed", sans-serif',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                backgroundColor: "var(--btn-primary-bg)",
+                color: "var(--btn-primary-text)",
+                border: "none",
+                cursor: sending || !input.trim() ? "not-allowed" : "pointer",
+              }}
+              onMouseEnter={(e) => { if (!sending && input.trim()) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
+            >
               Enviar
             </button>
           </form>
+          <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+            Enter para enviar · Shift+Enter para nueva línea
+          </p>
         </div>
       </div>
     </div>
