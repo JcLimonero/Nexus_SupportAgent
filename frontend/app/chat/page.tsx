@@ -64,11 +64,8 @@ export default function ChatPage() {
     router.push("/");
   };
 
-  const handleSend = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const text = input.trim();
+  const sendText = async (text: string) => {
     if (!text || sending) return;
-    setInput("");
     setSending(true);
     setMessages((p) => [...p, { role: "user", content: text }]);
     try {
@@ -80,6 +77,7 @@ export default function ChatPage() {
           role: "assistant",
           content: res.answer,
           sources: { pdfs: res.pdf_sources, videos: res.video_sources },
+          follow_ups: res.follow_ups || [],
         },
       ]);
       loadSessions();
@@ -92,6 +90,14 @@ export default function ChatPage() {
       setSending(false);
       inputRef.current?.focus();
     }
+  };
+
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput("");
+    await sendText(text);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -289,7 +295,17 @@ export default function ChatPage() {
             </div>
           )}
 
-          {messages.map((msg, i) => <MessageBubble key={i} message={msg} />)}
+          {messages.map((msg, i) => (
+            <MessageBubble
+              key={i}
+              message={msg}
+              onFollowUp={
+                i === messages.length - 1 && msg.role === "assistant" && !sending
+                  ? (text) => { sendText(text); }
+                  : undefined
+              }
+            />
+          ))}
 
           {sending && (
             <div className="flex justify-start">

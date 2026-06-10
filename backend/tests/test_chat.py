@@ -40,9 +40,10 @@ async def test_chat_returns_answer_structure(client):
     from main import app
     token = make_jwt()
     app.dependency_overrides[get_db] = make_db_override()
+    gemini_mock = {"answer": "Respuesta de prueba", "follow_ups": ["¿Cómo configuro X?", "¿Qué es Y?"]}
     with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
          patch("routers.chat.build_context", return_value=("sin contexto", [], [])), \
-         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, return_value="Respuesta de prueba"):
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, return_value=gemini_mock):
         response = await client.post(
             "/api/chat",
             json={"message": "Que es TotalDealer?"},
@@ -54,8 +55,10 @@ async def test_chat_returns_answer_structure(client):
     assert "session_id" in data
     assert "pdf_sources" in data
     assert "video_sources" in data
+    assert "follow_ups" in data
     assert isinstance(data["pdf_sources"], list)
     assert isinstance(data["video_sources"], list)
+    assert isinstance(data["follow_ups"], list)
 
 
 @pytest.mark.anyio
