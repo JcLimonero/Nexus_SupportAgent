@@ -86,7 +86,7 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
         timeout=60,
     )
     response.raise_for_status()
-    # Gemini 2.5 Flash may return a "thought" part before the actual response.
+    # Gemini 3.5 Flash may return a "thought" part before the actual response.
     # Only read parts where thought != True.
     parts = response.json()["candidates"][0]["content"]["parts"]
     text_parts = [p["text"] for p in parts if "text" in p and not p.get("thought", False)]

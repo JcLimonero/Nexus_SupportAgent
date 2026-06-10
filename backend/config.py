@@ -39,8 +39,7 @@ class Settings(BaseSettings):
     firebase_project_id: str = ""
 
     # ── LLM (Gemini via Vertex AI) ───────────────────────────────────────────
-    # Update to gemini-3.5-flash once Google adds it to Vertex AI
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
 
     # ── RAG tuning ──────────────────────────────────────────────────────────
     max_chunks_retrieved: int = 5
