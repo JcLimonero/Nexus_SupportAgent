@@ -61,10 +61,24 @@ jobs:
           DATABASE_URL: sqlite+aiosqlite:///./test.db
         run: pytest tests/ -v --tb=short
 
-  # ── Build & Deploy (main branch only) ────────────────────────────────────────
-  deploy:
-    name: Build & Deploy
+  # ── Docker build check (every push / PR) ─────────────────────────────────────
+  build:
+    name: Docker build check
+    runs-on: ubuntu-latest
     needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build ./backend -t nexus-backend:ci
+
+      - name: Build frontend image
+        run: docker build ./frontend -t nexus-frontend:ci
+
+  # ── Deploy (manual trigger only) ─────────────────────────────────────────────
+  deploy:
+    name: Deploy to Cloud Run
+    needs: [test, build]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'
     runs-on: ubuntu-latest
     permissions:
