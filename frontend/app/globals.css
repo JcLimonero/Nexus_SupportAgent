@@ -1,7 +1,115 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html, body {
   height: 100%;
+}
+
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --gv-black:      #222222;
+  --gv-gray:       #98989A;
+  --gv-gray-light: #f0f0f0;
+  --gv-gray-mid:   #d8d8d8;
+  --gv-white:      #ffffff;
+  --gv-border:     #e0e0e0;
+  --gv-page-bg:    #ebebeb;
+
+  /* semantic - light */
+  --bg-page:     #ebebeb;
+  --bg-surface:  #ffffff;
+  --bg-muted:    #f0f0f0;
+  --bg-sidebar:  #222222;
+  --bg-sidebar-hover: #333333;
+  --bg-sidebar-active: #444444;
+
+  --text-primary:   #222222;
+  --text-secondary: #444444;
+  --text-muted:     #98989A;
+  --text-faint:     #bbbbbb;
+
+  --border-default: #e0e0e0;
+  --border-strong:  #d8d8d8;
+
+  --bubble-user-bg:   #222222;
+  --bubble-user-text: #ffffff;
+  --bubble-ai-bg:     #ffffff;
+  --bubble-ai-border: #e0e0e0;
+  --bubble-ai-text:   #222222;
+
+  --input-bg:     #ffffff;
+  --input-border: #d8d8d8;
+  --input-focus:  #222222;
+
+  --btn-primary-bg:   #222222;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #111111;
+}
+
+html.dark {
+  --bg-page:     #0f0f0f;
+  --bg-surface:  #1a1a1a;
+  --bg-muted:    #252525;
+  --bg-sidebar:  #0d0d0d;
+  --bg-sidebar-hover: #1a1a1a;
+  --bg-sidebar-active: #252525;
+
+  --text-primary:   #e8e8e8;
+  --text-secondary: #bbbbbb;
+  --text-muted:     #666666;
+  --text-faint:     #444444;
+
+  --border-default: #2a2a2a;
+  --border-strong:  #333333;
+
+  --bubble-user-bg:   #e0e0e0;
+  --bubble-user-text: #111111;
+  --bubble-ai-bg:     #1a1a1a;
+  --bubble-ai-border: #2a2a2a;
+  --bubble-ai-text:   #e8e8e8;
+
+  --input-bg:     #1a1a1a;
+  --input-border: #333333;
+  --input-focus:  #888888;
+
+  --btn-primary-bg:   #e8e8e8;
+  --btn-primary-text: #111111;
+  --btn-primary-hover: #d0d0d0;
+}
+
+/* ── Base resets ───────────────────────────────────────────────────────────── */
+@layer base {
+  body {
+    font-family: "Barlow", sans-serif;
+    font-weight: 300;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* GV-style label utility */
+  .gv-label {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .gv-heading {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: -0.5px;
+  }
+
+  /* Sharp focus ring */
+  *:focus-visible {
+    outline: 2px solid var(--input-focus);
+    outline-offset: 0px;
+  }
 }

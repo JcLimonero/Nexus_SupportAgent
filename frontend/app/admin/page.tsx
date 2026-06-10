@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { uploadFile, getDocuments, deleteDocument } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Doc {
   file_name: string;
@@ -13,10 +14,10 @@ interface Doc {
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [docs, setDocs] = useState<Doc[]>([]);
+  const [docs, setDocs]           = useState<Doc[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null);
+  const [dragOver, setDragOver]   = useState(false);
+  const [notice, setNotice]       = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push("/");
@@ -24,9 +25,7 @@ export default function AdminPage() {
   }, [user, loading]);
 
   const loadDocs = async () => {
-    try {
-      setDocs(await getDocuments());
-    } catch {}
+    try { setDocs(await getDocuments()); } catch {}
   };
 
   const showNotice = (text: string, ok: boolean) => {
@@ -39,10 +38,7 @@ export default function AdminPage() {
     setUploading(true);
     try {
       await Promise.all(Array.from(files).map((f) => uploadFile(f)));
-      showNotice(
-        `${files.length} archivo(s) subido(s). La indexación puede tardar unos minutos.`,
-        true
-      );
+      showNotice(`${files.length} archivo(s) subido(s). La indexación puede tardar unos minutos.`, true);
       setTimeout(loadDocs, 5000);
     } catch {
       showNotice("Error al subir los archivos. Verifica el formato e inténtalo de nuevo.", false);
@@ -63,48 +59,61 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <span className="text-gray-400">Cargando...</span>
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
+        <span className="gv-label">Cargando...</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
+    <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
+      {/* Header — always dark */}
+      <div className="px-8 py-5" style={{ backgroundColor: "var(--gv-black, #222222)", borderBottom: "1px solid #333" }}>
+        <div className="max-w-2xl mx-auto flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Administrar documentos</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Sube PDFs y videos para que el agente los indexe y pueda responder preguntas sobre
-              ellos.
+            <div style={{ width: 28, height: 2, backgroundColor: "#98989A", marginBottom: 10 }} />
+            <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Administrar documentos
+            </h1>
+            <p style={{ fontSize: 12, color: "#777", marginTop: 4, fontWeight: 300 }}>
+              Sube PDFs y videos para que el agente los indexe.
             </p>
             {user?.is_admin && (
               <button
                 onClick={() => router.push("/admin/users")}
-                className="mt-2 text-xs text-blue-600 hover:underline"
+                style={{ marginTop: 8, fontSize: 10, color: "#98989A", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
               >
                 Gestionar usuarios →
               </button>
             )}
           </div>
-          <button
-            onClick={() => router.push("/chat")}
-            className="text-sm text-blue-600 hover:underline mt-1"
-          >
-            ← Volver al chat
-          </button>
+          <div className="flex items-center gap-3 mt-1">
+            <ThemeToggle
+              className="transition-colors p-1"
+              style={{ color: "#777", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties}
+            />
+            <button
+              onClick={() => router.push("/chat")}
+              style={{ fontSize: 10, color: "#98989A", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#e8e8e8")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#98989A")}
+            >
+              ← Chat
+            </button>
+          </div>
         </div>
+      </div>
 
+      <div className="max-w-2xl mx-auto px-4 md:px-8 py-8 space-y-6">
         {/* Notice */}
         {notice && (
           <div
-            className={`px-4 py-3 rounded-lg text-sm font-medium ${
-              notice.ok
-                ? "bg-green-50 text-green-800 border border-green-200"
-                : "bg-red-50 text-red-800 border border-red-200"
-            }`}
+            className="px-4 py-3 text-sm font-light"
+            style={{
+              borderLeft: `3px solid ${notice.ok ? "#4a7c4a" : "#c0392b"}`,
+              backgroundColor: notice.ok ? "rgba(74,124,74,0.08)" : "rgba(192,57,43,0.08)",
+              color: notice.ok ? "#4a7c4a" : "#c0392b",
+            }}
           >
             {notice.text}
           </div>
@@ -115,9 +124,13 @@ export default function AdminPage() {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
-          className={`border-2 border-dashed rounded-2xl p-10 text-center transition-colors ${
-            dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white hover:border-gray-400"
-          }`}
+          style={{
+            border: `2px dashed ${dragOver ? "var(--text-primary)" : "var(--border-strong)"}`,
+            backgroundColor: dragOver ? "var(--bg-muted)" : "var(--bg-surface)",
+            padding: "40px 24px",
+            textAlign: "center",
+            transition: "border-color 0.15s, background-color 0.15s",
+          }}
         >
           <input
             id="file-input"
@@ -128,51 +141,65 @@ export default function AdminPage() {
             onChange={(e) => handleFiles(e.target.files)}
           />
           <label htmlFor="file-input" className="cursor-pointer block">
-            <div className="text-4xl mb-3">{uploading ? "⏳" : "📁"}</div>
-            <p className="text-gray-700 font-medium text-sm">
-              {uploading
-                ? "Subiendo archivos y lanzando indexación..."
-                : "Arrastra archivos aquí o haz clic para seleccionar"}
+            <div style={{ fontSize: 32, marginBottom: 12 }}>{uploading ? "⏳" : "↑"}</div>
+            <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
+              {uploading ? "Subiendo y lanzando indexación..." : "Arrastra archivos · o haz clic para seleccionar"}
             </p>
-            <p className="text-gray-400 text-xs mt-1">Formatos: PDF, MP4</p>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+              PDF · MP4
+            </p>
           </label>
         </div>
 
         {/* Documents list */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800 text-sm">
-              Documentos indexados
-              <span className="ml-2 text-gray-400 font-normal">({docs.length})</span>
-            </h2>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+          <div
+            className="px-5 py-4 flex items-center justify-between"
+            style={{ borderBottom: "1px solid var(--border-default)" }}
+          >
+            <div>
+              <span className="gv-label">Documentos indexados</span>
+              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif' }}>
+                ({docs.length})
+              </span>
+            </div>
             <button
               onClick={loadDocs}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
             >
               Actualizar
             </button>
           </div>
 
           {docs.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm py-12">
-              No hay documentos indexados aún. Sube un PDF o video para empezar.
+            <p className="py-12 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>
+              No hay documentos indexados aún.
             </p>
           ) : (
-            <ul className="divide-y">
-              {docs.map((doc) => (
-                <li key={doc.file_name} className="flex items-center justify-between px-5 py-3.5">
+            <ul>
+              {docs.map((doc, i) => (
+                <li
+                  key={doc.file_name}
+                  className="flex items-center justify-between px-5 py-3"
+                  style={{
+                    borderTop: i === 0 ? "none" : `1px solid var(--border-default)`,
+                    borderLeft: "3px solid var(--border-strong)",
+                  }}
+                >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-lg shrink-0">{doc.source_type === "pdf" ? "📄" : "🎥"}</span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{doc.file_name}</p>
-                      <p className="text-xs text-gray-400">
-                        {doc.source_type === "pdf" ? "Documento PDF" : "Video de capacitación"}
-                      </p>
-                    </div>
+                    <span className="gv-label shrink-0">{doc.source_type === "pdf" ? "PDF" : "VID"}</span>
+                    <p className="text-sm font-light truncate" style={{ color: "var(--text-secondary)" }}>
+                      {doc.file_name}
+                    </p>
                   </div>
                   <button
                     onClick={() => handleDelete(doc.file_name)}
-                    className="text-xs text-red-500 hover:text-red-700 px-3 py-1.5 hover:bg-red-50 rounded-lg transition-colors shrink-0 ml-4"
+                    className="shrink-0 ml-4 transition-colors"
+                    style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#c0392b")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                   >
                     Eliminar
                   </button>
