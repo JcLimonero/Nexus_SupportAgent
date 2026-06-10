@@ -28,6 +28,9 @@ export default function ChatPage() {
   const [editingId, setEditingId]             = useState<string | null>(null);
   const [editingTitle, setEditingTitle]       = useState("");
   const [deletingId, setDeletingId]           = useState<string | null>(null);
+  const [pendingStream, setPendingStream]     = useState<string | null>(null);
+  const pendingFollowUpsRef  = useRef<string[]>([]);
+  const streamIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -45,6 +48,40 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
+
+  useEffect(() => {
+    if (!pendingStream) return;
+    const words = pendingStream.split(" ");
+    let idx = 0;
+    streamIntervalRef.current = setInterval(() => {
+      idx += 1;
+      const partial = words.slice(0, idx).join(" ");
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: partial };
+        }
+        return updated;
+      });
+      if (idx >= words.length) {
+        clearInterval(streamIntervalRef.current!);
+        const fups = pendingFollowUpsRef.current;
+        if (fups.length > 0) {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.role === "assistant") {
+              updated[updated.length - 1] = { ...last, follow_ups: fups };
+            }
+            return updated;
+          });
+        }
+        setPendingStream(null);
+      }
+    }, 20);
+    return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
+  }, [pendingStream]);
 
   const loadSessions = async () => {
     try { setSessions(await getSessions()); } catch {}
@@ -81,15 +118,17 @@ export default function ChatPage() {
     try {
       const res = await sendMessage(text, currentSessionId);
       setCurrentSessionId(res.session_id);
+      pendingFollowUpsRef.current = res.follow_ups || [];
       setMessages((p) => [
         ...p,
         {
           role: "assistant",
-          content: res.answer,
+          content: "",
           sources: { pdfs: res.pdf_sources, videos: res.video_sources },
-          follow_ups: res.follow_ups || [],
+          follow_ups: [],
         },
       ]);
+      setPendingStream(res.answer);
       loadSessions();
     } catch {
       setMessages((p) => [
@@ -450,8 +489,9 @@ export default function ChatPage() {
             <MessageBubble
               key={i}
               message={msg}
+              streaming={!!pendingStream && i === messages.length - 1 && msg.role === "assistant"}
               onFollowUp={
-                i === messages.length - 1 && msg.role === "assistant" && !sending
+                i === messages.length - 1 && msg.role === "assistant" && !sending && !pendingStream
                   ? (text) => { sendText(text); }
                   : undefined
               }
