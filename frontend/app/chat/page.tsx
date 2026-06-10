@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Session {
   id: string;
+  title: string | null;
   created_at: string;
 }
 
@@ -176,9 +177,6 @@ export default function ChatPage() {
             className="w-full text-left px-4 py-2.5 transition-colors"
             style={{
               fontFamily: '"Barlow Condensed", sans-serif',
-              fontSize: 11,
-              letterSpacing: "0.5px",
-              textTransform: "uppercase",
               backgroundColor: currentSessionId === s.id ? "#444444" : "transparent",
               color: currentSessionId === s.id ? "#ffffff" : "#777777",
               border: "none",
@@ -192,7 +190,18 @@ export default function ChatPage() {
               if (currentSessionId !== s.id) e.currentTarget.style.color = "#777777";
             }}
           >
-            {fmt(s.created_at)}
+            {s.title ? (
+              <span style={{ fontSize: 12, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.title}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                {fmt(s.created_at)}
+              </span>
+            )}
+            <span style={{ fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", opacity: 0.5, display: "block" }}>
+              {fmt(s.created_at)}
+            </span>
           </button>
         ))}
       </nav>

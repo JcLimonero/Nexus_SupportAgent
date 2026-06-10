@@ -28,9 +28,20 @@ async def _seed_admin():
         await db.commit()
 
 
+async def _migrate():
+    """Add columns introduced after initial schema creation."""
+    from sqlalchemy import text
+    async with AsyncSessionLocal() as db:
+        await db.execute(text(
+            "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS title TEXT"
+        ))
+        await db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await _migrate()
     if settings.auth_provider == "local":
         await _seed_admin()
     yield

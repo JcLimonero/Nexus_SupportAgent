@@ -49,7 +49,10 @@ async def chat(
         if not session:
             raise HTTPException(status_code=404, detail="Sesión no encontrada")
     else:
-        session = ChatSession(user_id=user_id)
+        title = request.message.strip()
+        if len(title) > 60:
+            title = title[:57] + "..."
+        session = ChatSession(user_id=user_id, title=title)
         db.add(session)
         await db.flush()
 
@@ -105,7 +108,7 @@ async def get_sessions(
         .limit(20)
     )
     return [
-        {"id": str(s.id), "created_at": s.created_at.isoformat()}
+        {"id": str(s.id), "title": s.title, "created_at": s.created_at.isoformat()}
         for s in result.scalars().all()
     ]
 
