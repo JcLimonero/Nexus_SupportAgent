@@ -3,7 +3,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: {
-    pdfs: Array<{ file_name: string; page_number: number | null; gcs_url: string }>;
+    pdfs:   Array<{ file_name: string; page_number: number | null; gcs_url: string }>;
     videos: Array<{ file_name: string; gcs_url: string }>;
   };
 }
@@ -16,31 +16,58 @@ export function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-2xl flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`} style={{ maxWidth: "min(680px, 85%)" }}>
+
+        {/* Bubble */}
         <div
-          className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+          className="px-4 py-3 text-sm font-light leading-relaxed whitespace-pre-wrap"
+          style={
             isUser
-              ? "bg-blue-600 text-white rounded-br-sm"
-              : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-sm"
-          }`}
+              ? {
+                  backgroundColor: "var(--bubble-user-bg)",
+                  color: "var(--bubble-user-text)",
+                  borderLeft: "3px solid transparent",
+                }
+              : {
+                  backgroundColor: "var(--bubble-ai-bg)",
+                  color: "var(--bubble-ai-text)",
+                  border: "1px solid var(--bubble-ai-border)",
+                  borderLeft: "3px solid var(--gv-gray-mid, #d8d8d8)",
+                }
+          }
         >
           {message.content}
         </div>
 
+        {/* Sources */}
         {!isUser && hasSources && (
-          <div className="flex flex-wrap gap-2 px-1">
+          <div className="flex flex-wrap gap-1.5 px-1">
             {message.sources!.pdfs.map((pdf, i) => (
               <a
                 key={i}
                 href={pdf.gcs_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors"
+                className="flex items-center gap-1.5 transition-colors"
+                style={{
+                  fontSize: 10,
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 600,
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  backgroundColor: "var(--bg-muted)",
+                  color: "var(--text-muted)",
+                  border: "1px solid var(--border-default)",
+                  padding: "3px 8px",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-muted)"; e.currentTarget.style.color = "var(--text-muted)"; }}
               >
-                <span>📄</span>
-                <span className="max-w-[180px] truncate">
+                <span style={{ fontSize: 9 }}>PDF</span>
+                <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {pdf.file_name}
-                  {pdf.page_number != null ? ` — p.${pdf.page_number}` : ""}
+                  {pdf.page_number != null ? ` · p.${pdf.page_number}` : ""}
                 </span>
               </a>
             ))}
@@ -50,10 +77,26 @@ export function MessageBubble({ message }: { message: Message }) {
                 href={video.gcs_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
+                className="flex items-center gap-1.5 transition-colors"
+                style={{
+                  fontSize: 10,
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 600,
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  backgroundColor: "var(--bg-muted)",
+                  color: "var(--text-muted)",
+                  border: "1px solid var(--border-default)",
+                  padding: "3px 8px",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-muted)"; e.currentTarget.style.color = "var(--text-muted)"; }}
               >
-                <span>🎥</span>
-                <span className="max-w-[180px] truncate">{video.file_name}</span>
+                <span style={{ fontSize: 9 }}>VID</span>
+                <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {video.file_name}
+                </span>
               </a>
             ))}
           </div>
