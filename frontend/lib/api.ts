@@ -9,6 +9,41 @@ async function headers(json = true): Promise<Record<string, string>> {
   return h;
 }
 
+export type StreamEvent =
+  | { token: string }
+  | { done: true; session_id: string; answer: string; pdf_sources: unknown[]; video_sources: unknown[]; follow_ups: string[] }
+  | { error: string };
+
+export async function* sendMessageStream(
+  message: string,
+  sessionId: string | null,
+): AsyncGenerator<StreamEvent> {
+  const token = await getBearerToken();
+  const res = await fetch(`${API_URL}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+  if (!res.ok || !res.body) throw new Error("Error al procesar la pregunta");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const chunk of parts) {
+      if (chunk.startsWith("data: ")) {
+        try { yield JSON.parse(chunk.slice(6)) as StreamEvent; } catch { /* skip malformed */ }
+      }
+    }
+  }
+}
+
 export async function sendMessage(message: string, sessionId: string | null) {
   const res = await fetch(`${API_URL}/api/chat`, {
     method: "POST",

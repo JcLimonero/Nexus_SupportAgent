@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import google.auth
@@ -35,6 +36,11 @@ _RESPONSE_SCHEMA = {
 _ENDPOINT = (
     "https://aiplatform.googleapis.com/v1/projects/{project}"
     "/locations/global/publishers/google/models/{model}:generateContent"
+)
+
+_STREAM_ENDPOINT = (
+    "https://aiplatform.googleapis.com/v1/projects/{project}"
+    "/locations/global/publishers/google/models/{model}:streamGenerateContent?alt=sse"
 )
 
 
@@ -116,3 +122,69 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
         }
     except (json.JSONDecodeError, KeyError):
         return {"answer": raw, "follow_ups": []}
+
+
+async def stream_gemini_response(history: list[dict], question: str, context: str):
+    """Async generator yielding raw text deltas from the Gemini streaming API.
+
+    The final chunk(s) may include a NEXUS_FOLLOW_UPS marker — callers must
+    strip it before displaying and parse it for follow-up questions.
+    """
+    url = _STREAM_ENDPOINT.format(
+        project=settings.vertex_ai_project,
+        model=settings.gemini_model,
+    )
+    token = await asyncio.to_thread(_get_token)
+
+    contents = []
+    for msg in history:
+        contents.append({
+            "role": "model" if msg["role"] == "assistant" else "user",
+            "parts": [{"text": msg["content"]}],
+        })
+    contents.append({
+        "role": "user",
+        "parts": [{"text": (
+            f"Contexto de los documentos:\n{context}\n\n---\n"
+            f"Pregunta: {question}\n\n"
+            "Responde en Markdown. Al terminar, en una nueva línea escribe exactamente:\n"
+            'NEXUS_FOLLOW_UPS: ["pregunta1", "pregunta2"]\n'
+            "(2-3 preguntas de seguimiento relevantes en español, o [] si no aplica)"
+        )}],
+    })
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 4096,
+            "temperature": 0.1,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream(
+            "POST", url,
+            headers={"Authorization": f"Bearer {token}"},
+            json=payload,
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data_str = line[5:].strip()
+                if not data_str:
+                    continue
+                try:
+                    data = json.loads(data_str)
+                    candidate = data.get("candidates", [{}])[0]
+                    content_obj = candidate.get("content", {})
+                    parts = content_obj.get("parts", [])
+                    for part in parts:
+                        if part.get("thought", False):
+                            continue
+                        text = part.get("text", "")
+                        if text:
+                            yield text
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
