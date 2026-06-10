@@ -14,6 +14,7 @@ def build_context(chunks: list[dict]) -> tuple[str, list[dict], list[dict]]:
             if key not in seen_pdfs:
                 seen_pdfs.add(key)
                 pdf_sources.append({
+                    "chunk_id": chunk.get("id", ""),
                     "file_name": chunk["file_name"],
                     "page_number": chunk["page_number"],
                     "gcs_url": chunk["gcs_url"],

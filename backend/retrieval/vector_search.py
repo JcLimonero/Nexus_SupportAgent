@@ -65,6 +65,7 @@ async def search_chunks(db: AsyncSession, query: str, k: int | None = None) -> l
     )
     return [
         {
+            "id": str(r.id),
             "content": r.content,
             "source_type": r.source_type,
             "file_name": r.file_name,

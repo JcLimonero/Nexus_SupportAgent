@@ -1,9 +1,12 @@
 import json
+import logging
 import google.auth
 import google.auth.transport.requests
 import httpx
 
 from config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -72,7 +75,7 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
         "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": contents,
         "generationConfig": {
-            "maxOutputTokens": 1024,
+            "maxOutputTokens": 4096,
             "temperature": 0.1,
             "responseMimeType": "application/json",
             "responseSchema": _RESPONSE_SCHEMA,
@@ -86,7 +89,25 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
         timeout=60,
     )
     response.raise_for_status()
-    raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    body = response.json()
+    candidate = body.get("candidates", [{}])[0]
+    finish_reason = candidate.get("finishReason", "UNKNOWN")
+    content = candidate.get("content", {})
+    parts = content.get("parts", [])
+
+    if not parts:
+        logger.warning("Gemini returned no parts. finishReason=%s body=%s", finish_reason, json.dumps(body)[:500])
+        # Safety filter or empty response — return fallback
+        return {
+            "answer": "No tengo información sobre ese tema en los documentos disponibles. Te recomiendo contactar al equipo de soporte.",
+            "follow_ups": [],
+        }
+
+    # Gemini 3.5 Flash may return a "thought" part before the actual response.
+    # Only read parts where thought != True.
+    text_parts = [p["text"] for p in parts if "text" in p and not p.get("thought", False)]
+    raw = text_parts[-1] if text_parts else parts[0].get("text", "")
     try:
         result = json.loads(raw)
         return {

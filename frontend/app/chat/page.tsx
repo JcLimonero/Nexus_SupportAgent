@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
 import { sendMessage, getSessions, getSessionMessages } from "@/lib/api";
-import { MessageBubble, type Message } from "@/components/MessageBubble";
+import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
+import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Session {
@@ -21,6 +22,7 @@ export default function ChatPage() {
   const [input, setInput]                     = useState("");
   const [sending, setSending]                 = useState(false);
   const [sidebarOpen, setSidebarOpen]         = useState(false);
+  const [activeSource, setActiveSource]       = useState<PdfSource | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -240,6 +242,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
+      <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
       {/* Sidebar — desktop */}
       <div className="hidden md:flex flex-col h-full">
         {sidebar}
@@ -304,6 +307,7 @@ export default function ChatPage() {
                   ? (text) => { sendText(text); }
                   : undefined
               }
+              onOpenSource={(pdf) => setActiveSource(pdf)}
             />
           ))}
 
