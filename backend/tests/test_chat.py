@@ -180,3 +180,127 @@ async def test_sessions_list_includes_title(client):
     sessions = response.json()
     assert len(sessions) == 1
     assert sessions[0]["title"] == "pregunta de prueba"
+
+
+# ── CRUD tests ────────────────────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_rename_session(client):
+    """PATCH /sessions/{id} updates the title."""
+    import uuid
+    from db.connection import get_db
+    from db.models import ChatSession
+    from main import app
+    token = make_jwt()
+
+    fake_session = MagicMock(spec=ChatSession)
+    fake_session.id = uuid.uuid4()
+    fake_session.title = "título original"
+    fake_session.user_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+    async def _db():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = fake_session
+        session.execute = AsyncMock(return_value=result)
+        session.commit = AsyncMock()
+        yield session
+
+    app.dependency_overrides[get_db] = _db
+    sid = str(fake_session.id)
+    response = await client.patch(
+        f"/api/sessions/{sid}",
+        json={"title": "nuevo título"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == "nuevo título"
+    assert fake_session.title == "nuevo título"
+
+
+@pytest.mark.anyio
+async def test_rename_session_requires_auth(client):
+    import uuid
+    response = await client.patch(f"/api/sessions/{uuid.uuid4()}", json={"title": "x"})
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_rename_session_not_found(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+
+    async def _empty_db():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=result)
+        yield session
+
+    app.dependency_overrides[get_db] = _empty_db
+    response = await client.patch(
+        f"/api/sessions/{uuid.uuid4()}",
+        json={"title": "x"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_delete_session(client):
+    """DELETE /sessions/{id} removes the session."""
+    import uuid
+    from db.connection import get_db
+    from db.models import ChatSession
+    from main import app
+    token = make_jwt()
+
+    fake_session = MagicMock(spec=ChatSession)
+    fake_session.id = uuid.uuid4()
+
+    async def _db():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = fake_session
+        session.execute = AsyncMock(return_value=result)
+        session.delete = AsyncMock()
+        session.commit = AsyncMock()
+        yield session
+
+    app.dependency_overrides[get_db] = _db
+    response = await client.delete(
+        f"/api/sessions/{fake_session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_delete_session_requires_auth(client):
+    import uuid
+    response = await client.delete(f"/api/sessions/{uuid.uuid4()}")
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_delete_session_not_found(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+
+    async def _empty_db():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=result)
+        yield session
+
+    app.dependency_overrides[get_db] = _empty_db
+    response = await client.delete(
+        f"/api/sessions/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404

@@ -19,6 +19,24 @@ export async function sendMessage(message: string, sessionId: string | null) {
   return res.json();
 }
 
+export async function renameSession(sessionId: string, title: string) {
+  const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, {
+    method: "PATCH",
+    headers: await headers(),
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error("Error al renombrar la sesión");
+  return res.json();
+}
+
+export async function deleteSession(sessionId: string) {
+  const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("Error al eliminar la sesión");
+}
+
 export async function getSuggestions(): Promise<{ label: string; prompt: string }[]> {
   try {
     const res = await fetch(`${API_URL}/api/suggestions`, { headers: await headers() });

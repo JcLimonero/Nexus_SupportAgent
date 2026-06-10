@@ -102,10 +102,12 @@ const mdComponents: Components = {
 
 export function MessageBubble({
   message,
+  streaming = false,
   onFollowUp,
   onOpenSource,
 }: {
   message: Message;
+  streaming?: boolean;
   onFollowUp?: (text: string) => void;
   onOpenSource?: (pdf: PdfSource) => void;
 }) {
@@ -133,9 +135,17 @@ export function MessageBubble({
           {isUser ? (
             message.content
           ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-              {message.content}
-            </ReactMarkdown>
+            <>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                {message.content}
+              </ReactMarkdown>
+              {streaming && (
+                <span
+                  className="animate-pulse"
+                  style={{ display: "inline-block", width: 2, height: "0.85em", backgroundColor: "var(--text-muted)", marginLeft: 2, verticalAlign: "text-bottom" }}
+                />
+              )}
+            </>
           )}
         </div>
 

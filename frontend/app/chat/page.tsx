@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
-import { sendMessage, getSessions, getSessionMessages, getSuggestions } from "@/lib/api";
+import { sendMessage, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession } from "@/lib/api";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -25,6 +25,12 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen]         = useState(false);
   const [activeSource, setActiveSource]       = useState<PdfSource | null>(null);
   const [suggestions, setSuggestions]         = useState<{ label: string; prompt: string }[]>([]);
+  const [editingId, setEditingId]             = useState<string | null>(null);
+  const [editingTitle, setEditingTitle]       = useState("");
+  const [deletingId, setDeletingId]           = useState<string | null>(null);
+  const [pendingStream, setPendingStream]     = useState<string | null>(null);
+  const pendingFollowUpsRef  = useRef<string[]>([]);
+  const streamIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -42,6 +48,40 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
+
+  useEffect(() => {
+    if (!pendingStream) return;
+    const words = pendingStream.split(" ");
+    let idx = 0;
+    streamIntervalRef.current = setInterval(() => {
+      idx += 1;
+      const partial = words.slice(0, idx).join(" ");
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: partial };
+        }
+        return updated;
+      });
+      if (idx >= words.length) {
+        clearInterval(streamIntervalRef.current!);
+        const fups = pendingFollowUpsRef.current;
+        if (fups.length > 0) {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.role === "assistant") {
+              updated[updated.length - 1] = { ...last, follow_ups: fups };
+            }
+            return updated;
+          });
+        }
+        setPendingStream(null);
+      }
+    }, 20);
+    return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
+  }, [pendingStream]);
 
   const loadSessions = async () => {
     try { setSessions(await getSessions()); } catch {}
@@ -78,15 +118,17 @@ export default function ChatPage() {
     try {
       const res = await sendMessage(text, currentSessionId);
       setCurrentSessionId(res.session_id);
+      pendingFollowUpsRef.current = res.follow_ups || [];
       setMessages((p) => [
         ...p,
         {
           role: "assistant",
-          content: res.answer,
+          content: "",
           sources: { pdfs: res.pdf_sources, videos: res.video_sources },
-          follow_ups: res.follow_ups || [],
+          follow_ups: [],
         },
       ]);
+      setPendingStream(res.answer);
       loadSessions();
     } catch {
       setMessages((p) => [
@@ -97,6 +139,34 @@ export default function ChatPage() {
       setSending(false);
       inputRef.current?.focus();
     }
+  };
+
+  const startEdit = (s: Session) => {
+    setEditingId(s.id);
+    setEditingTitle(s.title ?? fmt(s.created_at));
+    setDeletingId(null);
+  };
+
+  const commitEdit = async (id: string) => {
+    const title = editingTitle.trim();
+    setEditingId(null);
+    if (!title) return;
+    try {
+      await renameSession(id, title);
+      setSessions((prev) => prev.map((s) => s.id === id ? { ...s, title } : s));
+    } catch {}
+  };
+
+  const confirmDelete = async (id: string) => {
+    setDeletingId(null);
+    try {
+      await deleteSession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (currentSessionId === id) {
+        setCurrentSessionId(null);
+        setMessages([]);
+      }
+    } catch {}
   };
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -175,38 +245,113 @@ export default function ChatPage() {
           </p>
         )}
         {sessions.map((s) => (
-          <button
+          <div
             key={s.id}
-            onClick={() => openSession(s.id)}
-            className="w-full text-left px-4 py-2.5 transition-colors"
+            className="group relative"
             style={{
-              fontFamily: '"Barlow Condensed", sans-serif',
               backgroundColor: currentSessionId === s.id ? "#444444" : "transparent",
-              color: currentSessionId === s.id ? "#ffffff" : "#777777",
-              border: "none",
+              borderLeft: currentSessionId === s.id ? "2px solid #888" : "2px solid transparent",
             }}
             onMouseEnter={(e) => {
-              if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "#333333";
-              if (currentSessionId !== s.id) e.currentTarget.style.color = "#e8e8e8";
+              if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "#2a2a2a";
             }}
             onMouseLeave={(e) => {
               if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "transparent";
-              if (currentSessionId !== s.id) e.currentTarget.style.color = "#777777";
             }}
           >
-            {s.title ? (
-              <span style={{ fontSize: 12, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {s.title}
-              </span>
+            {/* Rename input */}
+            {editingId === s.id ? (
+              <input
+                autoFocus
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEdit(s.id);
+                  if (e.key === "Escape") setEditingId(null);
+                }}
+                onBlur={() => commitEdit(s.id)}
+                className="w-full px-4 py-2.5 focus:outline-none"
+                style={{
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontSize: 12,
+                  background: "#333",
+                  color: "#fff",
+                  border: "none",
+                  borderBottom: "1px solid #666",
+                }}
+              />
+            ) : deletingId === s.id ? (
+              /* Delete confirmation */
+              <div className="px-4 py-2.5">
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#e88", marginBottom: 6 }}>
+                  ¿Eliminar conversación?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => confirmDelete(s.id)}
+                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#e44", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px" }}
+                  >
+                    Eliminar
+                  </button>
+                  <button
+                    onClick={() => setDeletingId(null)}
+                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#888", border: "1px solid #555", cursor: "pointer", padding: "3px 8px" }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
             ) : (
-              <span style={{ fontSize: 11, letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                {fmt(s.created_at)}
-              </span>
+              /* Normal row */
+              <button
+                onClick={() => openSession(s.id)}
+                className="w-full text-left px-4 py-2.5 pr-16"
+                style={{ background: "none", border: "none", cursor: "pointer" }}
+              >
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 12, color: currentSessionId === s.id ? "#fff" : "#bbb", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {s.title ?? fmt(s.created_at)}
+                </span>
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#555", display: "block" }}>
+                  {fmt(s.created_at)}
+                </span>
+              </button>
             )}
-            <span style={{ fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", opacity: 0.5, display: "block" }}>
-              {fmt(s.created_at)}
-            </span>
-          </button>
+
+            {/* Action icons — visible on hover when not editing/deleting */}
+            {editingId !== s.id && deletingId !== s.id && (
+              <div
+                className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1"
+              >
+                {/* Rename */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); startEdit(s); }}
+                  title="Renombrar"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#666", padding: 4, lineHeight: 1 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#ccc")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                {/* Delete */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setDeletingId(s.id); setEditingId(null); }}
+                  title="Eliminar"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#666", padding: 4, lineHeight: 1 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e44")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6"/><path d="M14 11v6"/>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
         ))}
       </nav>
 
@@ -344,8 +489,9 @@ export default function ChatPage() {
             <MessageBubble
               key={i}
               message={msg}
+              streaming={!!pendingStream && i === messages.length - 1 && msg.role === "assistant"}
               onFollowUp={
-                i === messages.length - 1 && msg.role === "assistant" && !sending
+                i === messages.length - 1 && msg.role === "assistant" && !sending && !pendingStream
                   ? (text) => { sendText(text); }
                   : undefined
               }

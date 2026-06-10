@@ -6,8 +6,8 @@ import { IS_LOCAL, localLogin } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LoginPage() {
-  const [email, setEmail]         = useState("admin@nexus.local");
-  const [password, setPassword]   = useState("ChangeMe123!");
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
   const [error, setError]         = useState("");
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
@@ -143,11 +143,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {IS_LOCAL && (
-            <p className="mt-5 text-center" style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
-              admin@nexus.local · ChangeMe123!
-            </p>
-          )}
         </div>
       </div>
     </div>
