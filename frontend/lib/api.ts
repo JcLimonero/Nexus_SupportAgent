@@ -19,6 +19,16 @@ export async function sendMessage(message: string, sessionId: string | null) {
   return res.json();
 }
 
+export async function getSuggestions(): Promise<{ label: string; prompt: string }[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/suggestions`, { headers: await headers() });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
 export async function getSessions() {
   const res = await fetch(`${API_URL}/api/sessions`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al obtener sesiones");
