@@ -26,6 +26,7 @@ class ChatResponse(BaseModel):
     session_id: str
     pdf_sources: list[dict]
     video_sources: list[dict]
+    follow_ups: list[str] = []
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -69,7 +70,9 @@ async def chat(
     context, pdf_sources, video_sources = build_context(chunks)
 
     # Call Gemini (blocking SDK → thread)
-    answer = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    answer = gemini_result["answer"]
+    follow_ups = gemini_result.get("follow_ups", [])
 
     # Persist both messages
     db.add(ChatMessage(session_id=session.id, role="user", content=request.message))
@@ -86,6 +89,7 @@ async def chat(
         session_id=str(session.id),
         pdf_sources=pdf_sources,
         video_sources=video_sources,
+        follow_ups=follow_ups,
     )
 
 

@@ -11,6 +11,7 @@ export interface Message {
     pdfs:   Array<{ file_name: string; page_number: number | null; gcs_url: string }>;
     videos: Array<{ file_name: string; gcs_url: string }>;
   };
+  follow_ups?: string[];
 }
 
 const mdComponents: Components = {
@@ -92,11 +93,18 @@ const mdComponents: Components = {
   ),
 };
 
-export function MessageBubble({ message }: { message: Message }) {
+export function MessageBubble({
+  message,
+  onFollowUp,
+}: {
+  message: Message;
+  onFollowUp?: (text: string) => void;
+}) {
   const isUser = message.role === "user";
   const hasSources =
     message.sources &&
     (message.sources.pdfs.length > 0 || message.sources.videos.length > 0);
+  const hasFollowUps = !isUser && message.follow_ups && message.follow_ups.length > 0 && onFollowUp;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -159,6 +167,48 @@ export function MessageBubble({ message }: { message: Message }) {
                 </span>
               </a>
             ))}
+          </div>
+        )}
+
+        {/* Follow-up suggestion chips */}
+        {hasFollowUps && (
+          <div className="flex flex-col gap-1.5 px-1 pt-1">
+            <span style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
+              Preguntas relacionadas
+            </span>
+            <div className="flex flex-col gap-1">
+              {message.follow_ups!.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => onFollowUp!(q)}
+                  className="text-left transition-colors"
+                  style={{
+                    fontSize: 12,
+                    fontFamily: '"Barlow", sans-serif',
+                    fontWeight: 300,
+                    backgroundColor: "var(--bg-muted)",
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--border-default)",
+                    borderLeft: "2px solid var(--border-strong)",
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    lineHeight: 1.4,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--bg-surface)";
+                    e.currentTarget.style.color = "var(--text-primary)";
+                    e.currentTarget.style.borderLeftColor = "var(--text-muted)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--bg-muted)";
+                    e.currentTarget.style.color = "var(--text-secondary)";
+                    e.currentTarget.style.borderLeftColor = "var(--border-strong)";
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
