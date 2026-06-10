@@ -73,3 +73,110 @@ async def test_sessions_list(client):
     )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+@pytest.mark.anyio
+async def test_new_session_title_set_from_first_message(client):
+    """Title on new session equals the first user message."""
+    from db.connection import get_db
+    from db.models import ChatSession
+    from main import app
+    token = make_jwt()
+
+    added_objects = []
+
+    async def _capture_db():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        result.scalars.return_value.all.return_value = []
+        session.execute = AsyncMock(return_value=result)
+        session.commit = AsyncMock()
+        session.flush = AsyncMock()
+        session.add = MagicMock(side_effect=added_objects.append)
+        yield session
+
+    app.dependency_overrides[get_db] = _capture_db
+    gemini_mock = {"answer": "Respuesta", "follow_ups": []}
+    with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
+         patch("routers.chat.build_context", return_value=("", [], [])), \
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, return_value=gemini_mock):
+        response = await client.post(
+            "/api/chat",
+            json={"message": "como configuro el inventario"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    chat_session = next((o for o in added_objects if isinstance(o, ChatSession)), None)
+    assert chat_session is not None
+    assert chat_session.title == "como configuro el inventario"
+
+
+@pytest.mark.anyio
+async def test_long_message_title_truncated(client):
+    """Messages longer than 60 chars are truncated with ellipsis."""
+    from db.connection import get_db
+    from db.models import ChatSession
+    from main import app
+    token = make_jwt()
+
+    added_objects = []
+
+    async def _capture_db():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        result.scalars.return_value.all.return_value = []
+        session.execute = AsyncMock(return_value=result)
+        session.commit = AsyncMock()
+        session.flush = AsyncMock()
+        session.add = MagicMock(side_effect=added_objects.append)
+        yield session
+
+    app.dependency_overrides[get_db] = _capture_db
+    gemini_mock = {"answer": "Respuesta", "follow_ups": []}
+    with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
+         patch("routers.chat.build_context", return_value=("", [], [])), \
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, return_value=gemini_mock):
+        response = await client.post(
+            "/api/chat",
+            json={"message": "a" * 80},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    chat_session = next((o for o in added_objects if isinstance(o, ChatSession)), None)
+    assert chat_session is not None
+    assert len(chat_session.title) <= 60
+    assert chat_session.title.endswith("...")
+
+
+@pytest.mark.anyio
+async def test_sessions_list_includes_title(client):
+    """GET /sessions returns title field for each session."""
+    import uuid
+    from datetime import datetime
+    from db.connection import get_db
+    from db.models import ChatSession
+    from main import app
+    token = make_jwt()
+
+    fake_session = MagicMock(spec=ChatSession)
+    fake_session.id = uuid.uuid4()
+    fake_session.title = "pregunta de prueba"
+    fake_session.created_at = datetime.utcnow()
+
+    async def _sessions_with_title():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [fake_session]
+        session.execute = AsyncMock(return_value=result)
+        yield session
+
+    app.dependency_overrides[get_db] = _sessions_with_title
+    response = await client.get("/api/sessions", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    sessions = response.json()
+    assert len(sessions) == 1
+    assert sessions[0]["title"] == "pregunta de prueba"

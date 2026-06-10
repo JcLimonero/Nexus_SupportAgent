@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
-import { sendMessage, getSessions, getSessionMessages } from "@/lib/api";
+import { sendMessage, getSessions, getSessionMessages, getSuggestions } from "@/lib/api";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Session {
   id: string;
+  title: string | null;
   created_at: string;
 }
 
@@ -23,6 +24,7 @@ export default function ChatPage() {
   const [sending, setSending]                 = useState(false);
   const [sidebarOpen, setSidebarOpen]         = useState(false);
   const [activeSource, setActiveSource]       = useState<PdfSource | null>(null);
+  const [suggestions, setSuggestions]         = useState<{ label: string; prompt: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -31,7 +33,10 @@ export default function ChatPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user) loadSessions();
+    if (user) {
+      loadSessions();
+      getSuggestions().then(setSuggestions);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -176,9 +181,6 @@ export default function ChatPage() {
             className="w-full text-left px-4 py-2.5 transition-colors"
             style={{
               fontFamily: '"Barlow Condensed", sans-serif',
-              fontSize: 11,
-              letterSpacing: "0.5px",
-              textTransform: "uppercase",
               backgroundColor: currentSessionId === s.id ? "#444444" : "transparent",
               color: currentSessionId === s.id ? "#ffffff" : "#777777",
               border: "none",
@@ -192,7 +194,18 @@ export default function ChatPage() {
               if (currentSessionId !== s.id) e.currentTarget.style.color = "#777777";
             }}
           >
-            {fmt(s.created_at)}
+            {s.title ? (
+              <span style={{ fontSize: 12, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.title}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                {fmt(s.created_at)}
+              </span>
+            )}
+            <span style={{ fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", opacity: 0.5, display: "block" }}>
+              {fmt(s.created_at)}
+            </span>
           </button>
         ))}
       </nav>
@@ -285,8 +298,9 @@ export default function ChatPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3">
           {messages.length === 0 && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center" style={{ maxWidth: 360 }}>
+            <div className="flex flex-col items-center justify-center h-full gap-8" style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
+              {/* Heading */}
+              <div className="text-center">
                 <div style={{ width: 36, height: 2, backgroundColor: "#98989A", margin: "0 auto 16px" }} />
                 <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
                   ¿EN QUÉ PUEDO<br />AYUDARTE?
@@ -295,6 +309,34 @@ export default function ChatPage() {
                   Pregunta sobre configuración, procesos o funciones de TotalDealer.
                 </p>
               </div>
+
+              {/* Suggestion cards */}
+              {suggestions.length > 0 && (
+                <div className="grid grid-cols-1 gap-2 w-full" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => sendText(s.prompt)}
+                      className="text-left px-4 py-3 transition-colors"
+                      style={{
+                        backgroundColor: "var(--bg-surface)",
+                        border: "1px solid var(--border-default)",
+                        color: "var(--text-primary)",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--text-muted)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+                    >
+                      <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                        {s.label}
+                      </span>
+                      <span style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                        {s.prompt}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
