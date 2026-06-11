@@ -105,11 +105,13 @@ export function MessageBubble({
   streaming = false,
   onFollowUp,
   onOpenSource,
+  onOpenVideo,
 }: {
   message: Message;
   streaming?: boolean;
   onFollowUp?: (text: string) => void;
   onOpenSource?: (pdf: PdfSource) => void;
+  onOpenVideo?: (video: { file_name: string; gcs_url: string }) => void;
 }) {
   const isUser = message.role === "user";
   const hasSources =
@@ -168,21 +170,19 @@ export function MessageBubble({
               </button>
             ))}
             {message.sources!.videos.map((video, i) => (
-              <a
+              <button
                 key={i}
-                href={video.gcs_url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={() => onOpenVideo?.(video)}
                 className="flex items-center gap-1.5 transition-colors"
-                style={{ fontSize: 10, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", backgroundColor: "var(--bg-muted)", color: "var(--text-muted)", border: "1px solid var(--border-default)", padding: "3px 8px", textDecoration: "none" }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                style={{ fontSize: 10, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", backgroundColor: "var(--bg-muted)", color: "var(--text-muted)", border: "1px solid var(--border-default)", padding: "3px 8px", cursor: onOpenVideo ? "pointer" : "default" }}
+                onMouseEnter={(e) => { if (onOpenVideo) { e.currentTarget.style.backgroundColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-muted)"; e.currentTarget.style.color = "var(--text-muted)"; }}
               >
                 <span style={{ fontSize: 9 }}>VID</span>
                 <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {video.file_name}
                 </span>
-              </a>
+              </button>
             ))}
           </div>
         )}
