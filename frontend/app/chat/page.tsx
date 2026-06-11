@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
-import { sendMessage, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession } from "@/lib/api";
+import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession } from "@/lib/api";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -28,9 +28,7 @@ export default function ChatPage() {
   const [editingId, setEditingId]             = useState<string | null>(null);
   const [editingTitle, setEditingTitle]       = useState("");
   const [deletingId, setDeletingId]           = useState<string | null>(null);
-  const [pendingStream, setPendingStream]     = useState<string | null>(null);
-  const pendingFollowUpsRef  = useRef<string[]>([]);
-  const streamIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isStreaming, setIsStreaming]         = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -48,40 +46,6 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
-
-  useEffect(() => {
-    if (!pendingStream) return;
-    const words = pendingStream.split(" ");
-    let idx = 0;
-    streamIntervalRef.current = setInterval(() => {
-      idx += 1;
-      const partial = words.slice(0, idx).join(" ");
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last?.role === "assistant") {
-          updated[updated.length - 1] = { ...last, content: partial };
-        }
-        return updated;
-      });
-      if (idx >= words.length) {
-        clearInterval(streamIntervalRef.current!);
-        const fups = pendingFollowUpsRef.current;
-        if (fups.length > 0) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last?.role === "assistant") {
-              updated[updated.length - 1] = { ...last, follow_ups: fups };
-            }
-            return updated;
-          });
-        }
-        setPendingStream(null);
-      }
-    }, 20);
-    return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
-  }, [pendingStream]);
 
   const loadSessions = async () => {
     try { setSessions(await getSessions()); } catch {}
@@ -114,29 +78,60 @@ export default function ChatPage() {
   const sendText = async (text: string) => {
     if (!text || sending) return;
     setSending(true);
-    setMessages((p) => [...p, { role: "user", content: text }]);
+    setIsStreaming(false);
+    setMessages((p) => [
+      ...p,
+      { role: "user", content: text },
+      { role: "assistant", content: "", sources: { pdfs: [], videos: [] }, follow_ups: [] },
+    ]);
     try {
-      const res = await sendMessage(text, currentSessionId);
-      setCurrentSessionId(res.session_id);
-      pendingFollowUpsRef.current = res.follow_ups || [];
-      setMessages((p) => [
-        ...p,
-        {
-          role: "assistant",
-          content: "",
-          sources: { pdfs: res.pdf_sources, videos: res.video_sources },
-          follow_ups: [],
-        },
-      ]);
-      setPendingStream(res.answer);
-      loadSessions();
+      for await (const event of sendMessageStream(text, currentSessionId)) {
+        if ("token" in event) {
+          setIsStreaming(true);
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.role === "assistant") {
+              updated[updated.length - 1] = { ...last, content: last.content + event.token };
+            }
+            return updated;
+          });
+        } else if ("done" in event && event.done) {
+          setCurrentSessionId(event.session_id);
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.role === "assistant") {
+              updated[updated.length - 1] = {
+                ...last,
+                content: event.answer,
+                sources: {
+                  pdfs: event.pdf_sources as PdfSource[],
+                  videos: event.video_sources as Array<{ file_name: string; gcs_url: string }>,
+                },
+                follow_ups: event.follow_ups,
+              };
+            }
+            return updated;
+          });
+          loadSessions();
+        }
+      }
     } catch {
-      setMessages((p) => [
-        ...p,
-        { role: "assistant", content: "Ocurrió un error. Por favor intenta de nuevo." },
-      ]);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = {
+            ...last,
+            content: "Ocurrió un error. Por favor intenta de nuevo.",
+          };
+        }
+        return updated;
+      });
     } finally {
       setSending(false);
+      setIsStreaming(false);
       inputRef.current?.focus();
     }
   };
@@ -489,9 +484,9 @@ export default function ChatPage() {
             <MessageBubble
               key={i}
               message={msg}
-              streaming={!!pendingStream && i === messages.length - 1 && msg.role === "assistant"}
+              streaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
               onFollowUp={
-                i === messages.length - 1 && msg.role === "assistant" && !sending && !pendingStream
+                i === messages.length - 1 && msg.role === "assistant" && !sending
                   ? (text) => { sendText(text); }
                   : undefined
               }
@@ -499,7 +494,7 @@ export default function ChatPage() {
             />
           ))}
 
-          {sending && (
+          {sending && !isStreaming && (
             <div className="flex justify-start">
               <div className="px-4 py-3" style={{ backgroundColor: "var(--bubble-ai-bg)", border: "1px solid var(--bubble-ai-border)" }}>
                 <div className="flex space-x-1.5 items-center h-4">

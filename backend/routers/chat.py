@@ -1,18 +1,23 @@
+import json as _json
+import logging
 import re
 import uuid
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, distinct
 
-from db.connection import get_db
+from db.connection import get_db, AsyncSessionLocal
 from db.models import ChatSession, ChatMessage, DocumentChunk
 from auth.firebase_verify import get_current_user
 from retrieval.vector_search import search_chunks
 from retrieval.context_builder import build_context
-from llm.gemini_client import ask_gemini
+from llm.gemini_client import ask_gemini, stream_gemini_response
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -94,6 +99,121 @@ async def chat(
         pdf_sources=pdf_sources,
         video_sources=video_sources,
         follow_ups=follow_ups,
+    )
+
+
+_NEXUS_MARKER = "NEXUS_FOLLOW_UPS:"
+_TAIL_BUFFER = 380  # hold back enough tail to catch the marker + JSON array
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """SSE endpoint — streams Gemini tokens as they arrive."""
+    user_id = user["uid"]
+
+    if request.session_id:
+        result = await db.execute(
+            select(ChatSession).where(
+                ChatSession.id == uuid.UUID(request.session_id),
+                ChatSession.user_id == user_id,
+            )
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    else:
+        title = request.message.strip()
+        if len(title) > 60:
+            title = title[:57] + "..."
+        session = ChatSession(user_id=user_id, title=title)
+        db.add(session)
+        await db.flush()
+        await db.commit()
+
+    result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(6)
+    )
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in reversed(result.scalars().all())
+    ]
+
+    chunks = await search_chunks(db, request.message)
+    context, pdf_sources, video_sources = build_context(chunks)
+
+    # Capture plain values — session may not be accessible after db closes
+    session_id_str = str(session.id)
+    user_message = request.message
+
+    async def generate():
+        accumulated = ""
+        pending = ""  # tail buffer to intercept the NEXUS_FOLLOW_UPS line
+
+        try:
+            async for delta in stream_gemini_response(history, user_message, context):
+                accumulated += delta
+                pending += delta
+                safe_len = max(0, len(pending) - _TAIL_BUFFER)
+                if safe_len > 0:
+                    yield f"data: {_json.dumps({'token': pending[:safe_len]})}\n\n"
+                    pending = pending[safe_len:]
+        except Exception as exc:
+            logger.error("Gemini stream error: %s", exc)
+            yield f"data: {_json.dumps({'error': 'Error al procesar la respuesta'})}\n\n"
+            return
+
+        # Flush tail — strip NEXUS_FOLLOW_UPS marker before sending to client
+        answer = accumulated
+        follow_ups_list: list[str] = []
+        marker_idx = pending.find(_NEXUS_MARKER)
+        if marker_idx >= 0:
+            before = pending[:marker_idx].rstrip()
+            if before:
+                yield f"data: {_json.dumps({'token': before})}\n\n"
+            try:
+                follow_ups_list = _json.loads(pending[marker_idx + len(_NEXUS_MARKER):].strip())
+                if not isinstance(follow_ups_list, list):
+                    follow_ups_list = []
+            except _json.JSONDecodeError:
+                follow_ups_list = []
+            full_idx = accumulated.rfind(_NEXUS_MARKER)
+            if full_idx >= 0:
+                answer = accumulated[:full_idx].rstrip()
+        else:
+            if pending:
+                yield f"data: {_json.dumps({'token': pending})}\n\n"
+
+        # Persist messages in a fresh session to avoid closed-connection issues
+        try:
+            async with AsyncSessionLocal() as save_db:
+                save_db.add(ChatMessage(
+                    session_id=uuid.UUID(session_id_str),
+                    role="user",
+                    content=user_message,
+                ))
+                save_db.add(ChatMessage(
+                    session_id=uuid.UUID(session_id_str),
+                    role="assistant",
+                    content=answer,
+                    sources={"pdfs": pdf_sources, "videos": video_sources},
+                ))
+                await save_db.commit()
+        except Exception as exc:
+            logger.error("DB save error after stream: %s", exc)
+
+        yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'answer': answer, 'pdf_sources': pdf_sources, 'video_sources': video_sources, 'follow_ups': follow_ups_list})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
