@@ -1,12 +1,12 @@
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.2-pg16
     environment:
       POSTGRES_DB: nexus_agent
       POSTGRES_USER: nexus
       POSTGRES_PASSWORD: nexusdev
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"   # localhost-only — never expose to external interfaces
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

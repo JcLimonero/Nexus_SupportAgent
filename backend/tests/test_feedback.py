@@ -34,7 +34,7 @@ def _stub_message():
 async def test_feedback_requires_auth(client):
     msg_id = str(uuid.uuid4())
     response = await client.post(f"/api/messages/{msg_id}/feedback", json={"rating": "up"})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio

@@ -68,7 +68,7 @@ async def test_token_contains_is_admin(client):
 @pytest.mark.anyio
 async def test_protected_endpoint_requires_token(client):
     response = await client.get("/api/sessions")
-    assert response.status_code == 403  # HTTPBearer returns 403 when no token provided
+    assert response.status_code == 401  # HTTPBearer returns 401 when no token provided
 
 
 @pytest.mark.anyio

@@ -43,7 +43,7 @@ def _sessions_db():
 @pytest.mark.anyio
 async def test_chat_requires_auth(client):
     response = await client.post("/api/chat", json={"message": "hola"})
-    assert response.status_code == 403  # HTTPBearer returns 403 when no token
+    assert response.status_code == 401  # HTTPBearer returns 401 when no token
 
 
 @pytest.mark.anyio
@@ -248,7 +248,7 @@ async def test_rename_session(client):
 async def test_rename_session_requires_auth(client):
     import uuid
     response = await client.patch(f"/api/sessions/{uuid.uuid4()}", json={"title": "x"})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
@@ -307,7 +307,7 @@ async def test_delete_session(client):
 async def test_delete_session_requires_auth(client):
     import uuid
     response = await client.delete(f"/api/sessions/{uuid.uuid4()}")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
@@ -337,7 +337,7 @@ async def test_delete_session_not_found(client):
 @pytest.mark.anyio
 async def test_chat_stream_requires_auth(client):
     response = await client.post("/api/chat/stream", json={"message": "hola"})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio

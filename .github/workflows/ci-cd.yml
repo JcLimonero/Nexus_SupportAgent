@@ -37,20 +37,22 @@ jobs:
       - name: Install dependencies
         run: |
           pip install \
-            fastapi==0.115.0 \
+            fastapi==0.136.3 \
             httpx==0.27.2 \
-            pydantic==2.8.2 \
-            pydantic-settings==2.4.0 \
-            PyJWT==2.9.0 \
+            pydantic==2.13.4 \
+            pydantic-settings==2.14.1 \
+            PyJWT==2.13.0 \
             sqlalchemy[asyncio]==2.0.35 \
-            python-multipart==0.0.12 \
+            python-multipart==0.0.27 \
             passlib[bcrypt]==1.7.4 \
             bcrypt==4.0.1 \
             aiosqlite==0.20.0 \
-            pgvector==0.3.5 \
+            pgvector==0.4.2 \
+            filetype==1.2.0 \
             pytest==8.3.2 \
             pytest-asyncio==0.23.8 \
-            anyio==4.4.0
+            anyio==4.4.0 \
+            pip-audit==2.7.3
 
       - name: Run tests
         working-directory: backend
@@ -59,7 +61,20 @@ jobs:
           STORAGE_PROVIDER: local
           EMBEDDING_PROVIDER: local
           DATABASE_URL: sqlite+aiosqlite:///./test.db
+          RATE_LIMIT_ENABLED: "false"
         run: pytest tests/ -v --tb=short
+
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          pip-audit --requirement requirements.txt \
+            --ignore-vuln PYSEC-2022-42969 \
+            --ignore-vuln PYSEC-2025-183 \
+            --ignore-vuln GHSA-wh2j-26j7-9728 \
+            --ignore-vuln GHSA-6w46-j5rx-g56g \
+            --ignore-vuln PYSEC-2025-217 \
+            --ignore-vuln GHSA-69w3-r845-3855 \
+            --ignore-vuln GHSA-rrmf-rvhw-rf47
 
   # ── Frontend tests (every push / PR) ────────────────────────────────────────
   frontend-test:
@@ -143,7 +158,7 @@ jobs:
             --set-secrets="DATABASE_URL=nexus-database-url:latest,LOCAL_JWT_SECRET=nexus-jwt-secret:latest" \
             --set-env-vars="AUTH_PROVIDER=local,STORAGE_PROVIDER=gcs,EMBEDDING_PROVIDER=vertexai,EMBEDDING_DIMENSIONS=768,GCS_BUCKET_NAME=nexus-agent-docs-988042937611,VERTEX_AI_PROJECT=${{ env.PROJECT_ID }},VERTEX_AI_LOCATION=${{ env.REGION }}" \
             --allow-unauthenticated \
-            --min-instances=0 \
+            --min-instances=1 \
             --max-instances=10 \
             --memory=2Gi \
             --cpu=1 \
