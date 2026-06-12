@@ -157,7 +157,7 @@ export function MessageBubble({
             {message.sources!.pdfs.map((pdf, i) => (
               <button
                 key={i}
-                onClick={() => onOpenSource ? onOpenSource(pdf) : window.open(pdf.gcs_url, "_blank")}
+                onClick={() => onOpenSource?.(pdf)}
                 className="flex items-center gap-1.5 transition-colors"
                 style={{ fontSize: 10, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", backgroundColor: "var(--bg-muted)", color: "var(--text-muted)", border: "1px solid var(--border-default)", padding: "3px 8px", cursor: "pointer", background: "var(--bg-muted)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-primary)"; }}
