@@ -30,8 +30,9 @@ export default function ChatPage() {
   const [deletingId, setDeletingId]           = useState<string | null>(null);
   const [isStreaming, setIsStreaming]         = useState(false);
   const [videoLoading, setVideoLoading]       = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLTextAreaElement>(null);
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLTextAreaElement>(null);
+  const abortRef   = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push("/");
@@ -89,8 +90,14 @@ export default function ChatPage() {
     router.push("/");
   };
 
+  const stopStreaming = () => {
+    abortRef.current?.abort();
+  };
+
   const sendText = async (text: string) => {
     if (!text || sending) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSending(true);
     setIsStreaming(false);
     setMessages((p) => [
@@ -99,7 +106,7 @@ export default function ChatPage() {
       { role: "assistant", content: "", sources: { pdfs: [], videos: [] }, follow_ups: [] },
     ]);
     try {
-      for await (const event of sendMessageStream(text, currentSessionId)) {
+      for await (const event of sendMessageStream(text, currentSessionId, controller.signal)) {
         if ("token" in event) {
           setIsStreaming(true);
           setMessages((prev) => {
@@ -131,19 +138,33 @@ export default function ChatPage() {
           loadSessions();
         }
       }
-    } catch {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last?.role === "assistant") {
-          updated[updated.length - 1] = {
-            ...last,
-            content: "Ocurrió un error. Por favor intenta de nuevo.",
-          };
-        }
-        return updated;
-      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User stopped generation — keep whatever partial content arrived
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === "assistant" && last.content === "") {
+            // Nothing arrived yet — remove the empty placeholder
+            return updated.slice(0, -1);
+          }
+          return updated;
+        });
+      } else {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              content: "Ocurrió un error. Por favor intenta de nuevo.",
+            };
+          }
+          return updated;
+        });
+      }
     } finally {
+      abortRef.current = null;
       setSending(false);
       setIsStreaming(false);
       inputRef.current?.focus();
@@ -494,20 +515,26 @@ export default function ChatPage() {
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <MessageBubble
-              key={i}
-              message={msg}
-              streaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
-              onFollowUp={
-                i === messages.length - 1 && msg.role === "assistant" && !sending
-                  ? (text) => { sendText(text); }
-                  : undefined
-              }
-              onOpenSource={(pdf) => setActiveSource(pdf)}
-              onOpenVideo={handleOpenVideo}
-            />
-          ))}
+          {messages.map((msg, i) => {
+            // Hide empty assistant placeholder while bounce dots are showing
+            if (sending && !isStreaming && msg.role === "assistant" && msg.content === "" && i === messages.length - 1) {
+              return null;
+            }
+            return (
+              <MessageBubble
+                key={i}
+                message={msg}
+                streaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
+                onFollowUp={
+                  i === messages.length - 1 && msg.role === "assistant" && !sending
+                    ? (text) => { sendText(text); }
+                    : undefined
+                }
+                onOpenSource={(pdf) => setActiveSource(pdf)}
+                onOpenVideo={handleOpenVideo}
+              />
+            );
+          })}
 
           {sending && !isStreaming && (
             <div className="flex justify-start">
@@ -557,29 +584,52 @@ export default function ChatPage() {
                 t.style.height = Math.min(t.scrollHeight, 120) + "px";
               }}
             />
-            <button
-              type="submit"
-              disabled={sending || !input.trim()}
-              className="px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
-              style={{
-                fontFamily: '"Barlow Condensed", sans-serif',
-                fontWeight: 700,
-                fontSize: 11,
-                letterSpacing: "2px",
-                textTransform: "uppercase",
-                backgroundColor: "var(--btn-primary-bg)",
-                color: "var(--btn-primary-text)",
-                border: "none",
-                cursor: sending || !input.trim() ? "not-allowed" : "pointer",
-              }}
-              onMouseEnter={(e) => { if (!sending && input.trim()) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
-            >
-              Enviar
-            </button>
+            {sending ? (
+              <button
+                type="button"
+                onClick={stopStreaming}
+                className="px-5 py-2.5 shrink-0 transition-colors"
+                style={{
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  backgroundColor: "#444",
+                  color: "#fff",
+                  border: "1px solid #666",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#555"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#444"; }}
+              >
+                Detener
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
+                style={{
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  backgroundColor: "var(--btn-primary-bg)",
+                  color: "var(--btn-primary-text)",
+                  border: "none",
+                  cursor: !input.trim() ? "not-allowed" : "pointer",
+                }}
+                onMouseEnter={(e) => { if (input.trim()) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
+              >
+                Enviar
+              </button>
+            )}
           </form>
           <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
-            Enter para enviar · Shift+Enter para nueva línea
+            {sending ? "Generando respuesta · Detener para cancelar" : "Enter para enviar · Shift+Enter para nueva línea"}
           </p>
         </div>
       </div>
