@@ -51,7 +51,8 @@ jobs:
             filetype==1.2.0 \
             pytest==8.3.2 \
             pytest-asyncio==0.23.8 \
-            anyio==4.4.0
+            anyio==4.4.0 \
+            pip-audit==2.7.3
 
       - name: Run tests
         working-directory: backend
