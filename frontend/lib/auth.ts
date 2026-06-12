@@ -1,6 +1,6 @@
 /**
  * Unified auth helpers.
- * LOCAL_DEV=true  → JWT stored in localStorage, issued by our own backend.
+ * LOCAL_DEV=true  → JWT stored in sessionStorage, issued by our own backend.
  * LOCAL_DEV=false → Firebase ID token.
  */
 const IS_LOCAL = process.env.NEXT_PUBLIC_LOCAL_DEV === "true";
@@ -11,15 +11,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function getLocalToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function setLocalToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearLocalToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 export async function localLogin(email: string, password: string): Promise<void> {

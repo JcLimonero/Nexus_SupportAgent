@@ -5,6 +5,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import filetype
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -20,13 +21,30 @@ from config import get_settings
 settings = get_settings()
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB hard cap
+_ALLOWED_MIME = {"application/pdf", "video/mp4"}
+
+
+# ── Admin guard ───────────────────────────────────────────────────────────────
+
+def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Se requieren permisos de administrador")
+    return user
+
 
 # ── Storage helpers ──────────────────────────────────────────────────────────
+
+def _safe_filename(name: str) -> str:
+    """Strip path separators to prevent path traversal via filename."""
+    return Path(name).name.replace("\x00", "")
+
 
 def _save_local(tmp_path: str, file_name: str, source_type: str) -> str:
     dest_dir = Path(settings.local_storage_path) / f"{source_type}s"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{uuid.uuid4()}_{file_name}"
+    safe_name = _safe_filename(file_name)
+    dest = dest_dir / f"{uuid.uuid4()}_{safe_name}"
     shutil.copy2(tmp_path, dest)
     return f"/data/{source_type}s/{dest.name}"
 
@@ -35,7 +53,8 @@ def _save_gcs(tmp_path: str, file_name: str, source_type: str) -> str:
     from google.cloud import storage as gcs
     client = gcs.Client()
     bucket = client.bucket(settings.gcs_bucket_name)
-    blob_name = f"{source_type}s/{uuid.uuid4()}/{file_name}"
+    safe_name = _safe_filename(file_name)
+    blob_name = f"{source_type}s/{uuid.uuid4()}/{safe_name}"
     bucket.blob(blob_name).upload_from_filename(tmp_path)
     return f"https://storage.googleapis.com/{settings.gcs_bucket_name}/{blob_name}"
 
@@ -78,16 +97,27 @@ async def _process_and_index(file_path: str, file_name: str, file_url: str, sour
 async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
+    # Extension fast-fail
     ext = Path(file.filename).suffix.lower()
     if ext not in {".pdf", ".mp4"}:
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF y MP4")
 
     source_type = "pdf" if ext == ".pdf" else "video"
 
+    # Read with hard size cap to prevent OOM uploads
+    content = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="El archivo supera el límite de 50 MB")
+
+    # Magic bytes validation — extension spoofing prevention
+    kind = filetype.guess(content[:512])
+    if kind is None or kind.mime not in _ALLOWED_MIME:
+        raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
+
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-        tmp.write(await file.read())
+        tmp.write(content)
         tmp_path = tmp.name
 
     try:
@@ -109,7 +139,7 @@ async def upload_file(
 @router.get("/documents")
 async def list_documents(
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(DocumentChunk.file_name, DocumentChunk.source_type, DocumentChunk.gcs_url)
@@ -125,7 +155,7 @@ async def list_documents(
 async def delete_document(
     file_name: str,
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
     await db.execute(delete(DocumentChunk).where(DocumentChunk.file_name == file_name))
     await db.execute(delete(ResponseCache))  # knowledge base changed — flush cache
@@ -137,7 +167,7 @@ async def delete_document(
 async def get_excerpt(
     chunk_id: str,
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
     try:
         cid = uuid.UUID(chunk_id)
@@ -159,7 +189,7 @@ async def get_excerpt(
 @router.get("/documents/serve/{file_path:path}")
 async def serve_document(
     file_path: str,
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
     if settings.storage_provider != "local":
         raise HTTPException(status_code=501, detail="Solo disponible en almacenamiento local")
@@ -177,10 +207,8 @@ async def serve_document(
 @router.get("/cache/stats")
 async def cache_stats(
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Acceso denegado")
     from sqlalchemy import func
     result = await db.execute(
         select(
@@ -200,9 +228,7 @@ async def cache_stats(
 @router.delete("/cache", status_code=204)
 async def flush_cache(
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    _: dict = Depends(require_admin),
 ):
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Acceso denegado")
     await db.execute(delete(ResponseCache))
     await db.commit()

@@ -59,7 +59,12 @@ jobs:
           STORAGE_PROVIDER: local
           EMBEDDING_PROVIDER: local
           DATABASE_URL: sqlite+aiosqlite:///./test.db
+          RATE_LIMIT_ENABLED: "false"
         run: pytest tests/ -v --tb=short
+
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2022-42969
 
   # ── Frontend tests (every push / PR) ────────────────────────────────────────
   frontend-test:
@@ -143,7 +148,7 @@ jobs:
             --set-secrets="DATABASE_URL=nexus-database-url:latest,LOCAL_JWT_SECRET=nexus-jwt-secret:latest" \
             --set-env-vars="AUTH_PROVIDER=local,STORAGE_PROVIDER=gcs,EMBEDDING_PROVIDER=vertexai,EMBEDDING_DIMENSIONS=768,GCS_BUCKET_NAME=nexus-agent-docs-988042937611,VERTEX_AI_PROJECT=${{ env.PROJECT_ID }},VERTEX_AI_LOCATION=${{ env.REGION }}" \
             --allow-unauthenticated \
-            --min-instances=0 \
+            --min-instances=1 \
             --max-instances=10 \
             --memory=2Gi \
             --cpu=1 \

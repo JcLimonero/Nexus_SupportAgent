@@ -35,6 +35,15 @@ class CreateUserRequest(BaseModel):
             raise ValueError("Email inválido")
         return v.lower().strip()
 
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        if not any(c.isdigit() or not c.isalpha() for c in v):
+            raise ValueError("La contraseña debe contener al menos un número o símbolo")
+        return v
+
 
 class UpdateUserRequest(BaseModel):
     is_active: bool | None = None

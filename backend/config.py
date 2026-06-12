@@ -1,5 +1,13 @@
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 from functools import lru_cache
+
+_INSECURE_SECRETS = {
+    "local-dev-secret-change-in-production",
+    "local-dev-secret",
+    "changeme",
+    "secret",
+}
 
 
 class Settings(BaseSettings):
@@ -16,7 +24,8 @@ class Settings(BaseSettings):
 
     # ── Local auth ──────────────────────────────────────────────────────────
     local_jwt_secret: str = "local-dev-secret-change-in-production"
-    local_jwt_expire_hours: int = 72
+    local_jwt_expire_hours: int = 30  # reduced from 72 h — limit stolen-token window
+
     initial_admin_email: str = "admin@nexus.local"
     initial_admin_password: str = "ChangeMe123!"
 
@@ -46,6 +55,24 @@ class Settings(BaseSettings):
     max_session_history: int = 6
     chunk_size: int = 500
     chunk_overlap: int = 50
+
+    # ── Rate limiting ────────────────────────────────────────────────────────
+    rate_limit_enabled: bool = True
+
+    @model_validator(mode="after")
+    def _check_insecure_secret(self) -> "Settings":
+        # Raise at startup when local auth is active in a GCS/production environment
+        # and the JWT secret is still the default development value.
+        if (
+            self.auth_provider == "local"
+            and self.gcs_bucket_name  # non-empty → production storage
+            and self.local_jwt_secret in _INSECURE_SECRETS
+        ):
+            raise ValueError(
+                "LOCAL_JWT_SECRET is set to an insecure default value. "
+                "Set a strong random secret via GCP Secret Manager before deploying."
+            )
+        return self
 
     class Config:
         env_file = ".env"

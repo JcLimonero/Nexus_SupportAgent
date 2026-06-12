@@ -1,6 +1,7 @@
 "use client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 import type { Components } from "react-markdown";
 
 export interface PdfSource {
@@ -143,7 +144,7 @@ export function MessageBubble({
             message.content
           ) : (
             <>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={mdComponents}>
                 {message.content}
               </ReactMarkdown>
               {streaming && (

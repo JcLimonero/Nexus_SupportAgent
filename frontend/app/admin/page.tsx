@@ -20,8 +20,8 @@ export default function AdminPage() {
   const [notice, setNotice]       = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) router.push("/");
-    if (user) loadDocs();
+    if (!loading && (!user || !user.is_admin)) router.push("/");
+    if (user?.is_admin) loadDocs();
   }, [user, loading]);
 
   const loadDocs = async () => {
