@@ -63,6 +63,46 @@ describe("MessageBubble — assistant messages", () => {
     expect(screen.getByText("VID")).toBeInTheDocument();
     expect(screen.getByText(/intro\.mp4/)).toBeInTheDocument();
   });
+
+  it("video chip is a button element (not an anchor)", () => {
+    const msg: Message = {
+      role: "assistant",
+      content: "Ver video",
+      sources: {
+        pdfs: [],
+        videos: [{ file_name: "intro.mp4", gcs_url: "/data/videos/intro.mp4" }],
+      },
+    };
+    render(<MessageBubble message={msg} />);
+    const chip = screen.getByText("VID").closest("button");
+    expect(chip).not.toBeNull();
+    expect(chip!.tagName).toBe("BUTTON");
+  });
+
+  it("calls onOpenVideo with the video object when chip clicked", () => {
+    const onOpenVideo = jest.fn();
+    const video = { file_name: "intro.mp4", gcs_url: "/data/videos/intro.mp4" };
+    const msg: Message = {
+      role: "assistant",
+      content: "Ver video",
+      sources: { pdfs: [], videos: [video] },
+    };
+    render(<MessageBubble message={msg} onOpenVideo={onOpenVideo} />);
+    fireEvent.click(screen.getByText("VID").closest("button")!);
+    expect(onOpenVideo).toHaveBeenCalledWith(video);
+  });
+
+  it("does not throw when video chip clicked without onOpenVideo", () => {
+    const msg: Message = {
+      role: "assistant",
+      content: "Ver video",
+      sources: { pdfs: [], videos: [{ file_name: "intro.mp4", gcs_url: "/data/videos/intro.mp4" }] },
+    };
+    expect(() => {
+      render(<MessageBubble message={msg} />);
+      fireEvent.click(screen.getByText("VID").closest("button")!);
+    }).not.toThrow();
+  });
 });
 
 describe("MessageBubble — follow-up chips", () => {
