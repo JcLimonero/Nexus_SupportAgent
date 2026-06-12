@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
-import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, getDocumentBlobUrl } from "@/lib/api";
+import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, getDocumentBlobUrl, submitFeedback } from "@/lib/api";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -77,6 +77,24 @@ export default function ChatPage() {
     }
   };
 
+  const handleFeedback = async (messageIndex: number, rating: "up" | "down") => {
+    const msg = messages[messageIndex];
+    if (!msg?.id) return;
+    setMessages((prev) =>
+      prev.map((m, i) => i === messageIndex ? { ...m, feedback: rating } : m)
+    );
+    try { await submitFeedback(msg.id, rating); } catch { /* silent */ }
+  };
+
+  const handleRetry = () => {
+    if (sending || messages.length < 2) return;
+    const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
+    if (lastUserIdx === -1) return;
+    const userText = messages[lastUserIdx].content;
+    setMessages((prev) => prev.slice(0, lastUserIdx));
+    sendText(userText);
+  };
+
   const handleLogout = async () => {
     if (IS_LOCAL) {
       localLogout();
@@ -118,6 +136,7 @@ export default function ChatPage() {
             if (last?.role === "assistant") {
               updated[updated.length - 1] = {
                 ...last,
+                id: event.message_id,
                 content: event.answer,
                 sources: {
                   pdfs: event.pdf_sources as PdfSource[],
@@ -494,20 +513,25 @@ export default function ChatPage() {
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <MessageBubble
-              key={i}
-              message={msg}
-              streaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
-              onFollowUp={
-                i === messages.length - 1 && msg.role === "assistant" && !sending
-                  ? (text) => { sendText(text); }
-                  : undefined
-              }
-              onOpenSource={(pdf) => setActiveSource(pdf)}
-              onOpenVideo={handleOpenVideo}
-            />
-          ))}
+          {messages.map((msg, i) => {
+            if (sending && !isStreaming && msg.role === "assistant" && msg.content === "" && i === messages.length - 1) {
+              return null;
+            }
+            const isLastAssistant = i === messages.length - 1 && msg.role === "assistant";
+            const isCompleted = !sending && isLastAssistant;
+            return (
+              <MessageBubble
+                key={i}
+                message={msg}
+                streaming={isStreaming && isLastAssistant}
+                onFollowUp={isCompleted ? (text) => { sendText(text); } : undefined}
+                onOpenSource={(pdf) => setActiveSource(pdf)}
+                onOpenVideo={handleOpenVideo}
+                onFeedback={msg.role === "assistant" && !sending && msg.content ? (rating) => handleFeedback(i, rating) : undefined}
+                onRetry={isCompleted ? handleRetry : undefined}
+              />
+            );
+          })}
 
           {sending && !isStreaming && (
             <div className="flex justify-start">

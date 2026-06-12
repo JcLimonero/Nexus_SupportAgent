@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, distinct
 
 from db.connection import get_db, AsyncSessionLocal
-from db.models import ChatSession, ChatMessage, DocumentChunk
+from db.models import ChatSession, ChatMessage, DocumentChunk, MessageFeedback
 from auth.firebase_verify import get_current_user
 from retrieval.vector_search import search_chunks
 from retrieval.context_builder import build_context
@@ -191,6 +191,7 @@ async def chat_stream(
                 yield f"data: {_json.dumps({'token': pending})}\n\n"
 
         # Persist messages in a fresh session to avoid closed-connection issues
+        assistant_msg_id = uuid.uuid4()
         try:
             async with AsyncSessionLocal() as save_db:
                 save_db.add(ChatMessage(
@@ -199,6 +200,7 @@ async def chat_stream(
                     content=user_message,
                 ))
                 save_db.add(ChatMessage(
+                    id=assistant_msg_id,
                     session_id=uuid.UUID(session_id_str),
                     role="assistant",
                     content=answer,
@@ -208,7 +210,7 @@ async def chat_stream(
         except Exception as exc:
             logger.error("DB save error after stream: %s", exc)
 
-        yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'answer': answer, 'pdf_sources': pdf_sources, 'video_sources': video_sources, 'follow_ups': follow_ups_list})}\n\n"
+        yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': answer, 'pdf_sources': pdf_sources, 'video_sources': video_sources, 'follow_ups': follow_ups_list})}\n\n"
 
     return StreamingResponse(
         generate(),
@@ -351,4 +353,68 @@ async def get_session_messages(
             "created_at": m.created_at.isoformat(),
         }
         for m in result.scalars().all()
+    ]
+
+
+class FeedbackRequest(BaseModel):
+    rating: str = Field(pattern="^(up|down)$")
+
+
+@router.post("/messages/{message_id}/feedback", status_code=201)
+async def submit_feedback(
+    message_id: str,
+    body: FeedbackRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    try:
+        msg_uuid = uuid.UUID(message_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de mensaje inválido")
+
+    result = await db.execute(
+        select(ChatMessage)
+        .join(ChatSession)
+        .where(
+            ChatMessage.id == msg_uuid,
+            ChatSession.user_id == user["uid"],
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+
+    existing = await db.execute(
+        select(MessageFeedback).where(
+            MessageFeedback.message_id == msg_uuid,
+            MessageFeedback.user_id == user["uid"],
+        )
+    )
+    feedback = existing.scalar_one_or_none()
+    if feedback:
+        feedback.rating = body.rating
+    else:
+        db.add(MessageFeedback(message_id=msg_uuid, user_id=user["uid"], rating=body.rating))
+    await db.commit()
+    return {"message_id": message_id, "rating": body.rating}
+
+
+@router.get("/admin/feedback")
+async def get_feedback(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    result = await db.execute(
+        select(MessageFeedback).order_by(MessageFeedback.created_at.desc()).limit(200)
+    )
+    return [
+        {
+            "id": str(f.id),
+            "message_id": str(f.message_id),
+            "user_id": f.user_id,
+            "rating": f.rating,
+            "created_at": f.created_at.isoformat(),
+        }
+        for f in result.scalars().all()
     ]

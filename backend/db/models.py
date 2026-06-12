@@ -62,3 +62,13 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
+
+
+class MessageFeedback(Base):
+    __tablename__ = "message_feedback"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_messages.id"), index=True)
+    user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    rating: Mapped[str] = mapped_column(String(4), nullable=False)  # 'up' | 'down'
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
