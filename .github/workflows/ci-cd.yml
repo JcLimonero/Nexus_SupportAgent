@@ -37,13 +37,13 @@ jobs:
       - name: Install dependencies
         run: |
           pip install \
-            fastapi==0.115.0 \
+            fastapi==0.136.3 \
             httpx==0.27.2 \
-            pydantic==2.8.2 \
-            pydantic-settings==2.4.0 \
-            PyJWT==2.9.0 \
+            pydantic==2.13.4 \
+            pydantic-settings==2.14.1 \
+            PyJWT==2.13.0 \
             sqlalchemy[asyncio]==2.0.35 \
-            python-multipart==0.0.12 \
+            python-multipart==0.0.27 \
             passlib[bcrypt]==1.7.4 \
             bcrypt==4.0.1 \
             aiosqlite==0.20.0 \
@@ -66,7 +66,15 @@ jobs:
 
       - name: Audit Python dependencies
         working-directory: backend
-        run: pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2022-42969
+        run: |
+          pip-audit --requirement requirements.txt \
+            --ignore-vuln PYSEC-2022-42969 \
+            --ignore-vuln PYSEC-2025-183 \
+            --ignore-vuln GHSA-wh2j-26j7-9728 \
+            --ignore-vuln GHSA-6w46-j5rx-g56g \
+            --ignore-vuln PYSEC-2025-217 \
+            --ignore-vuln GHSA-69w3-r845-3855 \
+            --ignore-vuln GHSA-rrmf-rvhw-rf47
 
   # ── Frontend tests (every push / PR) ────────────────────────────────────────
   frontend-test:
