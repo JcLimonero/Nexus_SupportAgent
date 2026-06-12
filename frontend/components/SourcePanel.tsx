@@ -22,6 +22,7 @@ export function SourcePanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [opening, setOpening] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
@@ -31,6 +32,14 @@ export function SourcePanel({
       .then(setData)
       .catch(() => setError("No se pudo cargar el fragmento."))
       .finally(() => setLoading(false));
+  }, [source?.chunk_id]);
+
+  // Reset video player when source changes
+  useEffect(() => {
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
+    setOpening(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.chunk_id]);
 
   useEffect(() => {
@@ -52,7 +61,13 @@ export function SourcePanel({
     setOpening(true);
     try {
       const blobUrl = await getDocumentBlobUrl(source.gcs_url);
-      window.open(blobUrl, "_blank");
+      if (isPdf) {
+        // PDFs open in a new tab — browser handles them natively
+        window.open(blobUrl, "_blank");
+      } else {
+        // Videos play inline to avoid popup-blocker issues with window.open after await
+        setVideoUrl(blobUrl);
+      }
     } catch {
       // silent — serve endpoint may not exist in this env
     } finally {
@@ -73,7 +88,7 @@ export function SourcePanel({
       <div
         className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
         style={{
-          width: "min(440px, 100vw)",
+          width: "min(480px, 100vw)",
           backgroundColor: "var(--bg-surface)",
           borderLeft: "1px solid var(--border-default)",
           boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
@@ -88,7 +103,7 @@ export function SourcePanel({
             <div className="min-w-0 flex-1">
               <div style={{ width: 24, height: 2, backgroundColor: "#98989A", marginBottom: 10 }} />
               <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#98989A", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: 5 }}>
-                Fragmento de contexto
+                {isPdf ? "Fragmento de contexto" : "Video de referencia"}
               </p>
               <p
                 title={source.file_name}
@@ -117,8 +132,22 @@ export function SourcePanel({
           </div>
         </div>
 
-        {/* Excerpt content */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
+          {/* Inline video player */}
+          {videoUrl && !isPdf && (
+            <div style={{ marginBottom: 20 }}>
+              <video
+                controls
+                autoPlay
+                style={{ width: "100%", backgroundColor: "#000", display: "block" }}
+                src={videoUrl}
+              >
+                Tu navegador no soporta video HTML5.
+              </video>
+            </div>
+          )}
+
           {loading && (
             <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: "2px", textTransform: "uppercase" }}>
               Cargando...
@@ -149,30 +178,34 @@ export function SourcePanel({
           className="px-5 py-4 shrink-0 flex items-center justify-between"
           style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}
         >
-          <button
-            onClick={openDocument}
-            disabled={opening}
-            style={{
-              fontFamily: '"Barlow Condensed", sans-serif',
-              fontWeight: 700,
-              fontSize: 11,
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              backgroundColor: "var(--btn-primary-bg)",
-              color: "var(--btn-primary-text)",
-              border: "none",
-              padding: "8px 16px",
-              cursor: opening ? "not-allowed" : "pointer",
-              opacity: opening ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => { if (!opening) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
-          >
-            {opening ? "Abriendo..." : isPdf ? "Ver documento" : "Ver video"}
-          </button>
+          {!videoUrl && (
+            <button
+              onClick={openDocument}
+              disabled={opening}
+              style={{
+                fontFamily: '"Barlow Condensed", sans-serif',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                backgroundColor: "var(--btn-primary-bg)",
+                color: "var(--btn-primary-text)",
+                border: "none",
+                padding: "8px 16px",
+                cursor: opening ? "not-allowed" : "pointer",
+                opacity: opening ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => { if (!opening) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
+            >
+              {opening
+                ? isPdf ? "Abriendo..." : "Cargando video..."
+                : isPdf ? "Ver documento" : "Ver video"}
+            </button>
+          )}
           <button
             onClick={onClose}
-            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
           >
