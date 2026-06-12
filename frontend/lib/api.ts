@@ -17,12 +17,14 @@ export type StreamEvent =
 export async function* sendMessageStream(
   message: string,
   sessionId: string | null,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   const token = await getBearerToken();
   const res = await fetch(`${API_URL}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message, session_id: sessionId }),
+    signal,
   });
   if (!res.ok || !res.body) throw new Error("Error al procesar la pregunta");
 
