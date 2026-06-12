@@ -2,6 +2,16 @@
 
 RAG-based support chatbot for TotalDealer ERP. Users ask questions in Spanish and get answers grounded in uploaded PDF manuals and training videos, with source citations and video links.
 
+## Features
+
+- **SSE streaming** — AI answers stream token-by-token; stop generation mid-response with the Detener button
+- **Session management** — conversations persist, can be renamed or deleted; sidebar lists all sessions
+- **Markdown rendering** — answers render headings, lists, code blocks, tables via react-markdown
+- **Follow-up suggestions** — each answer surfaces 3 related questions as one-click chips
+- **Source document viewer** — PDF chips open an in-app panel showing the exact excerpt; VID chips stream the video via signed blob URL
+- **Theme toggle** — light / dark mode persisted via CSS variables
+- **Grupo Vanguardia brand** — Barlow Condensed typeface, sharp corners, condensed uppercase labels
+
 ## Architecture
 
 ```
@@ -42,18 +52,20 @@ docker-compose up --build
 | Backend  | http://localhost:8000 |
 | Docs API | http://localhost:8000/docs |
 
-Login with any email / any password in local mode.
+Login with `admin@nexus.local` / `ChangeMe123!` in local mode.
 
 ### Provider switches (docker-compose.yml)
 
 | Variable             | Local (default) | Production      |
 |----------------------|-----------------|-----------------|
-| `AUTH_PROVIDER`      | `local`         | `local`         |
+| `AUTH_PROVIDER`      | `local`         | `firebase`      |
 | `STORAGE_PROVIDER`   | `local`         | `gcs`           |
 | `EMBEDDING_PROVIDER` | `local`         | `vertexai`      |
 | `EMBEDDING_DIMENSIONS` | `384`         | `768`           |
 
 ## Running tests
+
+**Backend:**
 
 ```bash
 cd backend
@@ -62,6 +74,13 @@ pytest tests/ -v
 ```
 
 Tests mock all external dependencies (GCP, embeddings, DB) and run fully offline.
+
+**Frontend:**
+
+```bash
+cd frontend
+npm test -- --watchAll=false
+```
 
 ## Project structure
 
@@ -72,12 +91,14 @@ backend/
   ingestion/      PDF (PyMuPDF) + video (faster-whisper) processors
   llm/            Gemini 3.5 Flash client (Vertex AI global endpoint)
   retrieval/      pgvector cosine search + context builder
-  routers/        chat, admin, health endpoints
+  routers/        chat (SSE streaming), admin, health, sessions endpoints
   tests/          pytest regression tests
 frontend/
   app/            Next.js pages (login, chat, admin)
-  components/     MessageBubble with PDF/video source pills
-  lib/            auth, api client, Firebase stub
+  components/     MessageBubble (markdown, PDF/VID chips, follow-up suggestions)
+                  SourcePanel (slide-in PDF excerpt viewer)
+                  ThemeToggle (light/dark)
+  lib/            auth, api client (SSE generator), Firebase stub
 .github/
   workflows/      CI/CD pipeline (test → build → deploy)
 ```
