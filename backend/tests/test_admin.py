@@ -20,7 +20,7 @@ async def test_upload_requires_auth(client):
         "/api/admin/upload",
         files={"file": ("test.pdf", b"content", "application/pdf")},
     )
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
@@ -107,7 +107,7 @@ async def test_upload_pdf_accepted(client):
 @pytest.mark.anyio
 async def test_documents_list_requires_auth(client):
     response = await client.get("/api/admin/documents")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
@@ -165,7 +165,7 @@ async def test_delete_document_requires_admin(client):
 async def test_excerpt_requires_auth(client):
     import uuid
     response = await client.get(f"/api/admin/documents/excerpt/{uuid.uuid4()}")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
@@ -212,7 +212,7 @@ async def test_excerpt_returns_422_for_invalid_id(client):
 @pytest.mark.anyio
 async def test_serve_requires_auth(client):
     response = await client.get("/api/admin/documents/serve/pdfs/test.pdf")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio

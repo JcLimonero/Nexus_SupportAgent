@@ -47,7 +47,7 @@ def _flush_db():
 @pytest.mark.anyio
 async def test_cache_stats_requires_auth(client):
     response = await client.get("/api/admin/cache/stats")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
@@ -98,7 +98,7 @@ async def test_cache_stats_empty(client):
 @pytest.mark.anyio
 async def test_cache_flush_requires_auth(client):
     response = await client.delete("/api/admin/cache")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio
