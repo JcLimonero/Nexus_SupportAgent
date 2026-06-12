@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { IS_LOCAL, localLogin } from "@/lib/auth";
+import { localLogin } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LoginPage() {
@@ -22,16 +22,9 @@ export default function LoginPage() {
     setSubmitting(true);
     setError("");
     try {
-      if (IS_LOCAL) {
-        await localLogin(email, password);
-        refresh();
-        router.push("/chat");
-      } else {
-        const { signInWithEmailAndPassword } = await import("firebase/auth");
-        const { auth } = await import("@/lib/firebase");
-        await signInWithEmailAndPassword(auth, email, password);
-        router.push("/chat");
-      }
+      await localLogin(email, password);
+      refresh();
+      router.push("/chat");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Credenciales incorrectas");
     } finally {
@@ -72,11 +65,6 @@ export default function LoginPage() {
           <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 12, color: "#98989A", textTransform: "uppercase", letterSpacing: 3, marginTop: 4 }}>
             SUPPORT AGENT
           </div>
-          {IS_LOCAL && (
-            <span style={{ display: "inline-block", marginTop: 12, fontSize: 10, color: "#777", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", border: "1px solid #444", padding: "2px 8px" }}>
-              DEV LOCAL
-            </span>
-          )}
         </div>
 
         {/* Form body */}

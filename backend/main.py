@@ -6,7 +6,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import get_settings
 from db.connection import init_db, AsyncSessionLocal
@@ -18,6 +17,8 @@ settings = get_settings()
 # ── In-memory rate limiter ────────────────────────────────────────────────────
 # NOTE: this resets on container restart; use Redis-backed storage for
 # multi-instance production deployments.
+# Pure ASGI (not BaseHTTPMiddleware) so streaming responses pass through
+# without buffering and CORS headers are still added by the outer middleware.
 
 _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/auth/login":   (20, 60),   # 20 req / 60 s per IP (brute-force guard)
@@ -27,30 +28,34 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
 }
 
 
-class _RateLimitMiddleware(BaseHTTPMiddleware):
+class _RateLimitMiddleware:
     def __init__(self, app):
-        super().__init__(app)
+        self.app = app
         self._windows: dict[str, list[float]] = defaultdict(list)
 
-    async def dispatch(self, request: Request, call_next):
-        if not settings.rate_limit_enabled:
-            return await call_next(request)
-        path = request.url.path
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not settings.rate_limit_enabled:
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
         for prefix, (max_req, window) in _RATE_RULES.items():
             if path == prefix or path.startswith(prefix + "/"):
-                ip = (request.client.host if request.client else "unknown")
+                client = scope.get("client")
+                ip = client[0] if client else "unknown"
                 key = f"{ip}:{prefix}"
                 now = time.monotonic()
                 self._windows[key] = [t for t in self._windows[key] if now - t < window]
                 if len(self._windows[key]) >= max_req:
-                    return JSONResponse(
+                    response = JSONResponse(
                         {"detail": "Demasiadas solicitudes. Intenta más tarde."},
                         status_code=429,
                         headers={"Retry-After": str(window)},
                     )
+                    await response(scope, receive, send)
+                    return
                 self._windows[key].append(now)
                 break
-        return await call_next(request)
+        await self.app(scope, receive, send)
 
 
 # ── App lifecycle ─────────────────────────────────────────────────────────────
@@ -86,8 +91,7 @@ async def _migrate():
 async def lifespan(app: FastAPI):
     await init_db()
     await _migrate()
-    if settings.auth_provider == "local":
-        await _seed_admin()
+    await _seed_admin()
     yield
 
 
@@ -127,8 +131,7 @@ app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 
-if settings.auth_provider == "local":
-    from auth.local_auth import router as local_auth_router
-    from routers.users import router as users_router
-    app.include_router(local_auth_router)
-    app.include_router(users_router)
+from auth.local_auth import router as local_auth_router
+from routers.users import router as users_router
+app.include_router(local_auth_router)
+app.include_router(users_router)

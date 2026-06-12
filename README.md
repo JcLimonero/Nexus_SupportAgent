@@ -101,7 +101,7 @@ npm test
 
 ```
 backend/
-  auth/           JWT auth (local) / Firebase verify stub
+  auth/           JWT auth — local username/password + HS256 tokens
   db/             SQLAlchemy models + async engine + init_db
   ingestion/      PDF (PyMuPDF) + video (faster-whisper) processors
   llm/            Gemini 3.5 Flash client (Vertex AI)
@@ -111,7 +111,7 @@ backend/
 frontend/
   app/            Next.js pages: login, chat, admin (dashboard + upload), admin/users
   components/     MessageBubble · SourcePanel · ThemeToggle · Toast
-  lib/            auth (sessionStorage JWT) · api client (SSE) · Firebase stub
+  lib/            auth (sessionStorage JWT) · api client (SSE)
   __mocks__/      Jest mocks for ESM packages (react-markdown, remark-gfm, rehype-sanitize)
 .github/
   workflows/      CI/CD: backend tests → pip-audit → frontend tests → Docker build → deploy
@@ -159,6 +159,6 @@ Deploys are manual-trigger only (`workflow_dispatch`). Every push/PR runs: backe
 ## Adding documents
 
 1. Open the app → **Admin** panel
-2. Drag-and-drop a PDF or MP4 (max 50 MB)
+2. Drag-and-drop a PDF or MP4 (max 100 MB)
 3. Indexing runs in the background (PDFs: ~5s/page, videos: ~1 min/10 min of audio)
 4. Ask questions in the chat — answers cite the source pages/videos

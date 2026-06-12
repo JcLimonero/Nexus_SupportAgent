@@ -1,13 +1,5 @@
-/**
- * Unified auth helpers.
- * LOCAL_DEV=true  → JWT stored in sessionStorage, issued by our own backend.
- * LOCAL_DEV=false → Firebase ID token.
- */
-const IS_LOCAL = process.env.NEXT_PUBLIC_LOCAL_DEV === "true";
 const TOKEN_KEY = "nexus_token";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-// ── Local JWT helpers ────────────────────────────────────────────────────────
 
 export function getLocalToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -37,19 +29,8 @@ export async function localLogout() {
   clearLocalToken();
 }
 
-// ── Unified: get the current bearer token ────────────────────────────────────
-
 export async function getBearerToken(): Promise<string> {
-  if (IS_LOCAL) {
-    const token = getLocalToken();
-    if (!token) throw new Error("No autenticado");
-    return token;
-  }
-  // Firebase path
-  const { auth } = await import("./firebase");
-  const user = auth.currentUser;
-  if (!user) throw new Error("No autenticado");
-  return user.getIdToken();
+  const token = getLocalToken();
+  if (!token) throw new Error("No autenticado");
+  return token;
 }
-
-export { IS_LOCAL };

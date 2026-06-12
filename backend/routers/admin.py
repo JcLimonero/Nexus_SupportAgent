@@ -21,7 +21,7 @@ from config import get_settings
 settings = get_settings()
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB hard cap
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB hard cap
 _ALLOWED_MIME = {"application/pdf", "video/mp4"}
 
 
@@ -109,7 +109,7 @@ async def upload_file(
     # Read with hard size cap to prevent OOM uploads
     content = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(content) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="El archivo supera el límite de 50 MB")
+        raise HTTPException(status_code=413, detail="El archivo supera el límite de 100 MB")
 
     # Magic bytes validation — extension spoofing prevention
     kind = filetype.guess(content[:512])

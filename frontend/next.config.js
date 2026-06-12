@@ -26,7 +26,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' blob: data:",
-              `connect-src 'self' ${apiUrl} https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com`,
+              `connect-src 'self' ${apiUrl} https://*.googleapis.com`,
               "object-src 'none'",
               "frame-ancestors 'none'",
               "base-uri 'self'",

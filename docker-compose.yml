@@ -31,12 +31,12 @@ services:
       # GCP project for Vertex AI (embeddings in production)
       VERTEX_AI_PROJECT: nexus-support-agent
       VERTEX_AI_LOCATION: us-central1
-      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: /home/nexus/.config/gcloud/application_default_credentials.json
     volumes:
       - ./backend:/app
       - nexus_data:/data
-      # Mounts your local gcloud credentials so Vertex AI works inside the container
-      - ${APPDATA}/gcloud:/root/.config/gcloud:ro
+      # Mounts your local gcloud credentials into the nexus user's home (container runs as nexus, not root)
+      - ${APPDATA}/gcloud:/home/nexus/.config/gcloud:ro
     depends_on:
       db:
         condition: service_healthy

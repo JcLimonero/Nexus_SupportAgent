@@ -72,7 +72,7 @@ async def test_upload_rejects_oversized_file(client):
     from db.connection import get_db
     from main import app
     app.dependency_overrides[get_db] = make_db_override()
-    big = b"%PDF-1.4 " + b"A" * (50 * 1024 * 1024 + 1)  # 50 MB + 1 byte
+    big = b"%PDF-1.4 " + b"A" * (100 * 1024 * 1024 + 1)  # 100 MB + 1 byte
     response = await client.post(
         "/api/admin/upload",
         files={"file": ("big.pdf", big, "application/pdf")},

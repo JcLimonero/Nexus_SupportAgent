@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { IS_LOCAL, localLogout } from "@/lib/auth";
+import { localLogout } from "@/lib/auth";
 import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, getDocumentBlobUrl, submitFeedback } from "@/lib/api";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
@@ -96,15 +96,9 @@ export default function ChatPage() {
     sendText(userText);
   };
 
-  const handleLogout = async () => {
-    if (IS_LOCAL) {
-      localLogout();
-      refresh();
-    } else {
-      const { signOut } = await import("firebase/auth");
-      const { auth }    = await import("@/lib/firebase");
-      await signOut(auth);
-    }
+  const handleLogout = () => {
+    localLogout();
+    refresh();
     router.push("/");
   };
 
