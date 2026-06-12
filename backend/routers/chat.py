@@ -3,6 +3,7 @@ import logging
 import re
 import uuid
 import asyncio
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -11,15 +12,50 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, distinct
 
 from db.connection import get_db, AsyncSessionLocal
-from db.models import ChatSession, ChatMessage, DocumentChunk, MessageFeedback
+from db.models import ChatSession, ChatMessage, DocumentChunk, MessageFeedback, ResponseCache
 from auth.firebase_verify import get_current_user
-from retrieval.vector_search import search_chunks
+from retrieval.vector_search import search_chunks, embed_text
 from retrieval.context_builder import build_context
 from llm.gemini_client import ask_gemini, stream_gemini_response
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+_CACHE_DISTANCE_THRESHOLD = 0.05  # cosine distance; 0.05 ≈ similarity 0.95
+
+
+async def _lookup_cache(db: AsyncSession, embedding: list[float]) -> ResponseCache | None:
+    dist_expr = ResponseCache.question_embedding.cosine_distance(embedding)
+    result = await db.execute(
+        select(ResponseCache, dist_expr.label("dist"))
+        .where(dist_expr <= _CACHE_DISTANCE_THRESHOLD)
+        .order_by(dist_expr)
+        .limit(1)
+    )
+    row = result.first()
+    return row[0] if row else None
+
+
+async def _save_to_cache(
+    embedding: list[float],
+    question: str,
+    answer: str,
+    sources: dict,
+    follow_ups: list[str],
+) -> None:
+    try:
+        async with AsyncSessionLocal() as save_db:
+            save_db.add(ResponseCache(
+                question_embedding=embedding,
+                question_text=question,
+                answer=answer,
+                sources=sources,
+                follow_ups=follow_ups,
+            ))
+            await save_db.commit()
+    except Exception as exc:
+        logger.error("Cache save error: %s", exc)
 
 
 class ChatRequest(BaseModel):
@@ -145,12 +181,55 @@ async def chat_stream(
         for m in reversed(result.scalars().all())
     ]
 
-    chunks = await search_chunks(db, request.message)
-    context, pdf_sources, video_sources = build_context(chunks)
+    # Embed once — reused for cache lookup and doc search
+    question_embedding = await asyncio.to_thread(embed_text, request.message)
 
-    # Capture plain values — session may not be accessible after db closes
+    # ── Cache check ────────────────────────────────────────────────────────────
+    cached = await _lookup_cache(db, question_embedding)
+
     session_id_str = str(session.id)
     user_message = request.message
+
+    if cached:
+        cached.hit_count += 1
+        cached.last_used_at = datetime.utcnow()
+        try:
+            await db.commit()
+        except Exception as exc:
+            logger.error("Cache hit update error: %s", exc)
+
+        async def generate_cached():
+            assistant_msg_id = uuid.uuid4()
+            try:
+                async with AsyncSessionLocal() as save_db:
+                    save_db.add(ChatMessage(
+                        session_id=uuid.UUID(session_id_str),
+                        role="user",
+                        content=user_message,
+                    ))
+                    save_db.add(ChatMessage(
+                        id=assistant_msg_id,
+                        session_id=uuid.UUID(session_id_str),
+                        role="assistant",
+                        content=cached.answer,
+                        sources=cached.sources,
+                    ))
+                    await save_db.commit()
+            except Exception as exc:
+                logger.error("Cached message save error: %s", exc)
+
+            yield f"data: {_json.dumps({'token': cached.answer})}\n\n"
+            yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': cached.answer, 'pdf_sources': cached.sources.get('pdfs', []), 'video_sources': cached.sources.get('videos', []), 'follow_ups': cached.follow_ups, 'from_cache': True})}\n\n"
+
+        return StreamingResponse(
+            generate_cached(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # ── Cache miss — full pipeline ─────────────────────────────────────────────
+    chunks = await search_chunks(db, request.message, embedding=question_embedding)
+    context, pdf_sources, video_sources = build_context(chunks)
 
     async def generate():
         accumulated = ""
@@ -209,6 +288,15 @@ async def chat_stream(
                 await save_db.commit()
         except Exception as exc:
             logger.error("DB save error after stream: %s", exc)
+
+        # Save to semantic cache for future identical/similar questions
+        await _save_to_cache(
+            question_embedding,
+            user_message,
+            answer,
+            {"pdfs": pdf_sources, "videos": video_sources},
+            follow_ups_list,
+        )
 
         yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': answer, 'pdf_sources': pdf_sources, 'video_sources': video_sources, 'follow_ups': follow_ups_list})}\n\n"
 

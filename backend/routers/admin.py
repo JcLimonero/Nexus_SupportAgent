@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
 from db.connection import get_db, AsyncSessionLocal
-from db.models import DocumentChunk
+from db.models import DocumentChunk, ResponseCache
 from auth.firebase_verify import get_current_user
 from ingestion.pdf_processor import extract_pdf_chunks
 from ingestion.video_processor import extract_video_chunks
@@ -97,6 +97,12 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error al guardar el archivo: {e}")
 
     background_tasks.add_task(_process_and_index, tmp_path, file.filename, file_url, source_type)
+
+    # Invalidate semantic cache — new document may change correct answers
+    async with AsyncSessionLocal() as flush_db:
+        await flush_db.execute(delete(ResponseCache))
+        await flush_db.commit()
+
     return {"status": "processing", "file_name": file.filename, "url": file_url}
 
 
@@ -122,6 +128,7 @@ async def delete_document(
     user: dict = Depends(get_current_user),
 ):
     await db.execute(delete(DocumentChunk).where(DocumentChunk.file_name == file_name))
+    await db.execute(delete(ResponseCache))  # knowledge base changed — flush cache
     await db.commit()
     return {"status": "deleted", "file_name": file_name}
 
@@ -165,3 +172,37 @@ async def serve_document(
     from fastapi.responses import FileResponse
     media = "application/pdf" if target.suffix.lower() == ".pdf" else "video/mp4"
     return FileResponse(str(target), media_type=media, filename=target.name)
+
+
+@router.get("/cache/stats")
+async def cache_stats(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    from sqlalchemy import func
+    result = await db.execute(
+        select(
+            func.count(ResponseCache.id).label("total_entries"),
+            func.sum(ResponseCache.hit_count).label("total_hits"),
+            func.max(ResponseCache.created_at).label("newest_entry"),
+        )
+    )
+    row = result.first()
+    return {
+        "total_entries": row.total_entries or 0,
+        "total_hits": int(row.total_hits or 0),
+        "newest_entry": row.newest_entry.isoformat() if row.newest_entry else None,
+    }
+
+
+@router.delete("/cache", status_code=204)
+async def flush_cache(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    await db.execute(delete(ResponseCache))
+    await db.commit()

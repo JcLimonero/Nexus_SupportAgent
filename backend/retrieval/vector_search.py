@@ -51,12 +51,20 @@ def embed_document(text: str) -> list[float]:
 
 # ── Search ───────────────────────────────────────────────────────────────────
 
-async def search_chunks(db: AsyncSession, query: str, k: int | None = None) -> list[dict]:
-    """Embed query (in thread) → cosine search via pgvector (async)."""
+async def search_chunks(
+    db: AsyncSession,
+    query: str,
+    k: int | None = None,
+    embedding: list[float] | None = None,
+) -> list[dict]:
+    """Embed query (in thread) → cosine search via pgvector (async).
+
+    Pass a pre-computed embedding to skip the embed call.
+    """
     if k is None:
         k = settings.max_chunks_retrieved
 
-    query_embedding = await asyncio.to_thread(embed_text, query)
+    query_embedding = embedding if embedding is not None else await asyncio.to_thread(embed_text, query)
 
     result = await db.execute(
         select(DocumentChunk)
