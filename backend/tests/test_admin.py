@@ -216,7 +216,8 @@ async def test_serve_requires_auth(client):
 
 
 @pytest.mark.anyio
-async def test_serve_requires_admin(client):
+async def test_serve_accessible_to_regular_user(client):
+    """Any authenticated user can fetch source documents (file not found → 404, not 403)."""
     from db.connection import get_db
     from main import app
     app.dependency_overrides[get_db] = make_db_override()
@@ -225,4 +226,4 @@ async def test_serve_requires_admin(client):
         headers={"Authorization": f"Bearer {_user()}"},
     )
     app.dependency_overrides.clear()
-    assert response.status_code == 403
+    assert response.status_code == 404

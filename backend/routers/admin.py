@@ -189,7 +189,7 @@ async def get_excerpt(
 @router.get("/documents/serve/{file_path:path}")
 async def serve_document(
     file_path: str,
-    _: dict = Depends(require_admin),
+    _: dict = Depends(get_current_user),
 ):
     if settings.storage_provider != "local":
         raise HTTPException(status_code=501, detail="Solo disponible en almacenamiento local")

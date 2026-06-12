@@ -23,6 +23,7 @@ export function SourcePanel({
   const [error, setError] = useState("");
   const [opening, setOpening] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const currentGcsUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
@@ -34,19 +35,25 @@ export function SourcePanel({
       .finally(() => setLoading(false));
   }, [source?.chunk_id]);
 
-  // Reset video player when source changes
+  // Reset video player when the source file changes.
+  // Dep is gcs_url (not chunk_id) so it fires for both PDFs and videos —
+  // video sources have chunk_id=undefined always, so [chunk_id] never fired for them.
   useEffect(() => {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     setOpening(false);
+    setError("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source?.chunk_id]);
+  }, [source?.gcs_url]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  // Sync ref on every render so async callbacks can detect stale fetches
+  currentGcsUrlRef.current = source?.gcs_url ?? null;
 
   if (!source) return null;
 
@@ -58,20 +65,22 @@ export function SourcePanel({
       window.open(source.gcs_url, "_blank");
       return;
     }
+    const fetchFor = source.gcs_url;
     setOpening(true);
+    setError("");
     try {
       const blobUrl = await getDocumentBlobUrl(source.gcs_url);
+      // Discard result if source changed while fetch was in flight (panel closed/switched)
+      if (currentGcsUrlRef.current !== fetchFor) { URL.revokeObjectURL(blobUrl); return; }
       if (isPdf) {
-        // PDFs open in a new tab — browser handles them natively
         window.open(blobUrl, "_blank");
       } else {
-        // Videos play inline to avoid popup-blocker issues with window.open after await
         setVideoUrl(blobUrl);
       }
     } catch {
-      // silent — serve endpoint may not exist in this env
+      if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el video.");
     } finally {
-      setOpening(false);
+      if (currentGcsUrlRef.current === fetchFor) setOpening(false);
     }
   };
 
