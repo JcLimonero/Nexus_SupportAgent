@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 const nextConfig = {
   output: "standalone",
 
@@ -24,7 +26,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' blob: data:",
-              "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com",
+              `connect-src 'self' ${apiUrl} https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com`,
               "object-src 'none'",
               "frame-ancestors 'none'",
               "base-uri 'self'",
