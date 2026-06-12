@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { getBearerToken } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useToast } from "@/components/Toast";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -17,13 +18,13 @@ interface User {
 export default function UsersPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [users, setUsers]         = useState<User[]>([]);
-  const [fetching, setFetching]   = useState(true);
-  const [newEmail, setNewEmail]   = useState("");
+  const { toast } = useToast();
+  const [users, setUsers]             = useState<User[]>([]);
+  const [fetching, setFetching]       = useState(true);
+  const [newEmail, setNewEmail]       = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newIsAdmin, setNewIsAdmin]   = useState(false);
-  const [creating, setCreating]   = useState(false);
-  const [error, setError]         = useState("");
+  const [creating, setCreating]       = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -32,24 +33,21 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const token = await getBearerToken();
-      const res   = await fetch(`${API}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setUsers(await res.json());
     } finally {
       setFetching(false);
     }
   };
 
-  useEffect(() => {
-    if (user?.is_admin) fetchUsers();
-  }, [user]);
+  useEffect(() => { if (user?.is_admin) fetchUsers(); }, [user]);
 
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
-    setError("");
     try {
       const token = await getBearerToken();
-      const res   = await fetch(`${API}/api/users`, {
+      const res = await fetch(`${API}/api/users`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ email: newEmail, password: newPassword, is_admin: newIsAdmin }),
@@ -59,29 +57,49 @@ export default function UsersPage() {
         throw new Error(data.detail || "Error al crear usuario");
       }
       setNewEmail(""); setNewPassword(""); setNewIsAdmin(false);
+      toast(`Usuario ${newEmail} creado.`, "success");
       fetchUsers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error");
+      toast(err instanceof Error ? err.message : "Error al crear usuario", "error");
     } finally {
       setCreating(false);
     }
   };
 
-  const toggleActive = async (u: User) => {
+  const patch = async (u: User, body: Partial<Pick<User, "is_active" | "is_admin">>) => {
     const token = await getBearerToken();
-    await fetch(`${API}/api/users/${u.id}`, {
+    const res = await fetch(`${API}/api/users/${u.id}`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ is_active: !u.is_active }),
+      body: JSON.stringify(body),
     });
+    if (!res.ok) { toast("Error al actualizar el usuario.", "error"); return; }
     fetchUsers();
   };
 
+  const toggleActive = (u: User) => {
+    patch(u, { is_active: !u.is_active }).then(() =>
+      toast(`${u.email} ${!u.is_active ? "activado" : "desactivado"}.`, "success")
+    );
+  };
+
+  const toggleAdmin = (u: User) => {
+    if (!confirm(`¿${u.is_admin ? "Revocar" : "Conceder"} permisos de administrador a ${u.email}?`)) return;
+    patch(u, { is_admin: !u.is_admin }).then(() =>
+      toast(`${u.email} ${!u.is_admin ? "es ahora administrador" : "ya no es administrador"}.`, "success")
+    );
+  };
+
   const deleteUser = async (u: User) => {
-    if (!confirm(`¿Eliminar a ${u.email}?`)) return;
+    if (!confirm(`¿Eliminar a ${u.email}? Esta acción no se puede deshacer.`)) return;
     const token = await getBearerToken();
-    await fetch(`${API}/api/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    fetchUsers();
+    const res = await fetch(`${API}/api/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) {
+      toast(`${u.email} eliminado.`, "success");
+      fetchUsers();
+    } else {
+      toast("Error al eliminar el usuario.", "error");
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -115,10 +133,7 @@ export default function UsersPage() {
             </h1>
           </div>
           <div className="flex items-center gap-3 mt-1">
-            <ThemeToggle
-              className="p-1 transition-colors"
-              style={{ color: "#777", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties}
-            />
+            <ThemeToggle className="p-1 transition-colors" style={{ color: "#777", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties} />
             <button
               onClick={() => router.push("/admin")}
               style={{ fontSize: 10, color: "#98989A", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
@@ -132,6 +147,7 @@ export default function UsersPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 space-y-6">
+
         {/* Create user */}
         <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)", borderLeft: "3px solid var(--gv-gray-mid, #d8d8d8)" }}>
@@ -142,65 +158,30 @@ export default function UsersPage() {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="gv-label block mb-1.5">Correo electrónico</label>
-                  <input
-                    type="email"
-                    placeholder="usuario@empresa.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    required
-                    style={inputStyle}
+                  <input type="email" placeholder="usuario@empresa.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
-                    onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
-                  />
+                    onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
                 </div>
                 <div className="flex-1">
                   <label className="gv-label block mb-1.5">Contraseña</label>
-                  <input
-                    type="password"
-                    placeholder="Mínimo 8 caracteres"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={8}
-                    style={inputStyle}
+                  <input type="password" placeholder="Mínimo 8 caracteres" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
-                    onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
-                  />
+                    onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase" }}>
-                  <input
-                    type="checkbox"
-                    checked={newIsAdmin}
-                    onChange={(e) => setNewIsAdmin(e.target.checked)}
-                    style={{ accentColor: "var(--text-primary)", width: 14, height: 14 }}
-                  />
+                  <input type="checkbox" checked={newIsAdmin} onChange={(e) => setNewIsAdmin(e.target.checked)} style={{ accentColor: "var(--text-primary)", width: 14, height: 14 }} />
                   Administrador
                 </label>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="transition-colors disabled:opacity-40"
-                  style={{
-                    fontFamily: '"Barlow Condensed", sans-serif',
-                    fontWeight: 700,
-                    fontSize: 11,
-                    letterSpacing: "2px",
-                    textTransform: "uppercase",
-                    backgroundColor: "var(--btn-primary-bg)",
-                    color: "var(--btn-primary-text)",
-                    border: "none",
-                    padding: "8px 20px",
-                    cursor: creating ? "not-allowed" : "pointer",
-                  }}
+                <button type="submit" disabled={creating} className="transition-colors disabled:opacity-40"
+                  style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "2px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
                   onMouseEnter={(e) => { if (!creating) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
                 >
                   {creating ? "Creando..." : "Crear usuario"}
                 </button>
               </div>
-              {error && <p style={{ fontSize: 11, color: "#c0392b" }}>{error}</p>}
             </form>
           </div>
         </div>
@@ -215,12 +196,8 @@ export default function UsersPage() {
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}>
-                {["Email", "Rol", "Estado", ""].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-5 py-3"
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)" }}
-                  >
+                {["Email", "Rol", "Estado", "Acciones"].map((h) => (
+                  <th key={h} className="text-left px-5 py-3" style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)" }}>
                     {h}
                   </th>
                 ))}
@@ -228,62 +205,33 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {users.map((u, i) => (
-                <tr
-                  key={u.id}
-                  style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)` }}
-                >
-                  <td className="px-5 py-3" style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>
-                    {u.email}
-                  </td>
+                <tr key={u.id} style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)` }}>
+                  <td className="px-5 py-3" style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>{u.email}</td>
                   <td className="px-5 py-3">
-                    <span
-                      style={{
-                        fontFamily: '"Barlow Condensed", sans-serif',
-                        fontSize: 10,
-                        fontWeight: 600,
-                        letterSpacing: "1px",
-                        textTransform: "uppercase",
-                        padding: "2px 8px",
-                        border: "1px solid var(--border-default)",
-                        color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)",
-                        backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent",
-                      }}
-                    >
+                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: "1px solid var(--border-default)", color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)", backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent" }}>
                       {u.is_admin ? "Admin" : "Usuario"}
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <span
-                      style={{
-                        fontFamily: '"Barlow Condensed", sans-serif',
-                        fontSize: 10,
-                        fontWeight: 600,
-                        letterSpacing: "1px",
-                        textTransform: "uppercase",
-                        padding: "2px 8px",
-                        border: `1px solid ${u.is_active ? "#4a7c4a" : "#c0392b"}`,
-                        color: u.is_active ? "#4a7c4a" : "#c0392b",
-                      }}
-                    >
+                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: `1px solid ${u.is_active ? "#4a7c4a" : "#c0392b"}`, color: u.is_active ? "#4a7c4a" : "#c0392b" }}>
                       {u.is_active ? "Activo" : "Inactivo"}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <button
-                        onClick={() => toggleActive(u)}
-                        style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                      >
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         {u.is_active ? "Desactivar" : "Activar"}
                       </button>
-                      <button
-                        onClick={() => deleteUser(u)}
-                        style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => toggleAdmin(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
+                        {u.is_admin ? "Revocar admin" : "Hacer admin"}
+                      </button>
+                      <button onClick={() => deleteUser(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "#c0392b")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                      >
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Eliminar
                       </button>
                     </div>
@@ -291,11 +239,7 @@ export default function UsersPage() {
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>
-                    No hay usuarios registrados.
-                  </td>
-                </tr>
+                <tr><td colSpan={4} className="px-5 py-10 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>No hay usuarios registrados.</td></tr>
               )}
             </tbody>
           </table>

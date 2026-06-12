@@ -8,10 +8,10 @@ from pathlib import Path
 import filetype
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 
 from db.connection import get_db, AsyncSessionLocal
-from db.models import DocumentChunk, ResponseCache
+from db.models import DocumentChunk, ResponseCache, User, ChatSession, ChatMessage, MessageFeedback
 from auth.firebase_verify import get_current_user
 from ingestion.pdf_processor import extract_pdf_chunks
 from ingestion.video_processor import extract_video_chunks
@@ -232,3 +232,30 @@ async def flush_cache(
 ):
     await db.execute(delete(ResponseCache))
     await db.commit()
+
+
+# ── Dashboard stats ───────────────────────────────────────────────────────────
+
+@router.get("/stats")
+async def dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    total_users    = (await db.execute(select(func.count()).select_from(User))).scalar_one()
+    active_users   = (await db.execute(select(func.count()).select_from(User).where(User.is_active == True))).scalar_one()
+    total_sessions = (await db.execute(select(func.count()).select_from(ChatSession))).scalar_one()
+    total_messages = (await db.execute(select(func.count()).select_from(ChatMessage))).scalar_one()
+    total_docs     = (await db.execute(select(func.count(func.distinct(DocumentChunk.file_name))).select_from(DocumentChunk))).scalar_one()
+    cache_entries  = (await db.execute(select(func.count()).select_from(ResponseCache))).scalar_one()
+    cache_hits     = (await db.execute(select(func.coalesce(func.sum(ResponseCache.hit_count), 0)))).scalar_one()
+    thumbs_up      = (await db.execute(select(func.count()).select_from(MessageFeedback).where(MessageFeedback.rating == "up"))).scalar_one()
+    thumbs_down    = (await db.execute(select(func.count()).select_from(MessageFeedback).where(MessageFeedback.rating == "down"))).scalar_one()
+
+    return {
+        "users":         {"total": total_users, "active": active_users},
+        "sessions":      {"total": total_sessions},
+        "messages":      {"total": total_messages},
+        "documents":     {"total": total_docs},
+        "cache":         {"entries": cache_entries, "total_hits": int(cache_hits)},
+        "feedback":      {"up": thumbs_up, "down": thumbs_down},
+    }
