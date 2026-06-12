@@ -47,7 +47,8 @@ jobs:
             passlib[bcrypt]==1.7.4 \
             bcrypt==4.0.1 \
             aiosqlite==0.20.0 \
-            pgvector==0.3.5 \
+            pgvector==0.4.2 \
+            filetype==1.2.0 \
             pytest==8.3.2 \
             pytest-asyncio==0.23.8 \
             anyio==4.4.0
