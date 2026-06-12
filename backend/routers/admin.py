@@ -201,7 +201,7 @@ async def serve_document(
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     from fastapi.responses import FileResponse
     media = "application/pdf" if target.suffix.lower() == ".pdf" else "video/mp4"
-    return FileResponse(str(target), media_type=media, filename=target.name)
+    return FileResponse(str(target), media_type=media)
 
 
 @router.get("/cache/stats")
