@@ -11,7 +11,7 @@ async function headers(json = true): Promise<Record<string, string>> {
 
 export type StreamEvent =
   | { token: string }
-  | { done: true; session_id: string; answer: string; pdf_sources: unknown[]; video_sources: unknown[]; follow_ups: string[] }
+  | { done: true; session_id: string; message_id: string; answer: string; pdf_sources: unknown[]; video_sources: unknown[]; follow_ups: string[] }
   | { error: string };
 
 export async function* sendMessageStream(
@@ -134,6 +134,16 @@ export async function getExcerpt(chunkId: string) {
     page_number: number | null;
     content: string;
   }>;
+}
+
+export async function submitFeedback(messageId: string, rating: "up" | "down") {
+  const res = await fetch(`${API_URL}/api/messages/${messageId}/feedback`, {
+    method: "POST",
+    headers: await headers(),
+    body: JSON.stringify({ rating }),
+  });
+  if (!res.ok) throw new Error("Error al enviar feedback");
+  return res.json();
 }
 
 export async function getDocumentBlobUrl(gcsUrl: string): Promise<string> {

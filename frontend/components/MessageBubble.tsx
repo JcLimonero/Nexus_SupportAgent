@@ -19,6 +19,7 @@ export interface Message {
     videos: Array<{ file_name: string; gcs_url: string }>;
   };
   follow_ups?: string[];
+  feedback?: "up" | "down";
 }
 
 const mdComponents: Components = {
@@ -106,12 +107,16 @@ export function MessageBubble({
   onFollowUp,
   onOpenSource,
   onOpenVideo,
+  onFeedback,
+  onRetry,
 }: {
   message: Message;
   streaming?: boolean;
   onFollowUp?: (text: string) => void;
   onOpenSource?: (pdf: PdfSource) => void;
   onOpenVideo?: (video: { file_name: string; gcs_url: string }) => void;
+  onFeedback?: (rating: "up" | "down") => void;
+  onRetry?: () => void;
 }) {
   const isUser = message.role === "user";
   const hasSources =
@@ -184,6 +189,75 @@ export function MessageBubble({
                 </span>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Feedback + retry row */}
+        {!isUser && !streaming && (onFeedback || onRetry) && (
+          <div className="flex items-center gap-1 px-1">
+            {onFeedback && (
+              <>
+                <button
+                  onClick={() => onFeedback("up")}
+                  title="Respuesta útil"
+                  style={{
+                    background: "none",
+                    border: message.feedback === "up" ? "1px solid var(--border-strong)" : "1px solid transparent",
+                    cursor: "pointer",
+                    padding: "3px 5px",
+                    color: message.feedback === "up" ? "var(--text-primary)" : "var(--text-faint)",
+                    lineHeight: 1,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = message.feedback === "up" ? "var(--text-primary)" : "var(--text-faint)"; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={message.feedback === "up" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={() => onFeedback("down")}
+                  title="Respuesta poco útil"
+                  style={{
+                    background: "none",
+                    border: message.feedback === "down" ? "1px solid var(--border-strong)" : "1px solid transparent",
+                    cursor: "pointer",
+                    padding: "3px 5px",
+                    color: message.feedback === "down" ? "var(--text-primary)" : "var(--text-faint)",
+                    lineHeight: 1,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = message.feedback === "down" ? "var(--text-primary)" : "var(--text-faint)"; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={message.feedback === "down" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/>
+                    <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+                  </svg>
+                </button>
+              </>
+            )}
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                title="Reintentar"
+                style={{
+                  background: "none",
+                  border: "1px solid transparent",
+                  cursor: "pointer",
+                  padding: "3px 5px",
+                  color: "var(--text-faint)",
+                  lineHeight: 1,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-faint)"; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="1 4 1 10 7 10"/>
+                  <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+                </svg>
+              </button>
+            )}
           </div>
         )}
 
