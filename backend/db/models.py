@@ -64,6 +64,20 @@ class ChatMessage(Base):
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
 
 
+class ResponseCache(Base):
+    __tablename__ = "response_cache"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    question_embedding: Mapped[list] = mapped_column(Vector(settings.embedding_dimensions))
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    sources: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    follow_ups: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    hit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class MessageFeedback(Base):
     __tablename__ = "message_feedback"
 
