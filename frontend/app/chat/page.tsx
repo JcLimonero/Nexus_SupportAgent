@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { IS_LOCAL, localLogout } from "@/lib/auth";
-import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession } from "@/lib/api";
+import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, getDocumentBlobUrl } from "@/lib/api";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -29,6 +29,7 @@ export default function ChatPage() {
   const [editingTitle, setEditingTitle]       = useState("");
   const [deletingId, setDeletingId]           = useState<string | null>(null);
   const [isStreaming, setIsStreaming]         = useState(false);
+  const [videoLoading, setVideoLoading]       = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const abortRef   = useRef<AbortController | null>(null);
@@ -62,6 +63,19 @@ export default function ChatPage() {
     setCurrentSessionId(null);
     setMessages([]);
     setSidebarOpen(false);
+  };
+
+  const handleOpenVideo = async (video: { file_name: string; gcs_url: string }) => {
+    if (videoLoading) return;
+    setVideoLoading(true);
+    try {
+      const blobUrl = await getDocumentBlobUrl(video.gcs_url);
+      window.open(blobUrl, "_blank");
+    } catch {
+      // silent — video serve unavailable
+    } finally {
+      setVideoLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -517,6 +531,7 @@ export default function ChatPage() {
                     : undefined
                 }
                 onOpenSource={(pdf) => setActiveSource(pdf)}
+                onOpenVideo={handleOpenVideo}
               />
             );
           })}

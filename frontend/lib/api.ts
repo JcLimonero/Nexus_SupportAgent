@@ -138,7 +138,8 @@ export async function getExcerpt(chunkId: string) {
 
 export async function getDocumentBlobUrl(gcsUrl: string): Promise<string> {
   const path = gcsUrl.replace(/^\/data\//, "");
-  const res = await fetch(`${API_URL}/api/admin/documents/serve/${path}`, {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const res = await fetch(`${API_URL}/api/admin/documents/serve/${encodedPath}`, {
     headers: await headers(false),
   });
   if (!res.ok) throw new Error("Error al obtener el documento");
