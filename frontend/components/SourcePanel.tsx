@@ -35,9 +35,7 @@ export function SourcePanel({
       .finally(() => setLoading(false));
   }, [source?.chunk_id]);
 
-  // Reset video player when the source file changes.
-  // Dep is gcs_url (not chunk_id) so it fires for both PDFs and videos —
-  // video sources have chunk_id=undefined always, so [chunk_id] never fired for them.
+  // Reset video player when source file changes (gcs_url covers both PDFs and videos)
   useEffect(() => {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
@@ -70,7 +68,6 @@ export function SourcePanel({
     setError("");
     try {
       const blobUrl = await getDocumentBlobUrl(source.gcs_url);
-      // Discard result if source changed while fetch was in flight (panel closed/switched)
       if (currentGcsUrlRef.current !== fetchFor) { URL.revokeObjectURL(blobUrl); return; }
       if (isPdf) {
         window.open(blobUrl, "_blank");
@@ -78,7 +75,7 @@ export function SourcePanel({
         setVideoUrl(blobUrl);
       }
     } catch {
-      if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el video.");
+      if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el archivo.");
     } finally {
       if (currentGcsUrlRef.current === fetchFor) setOpening(false);
     }
@@ -89,7 +86,7 @@ export function SourcePanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40"
-        style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+        style={{ backgroundColor: "rgba(5,15,26,0.6)", backdropFilter: "blur(2px)", animation: "nqt-fadeIn 0.2s ease both" }}
         onClick={onClose}
       />
 
@@ -97,31 +94,34 @@ export function SourcePanel({
       <div
         className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
         style={{
-          width: "min(480px, 100vw)",
+          width: "min(500px, 100vw)",
           backgroundColor: "var(--bg-surface)",
           borderLeft: "1px solid var(--border-default)",
-          boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
+          boxShadow: "-8px 0 32px rgba(0,0,0,0.25)",
+          animation: "nqt-slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
         }}
       >
-        {/* Header — always dark */}
+        {/* Header */}
         <div
           className="px-5 py-4 shrink-0"
-          style={{ backgroundColor: "var(--gv-black, #222222)", borderBottom: "1px solid #333" }}
+          style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div style={{ width: 24, height: 2, backgroundColor: "#98989A", marginBottom: 10 }} />
-              <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#98989A", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: 5 }}>
-                {isPdf ? "Fragmento de contexto" : "Video de referencia"}
-              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <div style={{ width: 3, height: 16, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
+                  {isPdf ? "Fragmento de contexto" : "Video de referencia"}
+                </p>
+              </div>
               <p
                 title={source.file_name}
-                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 15, color: "#ffffff", textTransform: "uppercase", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 15, color: "#ffffff", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {source.file_name}
               </p>
               {source.page_number != null && (
-                <p style={{ fontSize: 11, color: "#777", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, marginTop: 3 }}>
+                <p style={{ fontSize: 11, color: "#475569", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, marginTop: 3 }}>
                   Página {source.page_number}
                 </p>
               )}
@@ -129,9 +129,9 @@ export function SourcePanel({
             <button
               onClick={onClose}
               aria-label="Cerrar panel"
-              style={{ color: "#777", background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0, marginTop: 2, lineHeight: 1 }}
+              style={{ color: "#475569", background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0, marginTop: 2, lineHeight: 1, borderRadius: "var(--radius-sm)" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#777")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="1" y1="1" x2="13" y2="13" />
@@ -145,7 +145,7 @@ export function SourcePanel({
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {/* Inline video player */}
           {videoUrl && !isPdf && (
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 20, borderRadius: "var(--radius)", overflow: "hidden", border: "1px solid var(--border-default)" }}>
               <video
                 controls
                 autoPlay
@@ -163,7 +163,9 @@ export function SourcePanel({
             </p>
           )}
           {error && !loading && (
-            <p style={{ fontSize: 12, color: "#c0392b", fontWeight: 300 }}>{error}</p>
+            <p style={{ fontSize: 12, color: "#f87171", backgroundColor: "rgba(248,113,113,0.08)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(248,113,113,0.2)", fontWeight: 300 }}>
+              {error}
+            </p>
           )}
           {!source.chunk_id && !loading && (
             <p style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300, lineHeight: 1.65 }}>
@@ -175,7 +177,7 @@ export function SourcePanel({
               <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: 14 }}>
                 Texto extraído por el modelo
               </p>
-              <p style={{ fontSize: 13, fontWeight: 300, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", borderLeft: "2px solid var(--border-strong)", paddingLeft: 14 }}>
+              <p style={{ fontSize: 13, fontWeight: 300, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", borderLeft: "2px solid var(--nqt-blue, #0ea5e9)", paddingLeft: 14 }}>
                 {data.content}
               </p>
             </>
@@ -195,20 +197,22 @@ export function SourcePanel({
                 fontFamily: '"Barlow Condensed", sans-serif',
                 fontWeight: 700,
                 fontSize: 11,
-                letterSpacing: "2px",
+                letterSpacing: "1.5px",
                 textTransform: "uppercase",
                 backgroundColor: "var(--btn-primary-bg)",
                 color: "var(--btn-primary-text)",
                 border: "none",
-                padding: "8px 16px",
+                borderRadius: "var(--radius-sm)",
+                padding: "7px 16px",
                 cursor: opening ? "not-allowed" : "pointer",
                 opacity: opening ? 0.5 : 1,
+                transition: "background-color 0.15s",
               }}
               onMouseEnter={(e) => { if (!opening) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
             >
               {opening
-                ? isPdf ? "Abriendo..." : "Cargando video..."
+                ? isPdf ? "Abriendo..." : "Cargando..."
                 : isPdf ? "Ver documento" : "Ver video"}
             </button>
           )}
