@@ -21,7 +21,7 @@ from config import get_settings
 settings = get_settings()
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB hard cap
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB hard cap
 _ALLOWED_MIME = {"application/pdf", "video/mp4"}
 
 
@@ -109,7 +109,7 @@ async def upload_file(
     # Read with hard size cap to prevent OOM uploads
     content = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(content) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="El archivo supera el límite de 50 MB")
+        raise HTTPException(status_code=413, detail="El archivo supera el límite de 100 MB")
 
     # Magic bytes validation — extension spoofing prevention
     kind = filetype.guess(content[:512])
@@ -189,7 +189,7 @@ async def get_excerpt(
 @router.get("/documents/serve/{file_path:path}")
 async def serve_document(
     file_path: str,
-    _: dict = Depends(require_admin),
+    _: dict = Depends(get_current_user),
 ):
     if settings.storage_provider != "local":
         raise HTTPException(status_code=501, detail="Solo disponible en almacenamiento local")
@@ -201,7 +201,7 @@ async def serve_document(
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     from fastapi.responses import FileResponse
     media = "application/pdf" if target.suffix.lower() == ".pdf" else "video/mp4"
-    return FileResponse(str(target), media_type=media, filename=target.name)
+    return FileResponse(str(target), media_type=media)
 
 
 @router.get("/cache/stats")

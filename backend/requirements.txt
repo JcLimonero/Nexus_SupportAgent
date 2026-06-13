@@ -9,10 +9,9 @@ pgvector==0.4.2
 PyJWT==2.13.0
 # Local embeddings (always installed; Vertex AI only used in production)
 sentence-transformers==3.0.1
-# Production: GCP + Firebase
+# Production: GCP (Vertex AI + GCS)
 google-cloud-aiplatform==1.65.0
 google-cloud-storage==2.18.2
-firebase-admin==6.5.0
 # Document/video processing
 pymupdf==1.26.7
 faster-whisper==1.0.3

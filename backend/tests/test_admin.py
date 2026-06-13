@@ -72,7 +72,7 @@ async def test_upload_rejects_oversized_file(client):
     from db.connection import get_db
     from main import app
     app.dependency_overrides[get_db] = make_db_override()
-    big = b"%PDF-1.4 " + b"A" * (50 * 1024 * 1024 + 1)  # 50 MB + 1 byte
+    big = b"%PDF-1.4 " + b"A" * (100 * 1024 * 1024 + 1)  # 100 MB + 1 byte
     response = await client.post(
         "/api/admin/upload",
         files={"file": ("big.pdf", big, "application/pdf")},
@@ -216,7 +216,8 @@ async def test_serve_requires_auth(client):
 
 
 @pytest.mark.anyio
-async def test_serve_requires_admin(client):
+async def test_serve_accessible_to_regular_user(client):
+    """Any authenticated user can fetch source documents (file not found → 404, not 403)."""
     from db.connection import get_db
     from main import app
     app.dependency_overrides[get_db] = make_db_override()
@@ -225,4 +226,4 @@ async def test_serve_requires_admin(client):
         headers={"Authorization": f"Bearer {_user()}"},
     )
     app.dependency_overrides.clear()
-    assert response.status_code == 403
+    assert response.status_code == 404

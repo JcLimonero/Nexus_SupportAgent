@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getExcerpt, getDocumentBlobUrl } from "@/lib/api";
 import type { PdfSource } from "./MessageBubble";
 
@@ -22,6 +22,8 @@ export function SourcePanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [opening, setOpening] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const currentGcsUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
@@ -33,11 +35,25 @@ export function SourcePanel({
       .finally(() => setLoading(false));
   }, [source?.chunk_id]);
 
+  // Reset video player when the source file changes.
+  // Dep is gcs_url (not chunk_id) so it fires for both PDFs and videos —
+  // video sources have chunk_id=undefined always, so [chunk_id] never fired for them.
+  useEffect(() => {
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
+    setOpening(false);
+    setError("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source?.gcs_url]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  // Sync ref on every render so async callbacks can detect stale fetches
+  currentGcsUrlRef.current = source?.gcs_url ?? null;
 
   if (!source) return null;
 
@@ -49,14 +65,22 @@ export function SourcePanel({
       window.open(source.gcs_url, "_blank");
       return;
     }
+    const fetchFor = source.gcs_url;
     setOpening(true);
+    setError("");
     try {
       const blobUrl = await getDocumentBlobUrl(source.gcs_url);
-      window.open(blobUrl, "_blank");
+      // Discard result if source changed while fetch was in flight (panel closed/switched)
+      if (currentGcsUrlRef.current !== fetchFor) { URL.revokeObjectURL(blobUrl); return; }
+      if (isPdf) {
+        window.open(blobUrl, "_blank");
+      } else {
+        setVideoUrl(blobUrl);
+      }
     } catch {
-      // silent — serve endpoint may not exist in this env
+      if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el video.");
     } finally {
-      setOpening(false);
+      if (currentGcsUrlRef.current === fetchFor) setOpening(false);
     }
   };
 
@@ -73,7 +97,7 @@ export function SourcePanel({
       <div
         className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
         style={{
-          width: "min(440px, 100vw)",
+          width: "min(480px, 100vw)",
           backgroundColor: "var(--bg-surface)",
           borderLeft: "1px solid var(--border-default)",
           boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
@@ -88,7 +112,7 @@ export function SourcePanel({
             <div className="min-w-0 flex-1">
               <div style={{ width: 24, height: 2, backgroundColor: "#98989A", marginBottom: 10 }} />
               <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#98989A", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: 5 }}>
-                Fragmento de contexto
+                {isPdf ? "Fragmento de contexto" : "Video de referencia"}
               </p>
               <p
                 title={source.file_name}
@@ -117,8 +141,22 @@ export function SourcePanel({
           </div>
         </div>
 
-        {/* Excerpt content */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
+          {/* Inline video player */}
+          {videoUrl && !isPdf && (
+            <div style={{ marginBottom: 20 }}>
+              <video
+                controls
+                autoPlay
+                style={{ width: "100%", backgroundColor: "#000", display: "block" }}
+                src={videoUrl}
+              >
+                Tu navegador no soporta video HTML5.
+              </video>
+            </div>
+          )}
+
           {loading && (
             <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: "2px", textTransform: "uppercase" }}>
               Cargando...
@@ -149,30 +187,34 @@ export function SourcePanel({
           className="px-5 py-4 shrink-0 flex items-center justify-between"
           style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}
         >
-          <button
-            onClick={openDocument}
-            disabled={opening}
-            style={{
-              fontFamily: '"Barlow Condensed", sans-serif',
-              fontWeight: 700,
-              fontSize: 11,
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              backgroundColor: "var(--btn-primary-bg)",
-              color: "var(--btn-primary-text)",
-              border: "none",
-              padding: "8px 16px",
-              cursor: opening ? "not-allowed" : "pointer",
-              opacity: opening ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => { if (!opening) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
-          >
-            {opening ? "Abriendo..." : isPdf ? "Ver documento" : "Ver video"}
-          </button>
+          {!videoUrl && (
+            <button
+              onClick={openDocument}
+              disabled={opening}
+              style={{
+                fontFamily: '"Barlow Condensed", sans-serif',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                backgroundColor: "var(--btn-primary-bg)",
+                color: "var(--btn-primary-text)",
+                border: "none",
+                padding: "8px 16px",
+                cursor: opening ? "not-allowed" : "pointer",
+                opacity: opening ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => { if (!opening) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
+            >
+              {opening
+                ? isPdf ? "Abriendo..." : "Cargando video..."
+                : isPdf ? "Ver documento" : "Ver video"}
+            </button>
+          )}
           <button
             onClick={onClose}
-            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
           >

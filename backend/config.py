@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://nexus:nexusdev@db:5432/nexus_agent"
 
     # ── Provider switches ────────────────────────────────────────────────────
-    # local | firebase
-    auth_provider: str = "local"
     # local | gcs
     storage_provider: str = "local"
     # local | vertexai
@@ -44,9 +42,6 @@ class Settings(BaseSettings):
     vertex_ai_location: str = "us-central1"
     gcs_bucket_name: str = ""
 
-    # ── Firebase (production only) ──────────────────────────────────────────
-    firebase_project_id: str = ""
-
     # ── LLM (Gemini via Vertex AI) ───────────────────────────────────────────
     gemini_model: str = "gemini-3.5-flash"
 
@@ -61,11 +56,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_insecure_secret(self) -> "Settings":
-        # Raise at startup when local auth is active in a GCS/production environment
-        # and the JWT secret is still the default development value.
         if (
-            self.auth_provider == "local"
-            and self.gcs_bucket_name  # non-empty → production storage
+            self.gcs_bucket_name  # non-empty → production deployment
             and self.local_jwt_secret in _INSECURE_SECRETS
         ):
             raise ValueError(
