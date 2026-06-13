@@ -44,10 +44,12 @@ export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [docs, setDocs]           = useState<Doc[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver]   = useState(false);
-  const [stats, setStats]         = useState<Stats | null>(null);
+  const [docs, setDocs]             = useState<Doc[]>([]);
+  const [uploading, setUploading]   = useState(false);
+  const [dragOver, setDragOver]     = useState(false);
+  const [stats, setStats]           = useState<Stats | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleting, setDeleting]     = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/");
@@ -80,8 +82,15 @@ export default function AdminPage() {
     }
   }, [toast]);
 
-  const handleDelete = async (fileName: string) => {
-    if (!confirm(`¿Eliminar "${fileName}" del índice de búsqueda?`)) return;
+  const handleDelete = (fileName: string) => {
+    setPendingDelete(fileName);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const fileName = pendingDelete;
+    setPendingDelete(null);
+    setDeleting(true);
     try {
       await deleteDocument(fileName);
       setDocs((prev) => prev.filter((d) => d.file_name !== fileName));
@@ -89,6 +98,8 @@ export default function AdminPage() {
       loadStats();
     } catch {
       toast("Error al eliminar el documento.", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -273,6 +284,91 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: "rgba(5,15,26,0.7)", backdropFilter: "blur(2px)" }}
+          onClick={() => setPendingDelete(null)}
+        >
+          <div
+            className="w-full max-w-sm"
+            style={{
+              backgroundColor: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderTop: "3px solid #f87171",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="px-6 pt-6 pb-4">
+              <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 16, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                Eliminar documento
+              </p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.6 }}>
+                ¿Eliminar{" "}
+                <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                  &quot;{pendingDelete}&quot;
+                </span>{" "}
+                del índice de búsqueda? Esta acción no se puede deshacer.
+              </p>
+            </div>
+
+            {/* Modal footer */}
+            <div
+              className="px-6 py-4 flex items-center justify-end gap-3"
+              style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}
+            >
+              <button
+                onClick={() => setPendingDelete(null)}
+                style={{
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 600,
+                  fontSize: 11,
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  background: "none",
+                  border: "1px solid var(--border-strong)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "7px 16px",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                style={{
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  backgroundColor: "#ef4444",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "7px 16px",
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  opacity: deleting ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.backgroundColor = "#dc2626"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
+              >
+                {deleting ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
