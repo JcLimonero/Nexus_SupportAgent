@@ -26,9 +26,15 @@ interface Stats {
 
 function StatCard({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   return (
-    <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", padding: "16px 20px", borderLeft: "3px solid var(--gv-gray-mid, #d8d8d8)" }}>
+    <div style={{
+      backgroundColor: "var(--bg-surface)",
+      border: "1px solid var(--border-default)",
+      borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
+      borderRadius: "var(--radius)",
+      padding: "16px 20px",
+    }}>
       <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
-      <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 28, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1 }}>{value}</p>
+      <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 28, fontWeight: 700, color: "var(--nqt-blue, #0ea5e9)", lineHeight: 1 }}>{value}</p>
       {sub && <p style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4, fontWeight: 300 }}>{sub}</p>}
     </div>
   );
@@ -38,10 +44,10 @@ export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [docs, setDocs]       = useState<Doc[]>([]);
+  const [docs, setDocs]           = useState<Doc[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver]   = useState(false);
-  const [stats, setStats]     = useState<Stats | null>(null);
+  const [stats, setStats]         = useState<Stats | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/");
@@ -97,20 +103,25 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
       {/* Header */}
-      <div className="px-8 py-5" style={{ backgroundColor: "var(--gv-black, #222222)", borderBottom: "1px solid #333" }}>
+      <div
+        className="px-8 py-5"
+        style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}
+      >
         <div className="max-w-4xl mx-auto flex items-start justify-between">
           <div>
-            <div style={{ width: 28, height: 2, backgroundColor: "#98989A", marginBottom: 10 }} />
-            <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Panel de administración
-            </h1>
-            <p style={{ fontSize: 12, color: "#777", marginTop: 4, fontWeight: 300 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
+              <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
+                Panel de administración
+              </h1>
+            </div>
+            <p style={{ fontSize: 12, color: "#64748b", marginTop: 2, fontWeight: 300, paddingLeft: 11 }}>
               Documentos, estadísticas y gestión de usuarios.
             </p>
             {user?.is_admin && (
               <button
                 onClick={() => router.push("/admin/users")}
-                style={{ marginTop: 8, fontSize: 10, color: "#98989A", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                style={{ marginTop: 8, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", paddingLeft: 11 }}
               >
                 Gestionar usuarios →
               </button>
@@ -119,13 +130,13 @@ export default function AdminPage() {
           <div className="flex items-center gap-3 mt-1">
             <ThemeToggle
               className="transition-colors p-1"
-              style={{ color: "#777", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties}
+              style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties}
             />
             <button
               onClick={() => router.push("/chat")}
-              style={{ fontSize: 10, color: "#98989A", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#e8e8e8")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#98989A")}
+              style={{ fontSize: 10, color: "#64748b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
             >
               ← Chat
             </button>
@@ -138,7 +149,9 @@ export default function AdminPage() {
         {/* Stats grid */}
         {stats && (
           <div>
-            <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>Resumen del sistema</p>
+            <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+              Resumen del sistema
+            </p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <StatCard label="Usuarios" value={stats.users.total} sub={`${stats.users.active} activos`} />
               <StatCard label="Sesiones" value={stats.sessions.total} />
@@ -158,14 +171,17 @@ export default function AdminPage() {
 
         {/* Upload zone */}
         <div>
-          <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>Subir documentos</p>
+          <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+            Subir documentos
+          </p>
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
             style={{
-              border: `2px dashed ${dragOver ? "var(--text-primary)" : "var(--border-strong)"}`,
-              backgroundColor: dragOver ? "var(--bg-muted)" : "var(--bg-surface)",
+              border: `2px dashed ${dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--border-strong)"}`,
+              backgroundColor: dragOver ? "rgba(14,165,233,0.05)" : "var(--bg-surface)",
+              borderRadius: "var(--radius)",
               padding: "40px 24px",
               textAlign: "center",
               transition: "border-color 0.15s, background-color 0.15s",
@@ -173,17 +189,21 @@ export default function AdminPage() {
           >
             <input id="file-input" type="file" accept=".pdf,.mp4" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <label htmlFor="file-input" className="cursor-pointer block">
-              <div style={{ fontSize: 32, marginBottom: 12 }}>{uploading ? "⏳" : "↑"}</div>
+              <div style={{ fontSize: 28, marginBottom: 12, color: dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--text-faint)" }}>
+                {uploading ? "⏳" : "↑"}
+              </div>
               <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
                 {uploading ? "Subiendo y lanzando indexación..." : "Arrastra archivos · o haz clic para seleccionar"}
               </p>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>PDF · MP4 · máx. 100 MB</p>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+                PDF · MP4 · máx. 100 MB
+              </p>
             </label>
           </div>
         </div>
 
         {/* Documents list */}
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden" }}>
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)" }}>
             <div>
               <span className="gv-label">Documentos indexados</span>
@@ -192,7 +212,7 @@ export default function AdminPage() {
             <button
               onClick={() => { loadDocs(); loadStats(); }}
               style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
             >
               Actualizar
@@ -200,24 +220,49 @@ export default function AdminPage() {
           </div>
 
           {docs.length === 0 ? (
-            <p className="py-12 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>No hay documentos indexados aún.</p>
+            <p className="py-12 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>
+              No hay documentos indexados aún.
+            </p>
           ) : (
             <ul>
               {docs.map((doc, i) => (
                 <li
                   key={doc.file_name}
-                  className="flex items-center justify-between px-5 py-3"
-                  style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)`, borderLeft: "3px solid var(--border-strong)" }}
+                  className="flex items-center justify-between px-5 py-3 transition-colors"
+                  style={{
+                    borderTop: i === 0 ? "none" : `1px solid var(--border-default)`,
+                    borderLeft: "3px solid transparent",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderLeftColor = "var(--nqt-blue, #0ea5e9)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderLeftColor = "transparent")}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="gv-label shrink-0">{doc.source_type === "pdf" ? "PDF" : "VID"}</span>
-                    <p className="text-sm font-light truncate" style={{ color: "var(--text-secondary)" }}>{doc.file_name}</p>
+                    <span
+                      className="shrink-0"
+                      style={{
+                        fontFamily: '"Barlow Condensed", sans-serif',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: "1.5px",
+                        textTransform: "uppercase",
+                        color: doc.source_type === "pdf" ? "var(--nqt-blue, #0ea5e9)" : "var(--nqt-cyan, #06b6d4)",
+                        backgroundColor: doc.source_type === "pdf" ? "rgba(14,165,233,0.1)" : "rgba(6,182,212,0.1)",
+                        border: `1px solid ${doc.source_type === "pdf" ? "rgba(14,165,233,0.3)" : "rgba(6,182,212,0.3)"}`,
+                        borderRadius: "3px",
+                        padding: "1px 5px",
+                      }}
+                    >
+                      {doc.source_type === "pdf" ? "PDF" : "VID"}
+                    </span>
+                    <p className="text-sm font-light truncate" style={{ color: "var(--text-secondary)" }}>
+                      {doc.file_name}
+                    </p>
                   </div>
                   <button
                     onClick={() => handleDelete(doc.file_name)}
                     className="shrink-0 ml-4 transition-colors"
                     style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#c0392b")}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                   >
                     Eliminar

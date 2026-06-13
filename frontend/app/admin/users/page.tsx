@@ -105,6 +105,7 @@ export default function UsersPage() {
   const inputStyle: React.CSSProperties = {
     backgroundColor: "var(--input-bg)",
     border: "1px solid var(--input-border)",
+    borderRadius: "var(--radius)",
     color: "var(--text-primary)",
     padding: "8px 12px",
     fontSize: 13,
@@ -124,21 +125,26 @@ export default function UsersPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
       {/* Header */}
-      <div className="px-8 py-5" style={{ backgroundColor: "var(--gv-black, #222222)", borderBottom: "1px solid #333" }}>
+      <div
+        className="px-8 py-5"
+        style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}
+      >
         <div className="max-w-3xl mx-auto flex items-start justify-between">
           <div>
-            <div style={{ width: 28, height: 2, backgroundColor: "#98989A", marginBottom: 10 }} />
-            <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Gestión de usuarios
-            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
+              <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
+                Gestión de usuarios
+              </h1>
+            </div>
           </div>
           <div className="flex items-center gap-3 mt-1">
-            <ThemeToggle className="p-1 transition-colors" style={{ color: "#777", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties} />
+            <ThemeToggle className="p-1 transition-colors" style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties} />
             <button
               onClick={() => router.push("/admin")}
-              style={{ fontSize: 10, color: "#98989A", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#e8e8e8")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#98989A")}
+              style={{ fontSize: 10, color: "#64748b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
             >
               ← Admin
             </button>
@@ -149,8 +155,8 @@ export default function UsersPage() {
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 space-y-6">
 
         {/* Create user */}
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
-          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)", borderLeft: "3px solid var(--gv-gray-mid, #d8d8d8)" }}>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)" }}>
+          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)", borderLeft: "3px solid var(--nqt-blue, #0ea5e9)" }}>
             <span className="gv-label">Nuevo usuario</span>
           </div>
           <div className="px-5 py-5">
@@ -175,7 +181,7 @@ export default function UsersPage() {
                   Administrador
                 </label>
                 <button type="submit" disabled={creating} className="transition-colors disabled:opacity-40"
-                  style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "2px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
+                  style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "2px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius)", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
                   onMouseEnter={(e) => { if (!creating) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
                 >
@@ -187,7 +193,7 @@ export default function UsersPage() {
         </div>
 
         {/* Users table */}
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
             <span className="gv-label">Usuarios registrados</span>
             <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif' }}>({users.length})</span>
@@ -195,7 +201,7 @@ export default function UsersPage() {
 
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}>
+              <tr style={{ borderBottom: "2px solid var(--nqt-blue, #0ea5e9)", backgroundColor: "var(--bg-muted)" }}>
                 {["Email", "Rol", "Estado", "Acciones"].map((h) => (
                   <th key={h} className="text-left px-5 py-3" style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)" }}>
                     {h}
