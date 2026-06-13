@@ -104,6 +104,81 @@ html.dark {
   scrollbar-color: var(--nqt-navy-mid) transparent;
 }
 
+/* ── Keyframe animations ───────────────────────────────────────────────────── */
+@keyframes nqt-slideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nqt-slideInRight {
+  from { opacity: 0.2; transform: translateX(32px); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+
+@keyframes nqt-slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes nqt-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes nqt-modalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+@keyframes nqt-shake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-7px); }
+  30%       { transform: translateX(7px); }
+  45%       { transform: translateX(-5px); }
+  60%       { transform: translateX(5px); }
+  75%       { transform: translateX(-3px); }
+  90%       { transform: translateX(3px); }
+}
+
+@keyframes nqt-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+@keyframes nqt-glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0   rgba(14, 165, 233, 0); }
+  50%       { box-shadow: 0 0 0 6px rgba(14, 165, 233, 0.22); }
+}
+
+@keyframes nqt-toastIn {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes nqt-toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+
+/* ── Utility classes ───────────────────────────────────────────────────────── */
+.nqt-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-muted) 25%,
+    var(--border-default) 50%,
+    var(--bg-muted) 75%
+  );
+  background-size: 600px 100%;
+  animation: nqt-shimmer 1.5s infinite linear;
+  border-radius: var(--radius-sm);
+}
+
+/* Send / primary action button press feedback */
+.btn-send:active:not(:disabled) {
+  transform: scale(0.96);
+  transition: transform 0.08s ease;
+}
+
 /* ── Base resets ───────────────────────────────────────────────────────────── */
 @layer base {
   body {

@@ -72,6 +72,7 @@ export default function LoginPage() {
           borderRadius: "var(--radius-lg)",
           boxShadow: "0 25px 50px rgba(0,0,0,0.4)",
           overflow: "hidden",
+          animation: "nqt-slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
         }}
       >
         {/* Card header — navy gradient */}
@@ -139,7 +140,11 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p className="text-xs" style={{ color: "#f87171", backgroundColor: "rgba(248,113,113,0.08)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(248,113,113,0.2)" }}>
+              <p
+                key={error}
+                className="text-xs"
+                style={{ color: "#f87171", backgroundColor: "rgba(248,113,113,0.08)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(248,113,113,0.2)", animation: "nqt-shake 0.45s ease" }}
+              >
                 {error}
               </p>
             )}

@@ -86,7 +86,7 @@ export function SourcePanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40"
-        style={{ backgroundColor: "rgba(5,15,26,0.6)", backdropFilter: "blur(2px)" }}
+        style={{ backgroundColor: "rgba(5,15,26,0.6)", backdropFilter: "blur(2px)", animation: "nqt-fadeIn 0.2s ease both" }}
         onClick={onClose}
       />
 
@@ -98,6 +98,7 @@ export function SourcePanel({
           backgroundColor: "var(--bg-surface)",
           borderLeft: "1px solid var(--border-default)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.25)",
+          animation: "nqt-slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
         }}
       >
         {/* Header */}

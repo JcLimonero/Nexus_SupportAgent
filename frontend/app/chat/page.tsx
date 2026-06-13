@@ -269,6 +269,7 @@ export default function ChatPage() {
             border: "none",
             borderRadius: "var(--radius-sm)",
             cursor: "pointer",
+            animation: sessions.length === 0 ? "nqt-glowPulse 2.2s ease-in-out infinite" : undefined,
           }}
           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
@@ -450,8 +451,8 @@ export default function ChatPage() {
 
       {/* Sidebar — mobile overlay */}
       {sidebarOpen && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
-          <div className="flex flex-col h-full" style={{ width: 256 }}>
+        <div className="md:hidden fixed inset-0 z-40 flex" style={{ animation: "nqt-fadeIn 0.2s ease both" }}>
+          <div className="flex flex-col h-full" style={{ width: 256, animation: "nqt-slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
             {sidebar}
           </div>
           <div
@@ -512,6 +513,8 @@ export default function ChatPage() {
                         color: "var(--text-primary)",
                         cursor: "pointer",
                         borderRadius: "2px var(--radius) var(--radius) 2px",
+                        animation: "nqt-slideUp 0.35s ease both",
+                        animationDelay: `${i * 75}ms`,
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = "rgba(14,165,233,0.04)";
@@ -543,16 +546,23 @@ export default function ChatPage() {
             const isLastAssistant = i === messages.length - 1 && msg.role === "assistant";
             const isCompleted = !sending && isLastAssistant;
             return (
-              <MessageBubble
+              <div
                 key={i}
-                message={msg}
-                streaming={isStreaming && isLastAssistant}
-                onFollowUp={isCompleted ? (text) => { sendText(text); } : undefined}
-                onOpenSource={(pdf) => setActiveSource(pdf)}
-                onOpenVideo={handleOpenVideo}
-                onFeedback={msg.role === "assistant" && !sending && msg.content ? (rating) => handleFeedback(i, rating) : undefined}
-                onRetry={isCompleted ? handleRetry : undefined}
-              />
+                style={{
+                  animation: "nqt-slideUp 0.28s ease both",
+                  animationDelay: `${Math.min(i, 6) * 35}ms`,
+                }}
+              >
+                <MessageBubble
+                  message={msg}
+                  streaming={isStreaming && isLastAssistant}
+                  onFollowUp={isCompleted ? (text) => { sendText(text); } : undefined}
+                  onOpenSource={(pdf) => setActiveSource(pdf)}
+                  onOpenVideo={handleOpenVideo}
+                  onFeedback={msg.role === "assistant" && !sending && msg.content ? (rating) => handleFeedback(i, rating) : undefined}
+                  onRetry={isCompleted ? handleRetry : undefined}
+                />
+              </div>
             );
           })}
 
@@ -639,7 +649,7 @@ export default function ChatPage() {
               <button
                 type="submit"
                 disabled={!input.trim()}
-                className="px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
+                className="btn-send px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
                 style={{
                   fontFamily: '"Barlow Condensed", sans-serif',
                   fontWeight: 700,
