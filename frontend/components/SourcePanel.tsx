@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getExcerpt, getDocumentBlobUrl } from "@/lib/api";
 import type { PdfSource } from "./MessageBubble";
 
