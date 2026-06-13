@@ -26,6 +26,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' blob: data:",
+              "media-src 'self' blob:",
               `connect-src 'self' ${apiUrl} https://*.googleapis.com`,
               "object-src 'none'",
               "frame-ancestors 'none'",
