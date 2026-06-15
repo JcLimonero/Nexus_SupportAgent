@@ -412,8 +412,8 @@ async def test_chat_stream_strips_long_followup_marker_split_across_chunks(clien
     # Two long Spanish follow-ups — the marker line is ~190 chars.
     marker_line = (
         '\nNEXUS_FOLLOW_UPS: ['
-        '"¿Cómo se realiza la emisión de un cheque para pagar a un proveedor?", '
-        '"¿Qué modificaciones se pueden hacer a una factura cuando está en estatus capturado?"]'
+        '"¿Quién es el responsable de generar y entregar las credenciales de acceso?", '
+        '"¿Con qué plataformas de correo y panel de control funciona este manual?"]'
     )
     full = answer + marker_line
 
@@ -428,7 +428,7 @@ async def test_chat_stream_strips_long_followup_marker_split_across_chunks(clien
          patch("routers.chat.AsyncSessionLocal", _make_save_db_mock()):
         response = await client.post(
             "/api/chat/stream",
-            json={"message": "como leo los xml de proveedores"},
+            json={"message": "como configuro las credenciales"},
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -442,8 +442,8 @@ async def test_chat_stream_strips_long_followup_marker_split_across_chunks(clien
     assert streamed.strip() == answer, "client should receive exactly the answer text"
     assert done["answer"] == answer
     assert done["follow_ups"] == [
-        "¿Cómo se realiza la emisión de un cheque para pagar a un proveedor?",
-        "¿Qué modificaciones se pueden hacer a una factura cuando está en estatus capturado?",
+        "¿Quién es el responsable de generar y entregar las credenciales de acceso?",
+        "¿Con qué plataformas de correo y panel de control funciona este manual?",
     ]
 
 

@@ -87,6 +87,10 @@ export default function ChatPage() {
     sendText(userText);
   };
 
+  // Clicking a related/follow-up question pauses briefly then types the answer
+  // out word by word, so it reads like the assistant is replying live.
+  const handleFollowUp = (text: string) => sendText(text, { typewriter: true, delayMs: 1000 });
+
   const handleLogout = () => {
     localLogout();
     refresh();
@@ -97,8 +101,12 @@ export default function ChatPage() {
     abortRef.current?.abort();
   };
 
-  const sendText = async (text: string) => {
+  const sendText = async (
+    text: string,
+    opts?: { typewriter?: boolean; delayMs?: number },
+  ) => {
     if (!text || sending) return;
+    const typewriter = opts?.typewriter ?? false;
     const controller = new AbortController();
     abortRef.current = controller;
     setSending(true);
@@ -108,19 +116,87 @@ export default function ChatPage() {
       { role: "user", content: text },
       { role: "assistant", content: "", sources: { pdfs: [], videos: [] }, follow_ups: [] },
     ]);
+
+    const appendToLast = (chunk: string) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: last.content + chunk };
+        }
+        return updated;
+      });
+    };
+    const setLastContent = (content: string) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content };
+        }
+        return updated;
+      });
+    };
+
+    // Typewriter reveal: the rendered answer is always a growing word-by-word
+    // prefix of `fullText`. Tokens (even a whole cached answer in one chunk)
+    // append to fullText; the reveal loop is the *sole* writer of content, so
+    // it never jumps — it walks the prefix forward at a steady cadence until it
+    // catches up to the final authoritative answer.
+    const REVEAL_CHARS = 4;   // chars revealed per tick
+    const REVEAL_TICK = 14;   // ms between ticks (~285 chars/s)
+    let fullText = "";
+    let revealed = 0;
+    let streamDone = false;
+    let revealPromise: Promise<void> | null = null;
+    const startReveal = () => {
+      revealPromise = (async () => {
+        while (!controller.signal.aborted) {
+          if (revealed >= fullText.length) {
+            if (streamDone) break;
+            await new Promise((r) => setTimeout(r, 16));
+            continue;
+          }
+          revealed = Math.min(fullText.length, revealed + REVEAL_CHARS);
+          setLastContent(fullText.slice(0, revealed));
+          await new Promise((r) => setTimeout(r, REVEAL_TICK));
+        }
+      })();
+    };
+
+    // Optional pause before answering so it feels like the assistant is composing.
+    if (opts?.delayMs) {
+      await new Promise((r) => setTimeout(r, opts.delayMs));
+      if (controller.signal.aborted) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          return last?.role === "assistant" && last.content === "" ? prev.slice(0, -1) : prev;
+        });
+        abortRef.current = null;
+        setSending(false);
+        return;
+      }
+    }
+
     try {
       for await (const event of sendMessageStream(text, currentSessionId, controller.signal)) {
         if ("token" in event) {
           setIsStreaming(true);
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last?.role === "assistant") {
-              updated[updated.length - 1] = { ...last, content: last.content + event.token };
-            }
-            return updated;
-          });
+          if (typewriter) {
+            fullText += event.token;
+            if (!revealPromise) startReveal();
+          } else {
+            appendToLast(event.token);
+          }
         } else if ("done" in event && event.done) {
+          const aborted = controller.signal.aborted;
+          if (typewriter) {
+            // event.answer is authoritative; let the reveal walk to its end so
+            // there is never an abrupt jump to the full text.
+            if (!aborted) fullText = event.answer;
+            streamDone = true;
+            if (revealPromise) await revealPromise;
+          }
           setCurrentSessionId(event.session_id);
           setMessages((prev) => {
             const updated = [...prev];
@@ -129,12 +205,14 @@ export default function ChatPage() {
               updated[updated.length - 1] = {
                 ...last,
                 id: event.message_id,
-                content: event.answer,
+                // In typewriter mode the reveal loop already wrote the content;
+                // keep it (and whatever was revealed if the user hit stop).
+                content: typewriter || aborted ? last.content : event.answer,
                 sources: {
                   pdfs: event.pdf_sources as PdfSource[],
                   videos: event.video_sources as Array<{ file_name: string; gcs_url: string }>,
                 },
-                follow_ups: event.follow_ups,
+                follow_ups: aborted ? last.follow_ups : event.follow_ups,
               };
             }
             return updated;
@@ -556,7 +634,7 @@ export default function ChatPage() {
                 <MessageBubble
                   message={msg}
                   streaming={isStreaming && isLastAssistant}
-                  onFollowUp={isCompleted ? sendText : undefined}
+                  onFollowUp={isCompleted ? handleFollowUp : undefined}
                   onOpenSource={setActiveSource}
                   onOpenVideo={handleOpenVideo}
                   onFeedback={msg.role === "assistant" && !sending && msg.content ? handleFeedback : undefined}
