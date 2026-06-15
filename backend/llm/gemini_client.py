@@ -86,6 +86,7 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
             "temperature": 0.1,
             "responseMimeType": "application/json",
             "responseSchema": _RESPONSE_SCHEMA,
+            "thinkingConfig": {"thinkingBudget": settings.gemini_thinking_budget},
         },
     }
 
@@ -160,6 +161,7 @@ async def stream_gemini_response(history: list[dict], question: str, context: st
         "generationConfig": {
             "maxOutputTokens": 4096,
             "temperature": 0.1,
+            "thinkingConfig": {"thinkingBudget": settings.gemini_thinking_budget},
         },
     }
 

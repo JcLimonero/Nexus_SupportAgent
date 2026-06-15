@@ -41,6 +41,16 @@ def embed_text(text: str) -> list[float]:
     return _get_vertex_model().get_embeddings([TextEmbeddingInput(text, "RETRIEVAL_QUERY")])[0].values
 
 
+def warm_up() -> None:
+    """Force the embedding backend to load at startup.
+
+    The local SentenceTransformer lazy-loads on first use, costing ~6–7s —
+    which otherwise lands on the first user after every container start.
+    Calling this in the app lifespan moves that cost to boot time.
+    """
+    embed_text("warm up")
+
+
 def embed_document(text: str) -> list[float]:
     """Embed a document chunk."""
     if settings.embedding_provider == "local":

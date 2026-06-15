@@ -89,9 +89,15 @@ async def _migrate():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
+    from retrieval.vector_search import warm_up
+
     await init_db()
     await _migrate()
     await _seed_admin()
+    # Preload the embedding model so the first user doesn't pay the ~6s
+    # cold-load. Run in a thread to avoid blocking the event loop.
+    await asyncio.to_thread(warm_up)
     yield
 
 

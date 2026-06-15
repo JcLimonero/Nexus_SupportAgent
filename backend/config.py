@@ -44,6 +44,12 @@ class Settings(BaseSettings):
 
     # ── LLM (Gemini via Vertex AI) ───────────────────────────────────────────
     gemini_model: str = "gemini-3.5-flash"
+    # Thinking budget (tokens). gemini-3.5-flash is a reasoning model whose
+    # default dynamic budget spends 5–12s on server-side thinking before the
+    # first token — wasteful for extractive RAG QA. A small fixed floor keeps
+    # answers grounded while cutting time-to-first-token to ~2s. 0 disables
+    # thinking entirely but can drop grounding on awkwardly-phrased queries.
+    gemini_thinking_budget: int = 512
 
     # ── RAG tuning ──────────────────────────────────────────────────────────
     max_chunks_retrieved: int = 5
