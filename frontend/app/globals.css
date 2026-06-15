@@ -8,76 +8,80 @@ html, body {
   height: 100%;
 }
 
-/* ── Design tokens ─────────────────────────────────────────────────────────── */
+/* ── Nexus Q Tech design tokens ────────────────────────────────────────────── */
 :root {
-  --gv-black:      #222222;
-  --gv-gray:       #98989A;
-  --gv-gray-light: #f0f0f0;
-  --gv-gray-mid:   #d8d8d8;
-  --gv-white:      #ffffff;
-  --gv-border:     #e0e0e0;
-  --gv-page-bg:    #ebebeb;
+  /* brand */
+  --nqt-blue:      #0ea5e9;
+  --nqt-blue-dark: #0284c7;
+  --nqt-navy:      #0a2540;
+  --nqt-cyan:      #06b6d4;
+  --nqt-navy-mid:  #1e3a5f;
 
-  /* semantic - light */
-  --bg-page:     #ebebeb;
-  --bg-surface:  #ffffff;
-  --bg-muted:    #f0f0f0;
-  --bg-sidebar:  #222222;
-  --bg-sidebar-hover: #333333;
-  --bg-sidebar-active: #444444;
+  /* radius */
+  --radius-sm: 4px;
+  --radius:    6px;
+  --radius-lg: 10px;
 
-  --text-primary:   #222222;
-  --text-secondary: #444444;
-  --text-muted:     #98989A;
-  --text-faint:     #bbbbbb;
+  /* semantic - light mode */
+  --bg-page:          #f0f4f8;
+  --bg-surface:       #ffffff;
+  --bg-muted:         #f1f5f9;
+  --bg-sidebar:       #0a2540;
+  --bg-sidebar-hover: #112d4e;
+  --bg-sidebar-active:#163660;
 
-  --border-default: #e0e0e0;
-  --border-strong:  #d8d8d8;
+  --text-primary:   #0f172a;
+  --text-secondary: #334155;
+  --text-muted:     #64748b;
+  --text-faint:     #94a3b8;
 
-  --bubble-user-bg:   #222222;
+  --border-default: #e2e8f0;
+  --border-strong:  #cbd5e1;
+
+  --bubble-user-bg:   #0ea5e9;
   --bubble-user-text: #ffffff;
   --bubble-ai-bg:     #ffffff;
-  --bubble-ai-border: #e0e0e0;
-  --bubble-ai-text:   #222222;
+  --bubble-ai-border: #e2e8f0;
+  --bubble-ai-text:   #0f172a;
 
   --input-bg:     #ffffff;
-  --input-border: #d8d8d8;
-  --input-focus:  #222222;
+  --input-border: #cbd5e1;
+  --input-focus:  #0ea5e9;
 
-  --btn-primary-bg:   #222222;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #111111;
+  --btn-primary-bg:    #0ea5e9;
+  --btn-primary-text:  #ffffff;
+  --btn-primary-hover: #0284c7;
 }
 
 html.dark {
-  --bg-page:     #0f0f0f;
-  --bg-surface:  #1a1a1a;
-  --bg-muted:    #252525;
-  --bg-sidebar:  #0d0d0d;
-  --bg-sidebar-hover: #1a1a1a;
-  --bg-sidebar-active: #252525;
+  --bg-page:          #071929;
+  --bg-surface:       #0d2137;
+  --bg-muted:         #0f2847;
+  --bg-sidebar:       #050f1a;
+  --bg-sidebar-hover: #0d2137;
+  --bg-sidebar-active:#112d4e;
 
-  --text-primary:   #e8e8e8;
-  --text-secondary: #bbbbbb;
-  --text-muted:     #666666;
-  --text-faint:     #444444;
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+  --text-faint:     #334155;
 
-  --border-default: #2a2a2a;
-  --border-strong:  #333333;
+  --border-default: #1e3a5f;
+  --border-strong:  #2d5282;
 
-  --bubble-user-bg:   #e0e0e0;
-  --bubble-user-text: #111111;
-  --bubble-ai-bg:     #1a1a1a;
-  --bubble-ai-border: #2a2a2a;
-  --bubble-ai-text:   #e8e8e8;
+  --bubble-user-bg:   #0ea5e9;
+  --bubble-user-text: #ffffff;
+  --bubble-ai-bg:     #0d2137;
+  --bubble-ai-border: #1e3a5f;
+  --bubble-ai-text:   #e2e8f0;
 
-  --input-bg:     #1a1a1a;
-  --input-border: #333333;
-  --input-focus:  #888888;
+  --input-bg:     #0d2137;
+  --input-border: #1e3a5f;
+  --input-focus:  #0ea5e9;
 
-  --btn-primary-bg:   #e8e8e8;
-  --btn-primary-text: #111111;
-  --btn-primary-hover: #d0d0d0;
+  --btn-primary-bg:    #0ea5e9;
+  --btn-primary-text:  #ffffff;
+  --btn-primary-hover: #0284c7;
 }
 
 /* ── Custom scrollbar ──────────────────────────────────────────────────────── */
@@ -89,14 +93,15 @@ html.dark {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
+  background: var(--nqt-navy-mid);
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--nqt-blue);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-color: var(--nqt-navy-mid) transparent;
 }
 
 /* ── Base resets ───────────────────────────────────────────────────────────── */
@@ -109,12 +114,21 @@ html.dark {
     -webkit-font-smoothing: antialiased;
   }
 
-  /* GV-style label utility */
+  .nqt-label {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* keep old alias so existing uses don't break */
   .gv-label {
     font-family: "Barlow Condensed", sans-serif;
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 3px;
+    letter-spacing: 2px;
     text-transform: uppercase;
     color: var(--text-muted);
   }
@@ -126,9 +140,9 @@ html.dark {
     letter-spacing: -0.5px;
   }
 
-  /* Sharp focus ring */
   *:focus-visible {
-    outline: 2px solid var(--input-focus);
-    outline-offset: 0px;
+    outline: 2px solid var(--nqt-blue);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 }

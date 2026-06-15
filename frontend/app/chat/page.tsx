@@ -143,12 +143,10 @@ export default function ChatPage() {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        // User stopped generation — keep whatever partial content arrived
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last?.role === "assistant" && last.content === "") {
-            // Nothing arrived yet — remove the empty placeholder
             return updated.slice(0, -1);
           }
           return updated;
@@ -239,17 +237,24 @@ export default function ChatPage() {
       style={{ backgroundColor: "var(--bg-sidebar)", width: 256, flexShrink: 0 }}
     >
       {/* Brand header */}
-      <div className="px-5 py-5" style={{ borderBottom: "1px solid #333" }}>
-        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 18, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1 }}>
-          NEXUS SUPPORT
-        </div>
-        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#98989A", textTransform: "uppercase", letterSpacing: 3, marginTop: 2 }}>
-          TOTALDEALDER
+      <div className="px-5 py-5" style={{ borderBottom: "1px solid #1e3a5f" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: "linear-gradient(135deg, #0ea5e9, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 12, color: "#fff" }}>N</span>
+          </div>
+          <div>
+            <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 16, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1, lineHeight: 1 }}>
+              NEXUS SUPPORT
+            </div>
+            <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 2 }}>
+              TOTALDEALDER
+            </div>
+          </div>
         </div>
       </div>
 
       {/* New chat */}
-      <div className="px-4 py-3" style={{ borderBottom: "1px solid #333" }}>
+      <div className="px-4 py-3" style={{ borderBottom: "1px solid #1e3a5f" }}>
         <button
           onClick={newChat}
           className="w-full py-2.5 px-3 text-center transition-colors"
@@ -259,12 +264,14 @@ export default function ChatPage() {
             fontSize: 11,
             letterSpacing: "2px",
             textTransform: "uppercase",
-            backgroundColor: "#ffffff",
-            color: "#222222",
+            backgroundColor: "var(--btn-primary-bg)",
+            color: "var(--btn-primary-text)",
             border: "none",
+            borderRadius: "var(--radius-sm)",
+            cursor: "pointer",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f0f0f0")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
         >
           + NUEVA CONVERSACIÓN
         </button>
@@ -273,7 +280,7 @@ export default function ChatPage() {
       {/* Session list */}
       <nav className="flex-1 overflow-y-auto py-2">
         {sessions.length === 0 && (
-          <p style={{ padding: "12px 16px", fontSize: 10, color: "#555", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase" }}>
+          <p style={{ padding: "12px 16px", fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase" }}>
             Sin conversaciones
           </p>
         )}
@@ -282,11 +289,11 @@ export default function ChatPage() {
             key={s.id}
             className="group relative"
             style={{
-              backgroundColor: currentSessionId === s.id ? "#444444" : "transparent",
-              borderLeft: currentSessionId === s.id ? "2px solid #888" : "2px solid transparent",
+              backgroundColor: currentSessionId === s.id ? "var(--bg-sidebar-active)" : "transparent",
+              borderLeft: currentSessionId === s.id ? "2px solid var(--nqt-blue, #0ea5e9)" : "2px solid transparent",
             }}
             onMouseEnter={(e) => {
-              if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "#2a2a2a";
+              if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "var(--bg-sidebar-hover)";
             }}
             onMouseLeave={(e) => {
               if (currentSessionId !== s.id) e.currentTarget.style.backgroundColor = "transparent";
@@ -307,28 +314,28 @@ export default function ChatPage() {
                 style={{
                   fontFamily: '"Barlow Condensed", sans-serif',
                   fontSize: 12,
-                  background: "#333",
-                  color: "#fff",
+                  background: "#0d2137",
+                  color: "#e2e8f0",
                   border: "none",
-                  borderBottom: "1px solid #666",
+                  borderBottom: "1px solid #0ea5e9",
                 }}
               />
             ) : deletingId === s.id ? (
               /* Delete confirmation */
               <div className="px-4 py-2.5">
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#e88", marginBottom: 6 }}>
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#fca5a5", marginBottom: 6 }}>
                   ¿Eliminar conversación?
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => confirmDelete(s.id)}
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#e44", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px" }}
+                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
                   >
                     Eliminar
                   </button>
                   <button
                     onClick={() => setDeletingId(null)}
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#888", border: "1px solid #555", cursor: "pointer", padding: "3px 8px" }}
+                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#64748b", border: "1px solid #1e3a5f", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
                   >
                     Cancelar
                   </button>
@@ -341,10 +348,10 @@ export default function ChatPage() {
                 className="w-full text-left px-4 py-2.5 pr-16"
                 style={{ background: "none", border: "none", cursor: "pointer" }}
               >
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 12, color: currentSessionId === s.id ? "#fff" : "#bbb", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 12, color: currentSessionId === s.id ? "#ffffff" : "#94a3b8", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {s.title ?? fmt(s.created_at)}
                 </span>
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#555", display: "block" }}>
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#2d5282", display: "block" }}>
                   {fmt(s.created_at)}
                 </span>
               </button>
@@ -352,16 +359,14 @@ export default function ChatPage() {
 
             {/* Action icons — visible on hover when not editing/deleting */}
             {editingId !== s.id && deletingId !== s.id && (
-              <div
-                className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1"
-              >
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1">
                 {/* Rename */}
                 <button
                   onClick={(e) => { e.stopPropagation(); startEdit(s); }}
                   title="Renombrar"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#666", padding: 4, lineHeight: 1 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#ccc")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#2d5282", padding: 4, lineHeight: 1 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#94a3b8")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -372,9 +377,9 @@ export default function ChatPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); setDeletingId(s.id); setEditingId(null); }}
                   title="Eliminar"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#666", padding: 4, lineHeight: 1 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e44")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#2d5282", padding: 4, lineHeight: 1 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -389,42 +394,46 @@ export default function ChatPage() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 space-y-2" style={{ borderTop: "1px solid #333" }}>
+      <div className="px-4 py-4 space-y-2" style={{ borderTop: "1px solid #1e3a5f" }}>
         {user && (
-          <p style={{ fontSize: 10, color: "#555", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {user.email}
           </p>
         )}
-        <button
-          onClick={() => router.push("/admin")}
-          className="w-full py-2 px-3 text-center transition-colors"
-          style={{
-            fontFamily: '"Barlow Condensed", sans-serif',
-            fontWeight: 600,
-            fontSize: 10,
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            backgroundColor: "#333",
-            color: "#999",
-            border: "none",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#444"; e.currentTarget.style.color = "#ccc"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#333"; e.currentTarget.style.color = "#999"; }}
-        >
-          Administrar documentos
-        </button>
+        {user?.is_admin && (
+          <button
+            onClick={() => router.push("/admin")}
+            className="w-full py-2 px-3 text-center transition-colors"
+            style={{
+              fontFamily: '"Barlow Condensed", sans-serif',
+              fontWeight: 600,
+              fontSize: 10,
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              backgroundColor: "#0d2137",
+              color: "#64748b",
+              border: "1px solid #1e3a5f",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#112d4e"; e.currentTarget.style.color = "#94a3b8"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#0d2137"; e.currentTarget.style.color = "#64748b"; }}
+          >
+            Administrar documentos
+          </button>
+        )}
         <div className="flex items-center justify-between pt-1">
           <button
             onClick={handleLogout}
-            style={{ fontSize: 10, color: "#555", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#888")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
+            style={{ fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
           >
             Cerrar sesión
           </button>
           <ThemeToggle
             className="transition-colors p-1"
-            style={{ color: "#555", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
+            style={{ color: "#2d5282", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
           />
         </div>
       </div>
@@ -447,7 +456,7 @@ export default function ChatPage() {
           </div>
           <div
             className="flex-1"
-            style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+            style={{ backgroundColor: "rgba(5,15,26,0.7)" }}
             onClick={() => setSidebarOpen(false)}
           />
         </div>
@@ -479,7 +488,7 @@ export default function ChatPage() {
             <div className="flex flex-col items-center justify-center h-full gap-8" style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
               {/* Heading */}
               <div className="text-center">
-                <div style={{ width: 36, height: 2, backgroundColor: "#98989A", margin: "0 auto 16px" }} />
+                <div style={{ width: 36, height: 3, background: "linear-gradient(90deg, #0ea5e9, #06b6d4)", margin: "0 auto 16px", borderRadius: 2 }} />
                 <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
                   ¿EN QUÉ PUEDO<br />AYUDARTE?
                 </p>
@@ -495,20 +504,29 @@ export default function ChatPage() {
                     <button
                       key={i}
                       onClick={() => sendText(s.prompt)}
-                      className="text-left px-4 py-3 transition-colors"
+                      className="text-left px-4 py-3 transition-all"
                       style={{
                         backgroundColor: "var(--bg-surface)",
                         border: "1px solid var(--border-default)",
+                        borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
                         color: "var(--text-primary)",
                         cursor: "pointer",
+                        borderRadius: "2px var(--radius) var(--radius) 2px",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--text-muted)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "rgba(14,165,233,0.04)";
+                        e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "var(--bg-surface)";
+                        e.currentTarget.style.borderColor = "var(--border-default)";
+                        e.currentTarget.style.borderLeftColor = "var(--nqt-blue, #0ea5e9)";
+                      }}
                     >
-                      <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                      <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", display: "block", marginBottom: 4 }}>
                         {s.label}
                       </span>
-                      <span style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                      <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.4, fontWeight: 300 }}>
                         {s.prompt}
                       </span>
                     </button>
@@ -519,7 +537,6 @@ export default function ChatPage() {
           )}
 
           {messages.map((msg, i) => {
-            // Hide empty assistant placeholder while bounce dots are showing
             if (sending && !isStreaming && msg.role === "assistant" && msg.content === "" && i === messages.length - 1) {
               return null;
             }
@@ -541,13 +558,21 @@ export default function ChatPage() {
 
           {sending && !isStreaming && (
             <div className="flex justify-start">
-              <div className="px-4 py-3" style={{ backgroundColor: "var(--bubble-ai-bg)", border: "1px solid var(--bubble-ai-border)" }}>
+              <div
+                className="px-4 py-3"
+                style={{
+                  backgroundColor: "var(--bubble-ai-bg)",
+                  border: "1px solid var(--bubble-ai-border)",
+                  borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
+                  borderRadius: "2px var(--radius) var(--radius) var(--radius)",
+                }}
+              >
                 <div className="flex space-x-1.5 items-center h-4">
                   {[0, 150, 300].map((d) => (
                     <span
                       key={d}
                       className="w-1.5 h-1.5 rounded-full animate-bounce"
-                      style={{ backgroundColor: "var(--text-muted)", animationDelay: `${d}ms` }}
+                      style={{ backgroundColor: "var(--nqt-blue, #0ea5e9)", animationDelay: `${d}ms`, opacity: 0.7 }}
                     />
                   ))}
                 </div>
@@ -575,6 +600,7 @@ export default function ChatPage() {
               style={{
                 backgroundColor: "var(--input-bg)",
                 border: "1px solid var(--input-border)",
+                borderRadius: "var(--radius)",
                 color: "var(--text-primary)",
                 maxHeight: 120,
                 lineHeight: 1.5,
@@ -598,13 +624,14 @@ export default function ChatPage() {
                   fontSize: 11,
                   letterSpacing: "2px",
                   textTransform: "uppercase",
-                  backgroundColor: "#444",
-                  color: "#fff",
-                  border: "1px solid #666",
+                  backgroundColor: "#0d2137",
+                  color: "#94a3b8",
+                  border: "1px solid #1e3a5f",
+                  borderRadius: "var(--radius)",
                   cursor: "pointer",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#555"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#444"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#112d4e"; e.currentTarget.style.color = "#e2e8f0"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#0d2137"; e.currentTarget.style.color = "#94a3b8"; }}
               >
                 Detener
               </button>
@@ -622,6 +649,7 @@ export default function ChatPage() {
                   backgroundColor: "var(--btn-primary-bg)",
                   color: "var(--btn-primary-text)",
                   border: "none",
+                  borderRadius: "var(--radius)",
                   cursor: !input.trim() ? "not-allowed" : "pointer",
                 }}
                 onMouseEnter={(e) => { if (input.trim()) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
