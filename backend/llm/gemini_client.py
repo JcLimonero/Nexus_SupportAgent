@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import time
+import threading
 import google.auth
 import google.auth.transport.requests
 import httpx
@@ -10,6 +12,12 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+# ── GCP token cache ───────────────────────────────────────────────────────────
+# OAuth2 tokens are valid for 3600s. Refreshing on every request wastes
+# 50–200ms per call. Cache and reuse until 60s before expiry.
+_token_cache: dict = {"value": None, "expiry": 0.0}
+_token_lock = threading.Lock()
 
 SYSTEM_PROMPT = """Eres Nexus, un asistente de soporte especializado en el sistema TotalDealer.
 
@@ -46,11 +54,19 @@ _STREAM_ENDPOINT = (
 
 
 def _get_token() -> str:
-    credentials, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    credentials.refresh(google.auth.transport.requests.Request())
-    return credentials.token
+    with _token_lock:
+        now = time.time()
+        if _token_cache["value"] and now < _token_cache["expiry"] - 60:
+            return _token_cache["value"]
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        credentials.refresh(google.auth.transport.requests.Request())
+        _token_cache["value"] = credentials.token
+        expiry = getattr(credentials, "expiry", None)
+        _token_cache["expiry"] = expiry.timestamp() if expiry else now + 3600
+        logger.debug("GCP token refreshed, expires in ~%.0fs", _token_cache["expiry"] - now)
+        return _token_cache["value"]
 
 
 def ask_gemini(history: list[dict], question: str, context: str) -> dict:
