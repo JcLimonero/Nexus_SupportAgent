@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { localLogout } from "@/lib/auth";
@@ -86,9 +87,10 @@ export default function ChatPage() {
     sendText(userText);
   };
 
-  // Clicking a related/follow-up question pauses briefly then types the answer
-  // out word by word, so it reads like the assistant is replying live.
-  const handleFollowUp = (text: string) => sendText(text, { typewriter: true, delayMs: 1000 });
+  // Clicking a suggested or related/follow-up question pauses briefly then
+  // types the answer out word by word, so it reads like the assistant is
+  // replying live.
+  const handleQuestionClick = (text: string) => sendText(text, { typewriter: true, delayMs: 1000 });
 
   const handleLogout = () => {
     localLogout();
@@ -316,18 +318,17 @@ export default function ChatPage() {
     >
       {/* Brand header */}
       <div className="px-5 py-5" style={{ borderBottom: "1px solid #1e3a5f" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: "linear-gradient(135deg, #0ea5e9, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 12, color: "#fff" }}>N</span>
-          </div>
-          <div>
-            <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 16, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1, lineHeight: 1 }}>
-              NEXUS SUPPORT
-            </div>
-            <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 2 }}>
-              TOTALDEALDER
-            </div>
-          </div>
+        <Image
+          src="/brand/nqt-logo-white.png"
+          alt="Nexus Q Tech"
+          width={160}
+          height={58}
+          priority
+          unoptimized
+          style={{ display: "block", width: 160, height: "auto" }}
+        />
+        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 8 }}>
+          Soporte · TotalDealer
         </div>
       </div>
 
@@ -582,7 +583,7 @@ export default function ChatPage() {
                   {suggestions.map((s, i) => (
                     <button
                       key={i}
-                      onClick={() => sendText(s.prompt)}
+                      onClick={() => handleQuestionClick(s.prompt)}
                       className="text-left px-4 py-3 transition-all"
                       style={{
                         backgroundColor: "var(--bg-surface)",
@@ -634,7 +635,7 @@ export default function ChatPage() {
                 <MessageBubble
                   message={msg}
                   streaming={isStreaming && isLastAssistant}
-                  onFollowUp={isCompleted ? handleFollowUp : undefined}
+                  onFollowUp={isCompleted ? handleQuestionClick : undefined}
                   onOpenSource={setActiveSource}
                   onOpenVideo={handleOpenVideo}
                   onFeedback={msg.role === "assistant" && !sending && msg.content ? handleFeedback : undefined}

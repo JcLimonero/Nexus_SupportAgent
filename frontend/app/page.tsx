@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { localLogin } from "@/lib/auth";
@@ -81,9 +82,9 @@ export default function LoginPage() {
           style={{ background: "linear-gradient(135deg, #0a2540 0%, #0d2f54 100%)", borderBottom: "1px solid #1e3a5f" }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            {/* NQT logo mark */}
-            <div style={{ width: 32, height: 32, borderRadius: 6, background: "linear-gradient(135deg, #0ea5e9, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, color: "#fff", letterSpacing: 0 }}>N</span>
+            {/* NQT brandmark — white rounded tile keeps the navy mark crisp on the dark header */}
+            <div style={{ width: 38, height: 38, borderRadius: 8, background: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, flexShrink: 0 }}>
+              <Image src="/brand/nqt-mark-sm.png" alt="Nexus Q Tech" width={30} height={30} priority unoptimized style={{ display: "block", objectFit: "contain" }} />
             </div>
             <div>
               <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 18, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1, lineHeight: 1 }}>
