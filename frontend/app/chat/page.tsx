@@ -87,9 +87,10 @@ export default function ChatPage() {
     sendText(userText);
   };
 
-  // Clicking a related/follow-up question pauses briefly then types the answer
-  // out word by word, so it reads like the assistant is replying live.
-  const handleFollowUp = (text: string) => sendText(text, { typewriter: true, delayMs: 1000 });
+  // Clicking a suggested or related/follow-up question pauses briefly then
+  // types the answer out word by word, so it reads like the assistant is
+  // replying live.
+  const handleQuestionClick = (text: string) => sendText(text, { typewriter: true, delayMs: 1000 });
 
   const handleLogout = () => {
     localLogout();
@@ -582,7 +583,7 @@ export default function ChatPage() {
                   {suggestions.map((s, i) => (
                     <button
                       key={i}
-                      onClick={() => sendText(s.prompt)}
+                      onClick={() => handleQuestionClick(s.prompt)}
                       className="text-left px-4 py-3 transition-all"
                       style={{
                         backgroundColor: "var(--bg-surface)",
@@ -634,7 +635,7 @@ export default function ChatPage() {
                 <MessageBubble
                   message={msg}
                   streaming={isStreaming && isLastAssistant}
-                  onFollowUp={isCompleted ? handleFollowUp : undefined}
+                  onFollowUp={isCompleted ? handleQuestionClick : undefined}
                   onOpenSource={setActiveSource}
                   onOpenVideo={handleOpenVideo}
                   onFeedback={msg.role === "assistant" && !sending && msg.content ? handleFeedback : undefined}
