@@ -158,27 +158,50 @@ export default function AdminPage() {
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-8 space-y-8">
 
         {/* Stats grid */}
-        {stats && (
-          <div>
-            <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
-              Resumen del sistema
-            </p>
+        <div>
+          <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+            Resumen del sistema
+          </p>
+          {stats ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <StatCard label="Usuarios" value={stats.users.total} sub={`${stats.users.active} activos`} />
-              <StatCard label="Sesiones" value={stats.sessions.total} />
-              <StatCard label="Mensajes" value={stats.messages.total} />
-              <StatCard label="Documentos" value={stats.documents.total} sub="archivos únicos indexados" />
-              <StatCard label="Caché" value={stats.cache.entries} sub={`${stats.cache.total_hits} hits totales`} />
-              <StatCard
-                label="Feedback"
-                value={`${stats.feedback.up}↑ ${stats.feedback.down}↓`}
-                sub={stats.feedback.up + stats.feedback.down > 0
-                  ? `${Math.round((stats.feedback.up / (stats.feedback.up + stats.feedback.down)) * 100)}% positivo`
-                  : "sin valoraciones aún"}
-              />
+              {[
+                <StatCard key="u" label="Usuarios"   value={stats.users.total}     sub={`${stats.users.active} activos`} />,
+                <StatCard key="s" label="Sesiones"   value={stats.sessions.total} />,
+                <StatCard key="m" label="Mensajes"   value={stats.messages.total} />,
+                <StatCard key="d" label="Documentos" value={stats.documents.total} sub="archivos únicos indexados" />,
+                <StatCard key="c" label="Caché"      value={stats.cache.entries}   sub={`${stats.cache.total_hits} hits totales`} />,
+                <StatCard key="f" label="Feedback"
+                  value={`${stats.feedback.up}↑ ${stats.feedback.down}↓`}
+                  sub={stats.feedback.up + stats.feedback.down > 0
+                    ? `${Math.round((stats.feedback.up / (stats.feedback.up + stats.feedback.down)) * 100)}% positivo`
+                    : "sin valoraciones aún"}
+                />,
+              ].map((card, i) => (
+                <div key={i} style={{ animation: "nqt-slideUp 0.3s ease both", animationDelay: `${i * 50}ms` }}>
+                  {card}
+                </div>
+              ))}
             </div>
-          </div>
-        )}
+          ) : (
+            /* Skeleton shimmer while stats load */
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    border: "1px solid var(--border-default)",
+                    borderLeft: "3px solid var(--border-default)",
+                    borderRadius: "var(--radius)",
+                    padding: "16px 20px",
+                  }}
+                >
+                  <div className="nqt-skeleton" style={{ height: 10, width: "55%", marginBottom: 12 }} />
+                  <div className="nqt-skeleton" style={{ height: 22, width: "40%" }} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Upload zone */}
         <div>
@@ -301,6 +324,7 @@ export default function AdminPage() {
               borderRadius: "var(--radius-lg)",
               boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
               overflow: "hidden",
+              animation: "nqt-modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both",
             }}
             onClick={(e) => e.stopPropagation()}
           >
