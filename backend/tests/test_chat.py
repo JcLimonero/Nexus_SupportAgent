@@ -399,6 +399,55 @@ async def test_chat_stream_tokens_and_done_event(client):
 
 
 @pytest.mark.anyio
+async def test_chat_stream_strips_long_followup_marker_split_across_chunks(client):
+    """Regression: long follow-up arrays (>150 chars) streamed token-by-token
+    must still be fully stripped — the marker line is longer than any fixed tail
+    buffer, so a char-by-char stream must not leak any of it to the client."""
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override()
+
+    answer = "Aquí tienes los pasos detallados para completar la configuración."
+    # Two long Spanish follow-ups — the marker line is ~190 chars.
+    marker_line = (
+        '\nNEXUS_FOLLOW_UPS: ['
+        '"¿Quién es el responsable de generar y entregar las credenciales de acceso?", '
+        '"¿Con qué plataformas de correo y panel de control funciona este manual?"]'
+    )
+    full = answer + marker_line
+
+    async def _mock_stream(*_args, **_kwargs):
+        # Stream one character at a time — the worst case for marker detection.
+        for ch in full:
+            yield ch
+
+    with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
+         patch("routers.chat.build_context", return_value=("", [], [])), \
+         patch("routers.chat.stream_gemini_response", side_effect=_mock_stream), \
+         patch("routers.chat.AsyncSessionLocal", _make_save_db_mock()):
+        response = await client.post(
+            "/api/chat/stream",
+            json={"message": "como configuro las credenciales"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    token_events = [e for e in events if "token" in e]
+    done = next(e for e in events if e.get("done"))
+
+    streamed = "".join(e["token"] for e in token_events)
+    assert "NEXUS_FOLLOW_UPS" not in streamed, "marker leaked into streamed tokens"
+    assert streamed.strip() == answer, "client should receive exactly the answer text"
+    assert done["answer"] == answer
+    assert done["follow_ups"] == [
+        "¿Quién es el responsable de generar y entregar las credenciales de acceso?",
+        "¿Con qué plataformas de correo y panel de control funciona este manual?",
+    ]
+
+
+@pytest.mark.anyio
 async def test_chat_stream_answer_content_matches_tokens(client):
     """The answer in the done event equals the concatenation of all token chunks."""
     from db.connection import get_db

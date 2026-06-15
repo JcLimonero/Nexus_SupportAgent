@@ -139,7 +139,12 @@ async def chat(
 
 
 _NEXUS_MARKER = "NEXUS_FOLLOW_UPS:"
-_TAIL_BUFFER = 150  # marker + typical JSON array is ≤100 chars; 150 gives headroom
+# Hold back just enough to detect a partial marker split across a chunk boundary.
+# A fixed-size tail buffer is fragile: long Spanish follow-up arrays (often
+# >150 chars) would have their marker start streamed to the client before we
+# could strip it. Detecting the marker incrementally and only holding back
+# len(marker)-1 chars is both correct for any follow-up length and faster.
+_MARKER_HOLD = len(_NEXUS_MARKER) - 1
 
 
 @router.post("/chat/stream")
@@ -233,41 +238,52 @@ async def chat_stream(
 
     async def generate():
         accumulated = ""
-        pending = ""  # tail buffer to intercept the NEXUS_FOLLOW_UPS line
+        yielded = 0       # chars of `accumulated` already streamed to the client
+        marker_idx = -1   # position of the NEXUS_FOLLOW_UPS marker once seen
 
         try:
             async for delta in stream_gemini_response(history, user_message, context):
                 accumulated += delta
-                pending += delta
-                safe_len = max(0, len(pending) - _TAIL_BUFFER)
-                if safe_len > 0:
-                    yield f"data: {_json.dumps({'token': pending[:safe_len]})}\n\n"
-                    pending = pending[safe_len:]
+                if marker_idx < 0:
+                    marker_idx = accumulated.find(_NEXUS_MARKER)
+                if marker_idx >= 0:
+                    # Marker reached — stream only the answer up to it, then stop;
+                    # everything after the marker is follow-ups, never streamed.
+                    if yielded < marker_idx:
+                        yield f"data: {_json.dumps({'token': accumulated[yielded:marker_idx]})}\n\n"
+                        yielded = marker_idx
+                else:
+                    # Safe to stream all but the last few chars (a partial marker
+                    # could be split across this and the next chunk).
+                    safe = len(accumulated) - _MARKER_HOLD
+                    if safe > yielded:
+                        yield f"data: {_json.dumps({'token': accumulated[yielded:safe]})}\n\n"
+                        yielded = safe
         except Exception as exc:
             logger.error("Gemini stream error: %s", exc)
             yield f"data: {_json.dumps({'error': 'Error al procesar la respuesta'})}\n\n"
             return
 
-        # Flush tail — strip NEXUS_FOLLOW_UPS marker before sending to client
+        # Finalize — split answer / follow-ups on the marker.
         answer = accumulated
         follow_ups_list: list[str] = []
-        marker_idx = pending.find(_NEXUS_MARKER)
+        if marker_idx < 0:
+            marker_idx = accumulated.find(_NEXUS_MARKER)
         if marker_idx >= 0:
-            before = pending[:marker_idx].rstrip()
-            if before:
-                yield f"data: {_json.dumps({'token': before})}\n\n"
+            answer = accumulated[:marker_idx].rstrip()
             try:
-                follow_ups_list = _json.loads(pending[marker_idx + len(_NEXUS_MARKER):].strip())
+                follow_ups_list = _json.loads(accumulated[marker_idx + len(_NEXUS_MARKER):].strip())
                 if not isinstance(follow_ups_list, list):
                     follow_ups_list = []
             except _json.JSONDecodeError:
                 follow_ups_list = []
-            full_idx = accumulated.rfind(_NEXUS_MARKER)
-            if full_idx >= 0:
-                answer = accumulated[:full_idx].rstrip()
+            # Flush any answer chars we were still holding back before the marker.
+            if yielded < marker_idx:
+                yield f"data: {_json.dumps({'token': accumulated[yielded:marker_idx]})}\n\n"
         else:
-            if pending:
-                yield f"data: {_json.dumps({'token': pending})}\n\n"
+            # No marker — flush whatever tail we held back.
+            if yielded < len(accumulated):
+                yield f"data: {_json.dumps({'token': accumulated[yielded:]})}\n\n"
 
         # Persist messages in a fresh session to avoid closed-connection issues
         assistant_msg_id = uuid.uuid4()
