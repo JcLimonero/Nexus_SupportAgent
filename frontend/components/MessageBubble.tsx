@@ -1,4 +1,5 @@
 "use client";
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -102,7 +103,7 @@ const mdComponents: Components = {
   ),
 };
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   streaming = false,
   onFollowUp,
@@ -116,7 +117,7 @@ export function MessageBubble({
   onFollowUp?: (text: string) => void;
   onOpenSource?: (pdf: PdfSource) => void;
   onOpenVideo?: (video: { file_name: string; gcs_url: string }) => void;
-  onFeedback?: (rating: "up" | "down") => void;
+  onFeedback?: (messageId: string, rating: "up" | "down") => void;
   onRetry?: () => void;
 }) {
   const isUser = message.role === "user";
@@ -253,7 +254,7 @@ export function MessageBubble({
             {onFeedback && (
               <>
                 <button
-                  onClick={() => onFeedback("up")}
+                  onClick={() => message.id && onFeedback(message.id, "up")}
                   title="Respuesta útil"
                   style={{
                     background: "none",
@@ -273,7 +274,7 @@ export function MessageBubble({
                   </svg>
                 </button>
                 <button
-                  onClick={() => onFeedback("down")}
+                  onClick={() => message.id && onFeedback(message.id, "down")}
                   title="Respuesta poco útil"
                   style={{
                     background: "none",
@@ -364,4 +365,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.5-flash"
 
     # ── RAG tuning ──────────────────────────────────────────────────────────
-    max_chunks_retrieved: int = 5
+    max_chunks_retrieved: int = 4
     max_session_history: int = 6
     chunk_size: int = 500
     chunk_overlap: int = 50

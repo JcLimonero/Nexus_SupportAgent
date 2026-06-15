@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { localLogout } from "@/lib/auth";
@@ -64,18 +64,18 @@ export default function ChatPage() {
     setSidebarOpen(false);
   };
 
-  const handleOpenVideo = (video: { file_name: string; gcs_url: string }) => {
+  const handleOpenVideo = useCallback((video: { file_name: string; gcs_url: string }) => {
     setActiveSource({ chunk_id: undefined, file_name: video.file_name, page_number: null, gcs_url: video.gcs_url });
-  };
+  }, []);
 
-  const handleFeedback = async (messageIndex: number, rating: "up" | "down") => {
-    const msg = messages[messageIndex];
-    if (!msg?.id) return;
+  // Stable reference — identified by message ID, not index, so memo on MessageBubble
+  // skips re-renders for all past messages during streaming.
+  const handleFeedback = useCallback(async (msgId: string, rating: "up" | "down") => {
     setMessages((prev) =>
-      prev.map((m, i) => i === messageIndex ? { ...m, feedback: rating } : m)
+      prev.map((m) => m.id === msgId ? { ...m, feedback: rating } : m)
     );
-    try { await submitFeedback(msg.id, rating); } catch { /* silent */ }
-  };
+    try { await submitFeedback(msgId, rating); } catch { /* silent */ }
+  }, []);
 
   const handleRetry = () => {
     if (sending || messages.length < 2) return;
@@ -556,10 +556,10 @@ export default function ChatPage() {
                 <MessageBubble
                   message={msg}
                   streaming={isStreaming && isLastAssistant}
-                  onFollowUp={isCompleted ? (text) => { sendText(text); } : undefined}
-                  onOpenSource={(pdf) => setActiveSource(pdf)}
+                  onFollowUp={isCompleted ? sendText : undefined}
+                  onOpenSource={setActiveSource}
                   onOpenVideo={handleOpenVideo}
-                  onFeedback={msg.role === "assistant" && !sending && msg.content ? (rating) => handleFeedback(i, rating) : undefined}
+                  onFeedback={msg.role === "assistant" && !sending && msg.content ? handleFeedback : undefined}
                   onRetry={isCompleted ? handleRetry : undefined}
                 />
               </div>

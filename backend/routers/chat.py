@@ -139,7 +139,7 @@ async def chat(
 
 
 _NEXUS_MARKER = "NEXUS_FOLLOW_UPS:"
-_TAIL_BUFFER = 380  # hold back enough tail to catch the marker + JSON array
+_TAIL_BUFFER = 150  # marker + typical JSON array is ≤100 chars; 150 gives headroom
 
 
 @router.post("/chat/stream")

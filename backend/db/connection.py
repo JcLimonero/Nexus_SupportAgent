@@ -30,3 +30,11 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
             ON document_chunks USING hnsw (embedding vector_cosine_ops)
         """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS response_cache_embedding_idx
+            ON response_cache USING hnsw (question_embedding vector_cosine_ops)
+        """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx
+            ON chat_messages (session_id, created_at DESC)
+        """))
