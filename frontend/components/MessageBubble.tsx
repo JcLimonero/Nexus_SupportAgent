@@ -12,6 +12,12 @@ export interface PdfSource {
   gcs_url: string;
 }
 
+// Short uppercase badge derived from the file extension (PDF, DOCX, PPTX, …).
+export function docLabel(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toUpperCase();
+  return ext && ext !== fileName.toUpperCase() ? ext : "DOC";
+}
+
 export interface Message {
   id?: string;
   role: "user" | "assistant";
@@ -202,7 +208,7 @@ export const MessageBubble = memo(function MessageBubble({
                   e.currentTarget.style.color = "var(--text-muted)";
                 }}
               >
-                <span style={{ fontSize: 9 }}>PDF</span>
+                <span style={{ fontSize: 9 }}>{docLabel(pdf.file_name)}</span>
                 <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {pdf.file_name}{pdf.page_number != null ? ` · p.${pdf.page_number}` : ""}
                 </span>

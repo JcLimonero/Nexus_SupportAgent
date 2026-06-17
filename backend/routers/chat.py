@@ -326,8 +326,7 @@ async def chat_stream(
 _CLEAN_PATTERNS = [
     r"\bVersion\s+[\d.]+\b",
     r"\bVerion\s+[\d.]+\b",
-    r"\.docx\b",
-    r"\.(pdf|mp4)\b",
+    r"\.(pdf|mp4|docx|pptx|txt|md|csv)\b",
     r"\bManual de (Usuario |Configuraci[oó]n |[Cc]onfguracion )",
     r"\bManual de\b",
     r"^Configuraci[oó]n\s+",  # strip leading "Configuración" from video titles

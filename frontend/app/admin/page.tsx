@@ -11,8 +11,15 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface Doc {
   file_name: string;
-  source_type: "pdf" | "video";
+  source_type: string;
   gcs_url: string;
+}
+
+// Video sources show in cyan; every document type (pdf, docx, pptx, txt, md, csv)
+// shows in blue with its own short label.
+function sourceBadge(sourceType: string): { label: string; accent: "video" | "doc" } {
+  if (sourceType === "video") return { label: "VID", accent: "video" };
+  return { label: sourceType.toUpperCase(), accent: "doc" };
 }
 
 interface Stats {
@@ -46,6 +53,7 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [docs, setDocs]             = useState<Doc[]>([]);
   const [uploading, setUploading]   = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [dragOver, setDragOver]     = useState(false);
   const [stats, setStats]           = useState<Stats | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -70,16 +78,28 @@ export default function AdminPage() {
 
   const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const list = Array.from(files);
     setUploading(true);
-    try {
-      await Promise.all(Array.from(files).map((f) => uploadFile(f)));
-      toast(`${files.length} archivo(s) subido(s). La indexación puede tardar unos minutos.`, "success");
-      setTimeout(() => { loadDocs(); loadStats(); }, 5000);
-    } catch {
-      toast("Error al subir los archivos. Verifica el formato e inténtalo de nuevo.", "error");
-    } finally {
-      setUploading(false);
+    // Upload sequentially so we pace requests under the rate limit and can show
+    // per-file progress; uploadFile auto-retries on 429 for large batches.
+    let ok = 0, failed = 0;
+    for (let i = 0; i < list.length; i++) {
+      setUploadProgress({ current: i + 1, total: list.length });
+      try {
+        await uploadFile(list[i]);
+        ok++;
+      } catch {
+        failed++;
+      }
     }
+    setUploadProgress(null);
+    if (failed === 0) {
+      toast(`${ok} archivo(s) subido(s). La indexación puede tardar unos minutos.`, "success");
+    } else {
+      toast(`${ok} subido(s), ${failed} con error. Verifica el formato y el tamaño.`, failed === list.length ? "error" : "success");
+    }
+    setTimeout(() => { loadDocs(); loadStats(); }, 5000);
+    setUploading(false);
   }, [toast]);
 
   const handleDelete = (fileName: string) => {
@@ -221,16 +241,20 @@ export default function AdminPage() {
               transition: "border-color 0.15s, background-color 0.15s",
             }}
           >
-            <input id="file-input" type="file" accept=".pdf,.mp4" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+            <input id="file-input" type="file" accept=".pdf,.mp4,.docx,.pptx,.txt,.md,.csv" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <label htmlFor="file-input" className="cursor-pointer block">
               <div style={{ fontSize: 28, marginBottom: 12, color: dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--text-faint)" }}>
                 {uploading ? "⏳" : "↑"}
               </div>
               <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
-                {uploading ? "Subiendo y lanzando indexación..." : "Arrastra archivos · o haz clic para seleccionar"}
+                {uploading
+                  ? uploadProgress
+                    ? `Subiendo ${uploadProgress.current} de ${uploadProgress.total}...`
+                    : "Subiendo y lanzando indexación..."
+                  : "Arrastra archivos · o haz clic para seleccionar"}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
-                PDF · MP4 · máx. 100 MB
+                PDF · MP4 · DOCX · PPTX · TXT · MD · CSV · máx. 100 MB
               </p>
             </label>
           </div>
@@ -271,23 +295,29 @@ export default function AdminPage() {
                   onMouseLeave={(e) => (e.currentTarget.style.borderLeftColor = "transparent")}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className="shrink-0"
-                      style={{
-                        fontFamily: '"Barlow Condensed", sans-serif',
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: "1.5px",
-                        textTransform: "uppercase",
-                        color: doc.source_type === "pdf" ? "var(--nqt-blue, #0ea5e9)" : "var(--nqt-cyan, #06b6d4)",
-                        backgroundColor: doc.source_type === "pdf" ? "rgba(14,165,233,0.1)" : "rgba(6,182,212,0.1)",
-                        border: `1px solid ${doc.source_type === "pdf" ? "rgba(14,165,233,0.3)" : "rgba(6,182,212,0.3)"}`,
-                        borderRadius: "3px",
-                        padding: "1px 5px",
-                      }}
-                    >
-                      {doc.source_type === "pdf" ? "PDF" : "VID"}
-                    </span>
+                    {(() => {
+                      const badge = sourceBadge(doc.source_type);
+                      const isDoc = badge.accent === "doc";
+                      return (
+                        <span
+                          className="shrink-0"
+                          style={{
+                            fontFamily: '"Barlow Condensed", sans-serif',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: "1.5px",
+                            textTransform: "uppercase",
+                            color: isDoc ? "var(--nqt-blue, #0ea5e9)" : "var(--nqt-cyan, #06b6d4)",
+                            backgroundColor: isDoc ? "rgba(14,165,233,0.1)" : "rgba(6,182,212,0.1)",
+                            border: `1px solid ${isDoc ? "rgba(14,165,233,0.3)" : "rgba(6,182,212,0.3)"}`,
+                            borderRadius: "3px",
+                            padding: "1px 5px",
+                          }}
+                        >
+                          {badge.label}
+                        </span>
+                      );
+                    })()}
                     <p className="text-sm font-light truncate" style={{ color: "var(--text-secondary)" }}>
                       {doc.file_name}
                     </p>

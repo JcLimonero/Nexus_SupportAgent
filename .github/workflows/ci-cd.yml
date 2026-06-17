@@ -43,7 +43,7 @@ jobs:
             pydantic-settings==2.14.1 \
             PyJWT==2.13.0 \
             sqlalchemy[asyncio]==2.0.35 \
-            python-multipart==0.0.27 \
+            python-multipart==0.0.31 \
             passlib[bcrypt]==1.7.4 \
             bcrypt==4.0.1 \
             aiosqlite==0.20.0 \

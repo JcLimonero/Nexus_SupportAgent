@@ -23,7 +23,16 @@ def build_context(chunks: list[dict]) -> tuple[str, list[dict], list[dict]]:
             f"{_UNTRUSTED_HEADER}\n[Fragmento {i}]\n{chunk['content']}\n{_UNTRUSTED_FOOTER}"
         )
 
-        if chunk["source_type"] == "pdf":
+        if chunk["source_type"] == "video":
+            if chunk["gcs_url"] not in seen_videos:
+                seen_videos.add(chunk["gcs_url"])
+                video_sources.append({
+                    "file_name": chunk["file_name"],
+                    "gcs_url": chunk["gcs_url"],
+                })
+        else:
+            # Every non-video document (pdf, docx, pptx, txt, md, csv) shares the
+            # same excerpt-and-open path on the frontend.
             key = f"{chunk['file_name']}:{chunk['page_number']}"
             if key not in seen_pdfs:
                 seen_pdfs.add(key)
@@ -31,13 +40,6 @@ def build_context(chunks: list[dict]) -> tuple[str, list[dict], list[dict]]:
                     "chunk_id": chunk.get("id", ""),
                     "file_name": chunk["file_name"],
                     "page_number": chunk["page_number"],
-                    "gcs_url": chunk["gcs_url"],
-                })
-        elif chunk["source_type"] == "video":
-            if chunk["gcs_url"] not in seen_videos:
-                seen_videos.add(chunk["gcs_url"])
-                video_sources.append({
-                    "file_name": chunk["file_name"],
                     "gcs_url": chunk["gcs_url"],
                 })
 

@@ -45,7 +45,21 @@ async def test_upload_rejects_unsupported_type(client):
     app.dependency_overrides[get_db] = make_db_override()
     response = await client.post(
         "/api/admin/upload",
-        files={"file": ("test.txt", b"content", "text/plain")},
+        files={"file": ("test.zip", b"PK\x03\x04binary", "application/zip")},
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_upload_rejects_binary_disguised_as_text(client):
+    """A binary file renamed to .txt (contains NUL bytes) must be rejected."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.post(
+        "/api/admin/upload",
+        files={"file": ("evil.txt", b"text\x00\x00binary", "text/plain")},
         headers={"Authorization": f"Bearer {_admin()}"},
     )
     assert response.status_code == 400
@@ -100,6 +114,58 @@ async def test_upload_pdf_accepted(client):
     data = response.json()
     assert data["status"] == "processing"
     assert data["file_name"] == "manual.pdf"
+
+
+@pytest.mark.anyio
+async def test_upload_txt_accepted(client):
+    """Plain-text uploads pass validation without magic bytes."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.admin.save_file", return_value="/data/txts/notas.txt"), \
+         patch("routers.admin._process_and_index"):
+        response = await client.post(
+            "/api/admin/upload",
+            files={"file": ("notas.txt", "Texto de prueba en español.".encode("utf-8"), "text/plain")},
+            headers={"Authorization": f"Bearer {_admin()}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+
+
+@pytest.mark.anyio
+async def test_upload_docx_accepted(client):
+    """DOCX validated via Office Open XML magic bytes."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    with patch("routers.admin.save_file", return_value="/data/docxs/manual.docx"), \
+         patch("routers.admin._process_and_index"), \
+         patch("routers.admin.filetype.guess") as mock_guess:
+        mock_guess.return_value = MagicMock(mime=docx_mime)
+        response = await client.post(
+            "/api/admin/upload",
+            files={"file": ("manual.docx", b"PK\x03\x04" + b"\x00" * 600, docx_mime)},
+            headers={"Authorization": f"Bearer {_admin()}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+
+
+@pytest.mark.anyio
+async def test_upload_docx_rejects_wrong_magic_bytes(client):
+    """A non-OOXML file renamed to .docx must be rejected."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.admin.filetype.guess", return_value=None):
+        response = await client.post(
+            "/api/admin/upload",
+            files={"file": ("fake.docx", b"not a real docx", "application/octet-stream")},
+            headers={"Authorization": f"Bearer {_admin()}"},
+        )
+    assert response.status_code == 400
 
 
 # ── Documents list ─────────────────────────────────────────────────────────────

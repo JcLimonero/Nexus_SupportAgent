@@ -98,11 +98,17 @@ export async function getSessionMessages(sessionId: string) {
   return res.json();
 }
 
-export async function uploadFile(file: File) {
+export async function uploadFile(file: File, retries = 3): Promise<any> {
   const h = await headers(false);
   const body = new FormData();
   body.append("file", file);
   const res = await fetch(`${API_URL}/api/admin/upload`, { method: "POST", headers: h, body });
+  // Rate limited (bulk upload overflow) — wait the server's Retry-After and retry.
+  if (res.status === 429 && retries > 0) {
+    const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
+    await new Promise((r) => setTimeout(r, Math.min(retryAfter, 60) * 1000));
+    return uploadFile(file, retries - 1);
+  }
   if (!res.ok) throw new Error("Error al subir el archivo");
   return res.json();
 }

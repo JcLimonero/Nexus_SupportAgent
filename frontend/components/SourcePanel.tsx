@@ -56,7 +56,9 @@ export function SourcePanel({
   if (!source) return null;
 
   const isLocal = source.gcs_url.startsWith("/data/");
-  const isPdf = source.file_name.toLowerCase().endsWith(".pdf");
+  // Only MP4 uses the inline player; every other type (pdf, docx, pptx, txt,
+  // md, csv) opens/downloads in a new tab.
+  const isVideo = source.file_name.toLowerCase().endsWith(".mp4");
 
   const openDocument = async () => {
     if (!isLocal) {
@@ -69,10 +71,10 @@ export function SourcePanel({
     try {
       const blobUrl = await getDocumentBlobUrl(source.gcs_url);
       if (currentGcsUrlRef.current !== fetchFor) { URL.revokeObjectURL(blobUrl); return; }
-      if (isPdf) {
-        window.open(blobUrl, "_blank");
-      } else {
+      if (isVideo) {
         setVideoUrl(blobUrl);
+      } else {
+        window.open(blobUrl, "_blank");
       }
     } catch {
       if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el archivo.");
@@ -111,7 +113,7 @@ export function SourcePanel({
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <div style={{ width: 3, height: 16, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
                 <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
-                  {isPdf ? "Fragmento de contexto" : "Video de referencia"}
+                  {isVideo ? "Video de referencia" : "Fragmento de contexto"}
                 </p>
               </div>
               <p
@@ -144,7 +146,7 @@ export function SourcePanel({
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {/* Inline video player */}
-          {videoUrl && !isPdf && (
+          {videoUrl && isVideo && (
             <div style={{ marginBottom: 20, borderRadius: "var(--radius)", overflow: "hidden", border: "1px solid var(--border-default)" }}>
               <video
                 controls
@@ -212,8 +214,8 @@ export function SourcePanel({
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
             >
               {opening
-                ? isPdf ? "Abriendo..." : "Cargando..."
-                : isPdf ? "Ver documento" : "Ver video"}
+                ? isVideo ? "Cargando..." : "Abriendo..."
+                : isVideo ? "Ver video" : "Ver documento"}
             </button>
           )}
           <button
