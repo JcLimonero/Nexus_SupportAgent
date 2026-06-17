@@ -15,6 +15,7 @@ from db.models import DocumentChunk, ResponseCache, User, ChatSession, ChatMessa
 from auth.firebase_verify import get_current_user
 from ingestion.pdf_processor import extract_pdf_chunks
 from ingestion.video_processor import extract_video_chunks
+from ingestion.document_processor import extract_document_chunks
 from retrieval.vector_search import embed_document
 from config import get_settings
 
@@ -22,7 +23,50 @@ settings = get_settings()
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB hard cap
-_ALLOWED_MIME = {"application/pdf", "video/mp4"}
+
+# Binary formats validated by magic bytes (extension → expected MIME via filetype).
+_BINARY_MIME = {
+    ".pdf":  {"application/pdf"},
+    ".mp4":  {"video/mp4"},
+    ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    ".pptx": {"application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+}
+# Plain-text formats have no magic bytes — validated by a UTF-8 text-decode check.
+_TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
+
+_ALLOWED_EXTENSIONS = set(_BINARY_MIME) | _TEXT_EXTENSIONS
+
+# Extension → source_type used for storage subfolder and DocumentChunk.source_type.
+_SOURCE_TYPE = {
+    ".pdf": "pdf", ".mp4": "video", ".docx": "docx",
+    ".pptx": "pptx", ".txt": "txt", ".md": "md", ".csv": "csv",
+}
+
+# Content-type used when serving files back from local storage.
+_SERVE_MIME = {
+    ".pdf":  "application/pdf",
+    ".mp4":  "video/mp4",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt":  "text/plain; charset=utf-8",
+    ".md":   "text/markdown; charset=utf-8",
+    ".csv":  "text/csv; charset=utf-8",
+}
+
+
+def _looks_like_text(content: bytes) -> bool:
+    """Heuristic for plain-text uploads: decodes as UTF-8 and has no NUL bytes."""
+    if b"\x00" in content:
+        return False
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        # Allow a small tail of multi-byte chars cut mid-sequence by the size cap.
+        try:
+            content[:-4].decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+    return True
 
 
 # ── Admin guard ───────────────────────────────────────────────────────────────
@@ -67,12 +111,14 @@ def save_file(tmp_path: str, file_name: str, source_type: str) -> str:
 
 # ── Background indexing ──────────────────────────────────────────────────────
 
-async def _process_and_index(file_path: str, file_name: str, file_url: str, source_type: str):
+async def _process_and_index(file_path: str, file_name: str, file_url: str, source_type: str, ext: str):
     try:
         if source_type == "pdf":
             chunks = await asyncio.to_thread(extract_pdf_chunks, file_path, file_name, file_url)
-        else:
+        elif source_type == "video":
             chunks = await asyncio.to_thread(extract_video_chunks, file_path, file_name, file_url)
+        else:
+            chunks = await asyncio.to_thread(extract_document_chunks, file_path, file_name, file_url, ext)
 
         async with AsyncSessionLocal() as db:
             for chunk in chunks:
@@ -101,20 +147,30 @@ async def upload_file(
 ):
     # Extension fast-fail
     ext = Path(file.filename).suffix.lower()
-    if ext not in {".pdf", ".mp4"}:
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF y MP4")
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se aceptan archivos PDF, MP4, DOCX, PPTX, TXT, MD y CSV",
+        )
 
-    source_type = "pdf" if ext == ".pdf" else "video"
+    source_type = _SOURCE_TYPE[ext]
 
     # Read with hard size cap to prevent OOM uploads
     content = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(content) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="El archivo supera el límite de 100 MB")
 
-    # Magic bytes validation — extension spoofing prevention
-    kind = filetype.guess(content[:512])
-    if kind is None or kind.mime not in _ALLOWED_MIME:
-        raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
+    # Content validation — extension-spoofing prevention.
+    if ext in _TEXT_EXTENSIONS:
+        # No magic bytes for plain text; reject binary disguised as text.
+        if not _looks_like_text(content):
+            raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
+    else:
+        # Magic bytes for binary formats. OOXML (docx/pptx) is zip-based and the
+        # marker may sit past the first 512 bytes, so scan a larger prefix.
+        kind = filetype.guess(content[:8192])
+        if kind is None or kind.mime not in _BINARY_MIME[ext]:
+            raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
 
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(content)
@@ -126,7 +182,7 @@ async def upload_file(
         Path(tmp_path).unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Error al guardar el archivo: {e}")
 
-    background_tasks.add_task(_process_and_index, tmp_path, file.filename, file_url, source_type)
+    background_tasks.add_task(_process_and_index, tmp_path, file.filename, file_url, source_type, ext)
 
     # Invalidate semantic cache — new document may change correct answers
     async with AsyncSessionLocal() as flush_db:
@@ -200,7 +256,7 @@ async def serve_document(
     if not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     from fastapi.responses import FileResponse
-    media = "application/pdf" if target.suffix.lower() == ".pdf" else "video/mp4"
+    media = _SERVE_MIME.get(target.suffix.lower(), "application/octet-stream")
     return FileResponse(str(target), media_type=media)
 
 
