@@ -53,6 +53,7 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [docs, setDocs]             = useState<Doc[]>([]);
   const [uploading, setUploading]   = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [dragOver, setDragOver]     = useState(false);
   const [stats, setStats]           = useState<Stats | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -77,16 +78,28 @@ export default function AdminPage() {
 
   const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const list = Array.from(files);
     setUploading(true);
-    try {
-      await Promise.all(Array.from(files).map((f) => uploadFile(f)));
-      toast(`${files.length} archivo(s) subido(s). La indexación puede tardar unos minutos.`, "success");
-      setTimeout(() => { loadDocs(); loadStats(); }, 5000);
-    } catch {
-      toast("Error al subir los archivos. Verifica el formato e inténtalo de nuevo.", "error");
-    } finally {
-      setUploading(false);
+    // Upload sequentially so we pace requests under the rate limit and can show
+    // per-file progress; uploadFile auto-retries on 429 for large batches.
+    let ok = 0, failed = 0;
+    for (let i = 0; i < list.length; i++) {
+      setUploadProgress({ current: i + 1, total: list.length });
+      try {
+        await uploadFile(list[i]);
+        ok++;
+      } catch {
+        failed++;
+      }
     }
+    setUploadProgress(null);
+    if (failed === 0) {
+      toast(`${ok} archivo(s) subido(s). La indexación puede tardar unos minutos.`, "success");
+    } else {
+      toast(`${ok} subido(s), ${failed} con error. Verifica el formato y el tamaño.`, failed === list.length ? "error" : "success");
+    }
+    setTimeout(() => { loadDocs(); loadStats(); }, 5000);
+    setUploading(false);
   }, [toast]);
 
   const handleDelete = (fileName: string) => {
@@ -234,7 +247,11 @@ export default function AdminPage() {
                 {uploading ? "⏳" : "↑"}
               </div>
               <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
-                {uploading ? "Subiendo y lanzando indexación..." : "Arrastra archivos · o haz clic para seleccionar"}
+                {uploading
+                  ? uploadProgress
+                    ? `Subiendo ${uploadProgress.current} de ${uploadProgress.total}...`
+                    : "Subiendo y lanzando indexación..."
+                  : "Arrastra archivos · o haz clic para seleccionar"}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
                 PDF · MP4 · DOCX · PPTX · TXT · MD · CSV · máx. 100 MB

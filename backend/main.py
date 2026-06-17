@@ -24,7 +24,7 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/auth/login":   (20, 60),   # 20 req / 60 s per IP (brute-force guard)
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/chat":         (60, 60),
-    "/api/admin/upload": (10, 60),   # 10 uploads / 60 s per IP
+    "/api/admin/upload": (60, 60),   # 60 uploads / 60 s per IP (admin-only; bulk KB seeding)
 }
 
 
