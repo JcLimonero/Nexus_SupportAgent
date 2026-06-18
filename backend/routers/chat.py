@@ -1,5 +1,6 @@
 import json as _json
 import logging
+import secrets
 import uuid
 import asyncio
 from datetime import datetime
@@ -507,6 +508,74 @@ async def get_session_messages(
         }
         for m in result.scalars().all()
     ]
+
+
+# ── Conversation sharing (public read-only links) ─────────────────────────────
+
+@router.post("/sessions/{session_id}/share")
+async def share_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Create (or return existing) a public share token for one's own session.
+    Available to any authenticated user, including guests."""
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de sesión inválido")
+    result = await db.execute(
+        select(ChatSession).where(ChatSession.id == sid, ChatSession.user_id == user["uid"])
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    if not session.share_token:
+        session.share_token = secrets.token_urlsafe(16)
+        await db.commit()
+    return {"token": session.share_token, "path": f"/shared/{session.share_token}"}
+
+
+@router.delete("/sessions/{session_id}/share", status_code=204)
+async def unshare_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Revoke a session's public share link."""
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de sesión inválido")
+    result = await db.execute(
+        select(ChatSession).where(ChatSession.id == sid, ChatSession.user_id == user["uid"])
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    session.share_token = None
+    await db.commit()
+
+
+@router.get("/shared/{token}")
+async def get_shared_conversation(token: str, db: AsyncSession = Depends(get_db)):
+    """PUBLIC, no auth — read-only view of a shared conversation by token.
+    Identity is intentionally omitted; only the title and messages are exposed."""
+    result = await db.execute(select(ChatSession).where(ChatSession.share_token == token))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada o no compartida")
+    msgs = (await db.execute(
+        select(ChatMessage).where(ChatMessage.session_id == session.id).order_by(ChatMessage.created_at)
+    )).scalars().all()
+    return {
+        "title": session.title,
+        "created_at": session.created_at.isoformat(),
+        "messages": [
+            {"role": m.role, "content": m.content, "sources": m.sources}
+            for m in msgs
+        ],
+    }
 
 
 class FeedbackRequest(BaseModel):

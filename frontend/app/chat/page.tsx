@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { localLogout } from "@/lib/auth";
-import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, submitFeedback } from "@/lib/api";
+import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, submitFeedback, shareSession } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -18,6 +19,8 @@ interface Session {
 export default function ChatPage() {
   const { user, loading, refresh } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
+  const [sharing, setSharing] = useState(false);
   const [sessions, setSessions]               = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages]               = useState<Message[]>([]);
@@ -99,6 +102,21 @@ export default function ChatPage() {
     localLogout();
     refresh();
     router.push("/");
+  };
+
+  const handleShare = async () => {
+    if (!currentSessionId || sharing) return;
+    setSharing(true);
+    try {
+      const { path } = await shareSession(currentSessionId);
+      const url = `${window.location.origin}${path}`;
+      await navigator.clipboard.writeText(url);
+      toast("Enlace copiado. Cualquiera con el enlace podrá ver esta conversación.", "success");
+    } catch {
+      toast("No se pudo crear el enlace para compartir.", "error");
+    } finally {
+      setSharing(false);
+    }
   };
 
   const stopStreaming = () => {
@@ -599,6 +617,36 @@ export default function ChatPage() {
             <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
               NEXUS SUPPORT
             </span>
+          </div>
+        )}
+
+        {/* Share toolbar — appears once the conversation has a saved session */}
+        {currentSessionId && messages.length > 0 && (
+          <div
+            className="flex items-center justify-end px-4 md:px-8 py-2"
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+          >
+            <button
+              onClick={handleShare}
+              disabled={sharing}
+              title="Copiar enlace público a esta conversación"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10,
+                letterSpacing: "1.5px", textTransform: "uppercase",
+                color: "var(--text-muted)", background: "none",
+                border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
+                padding: "5px 12px", cursor: sharing ? "not-allowed" : "pointer", opacity: sharing ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => { if (!sharing) { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; } }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              {sharing ? "Generando..." : "Compartir"}
+            </button>
           </div>
         )}
 

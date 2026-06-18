@@ -9,6 +9,7 @@ import {
   getConversations,
   getConversation,
   deleteConversation,
+  shareConversationAdmin,
   type ConversationSummary,
   type ConversationDetail,
 } from "@/lib/api";
@@ -86,12 +87,13 @@ function ConversationsInner() {
   }, [user, sharedId]);
 
   const handleShare = async (id: string) => {
-    const url = `${window.location.origin}/admin/conversations?id=${id}`;
     try {
+      const { path } = await shareConversationAdmin(id);
+      const url = `${window.location.origin}${path}`;
       await navigator.clipboard.writeText(url);
-      toast("Enlace de la conversación copiado.", "success");
+      toast("Enlace público copiado. Cualquiera con el enlace puede verla.", "success");
     } catch {
-      toast("No se pudo copiar el enlace.", "error");
+      toast("No se pudo crear el enlace para compartir.", "error");
     }
   };
 

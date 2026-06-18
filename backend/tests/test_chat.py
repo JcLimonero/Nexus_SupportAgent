@@ -577,3 +577,89 @@ async def test_suggestions_fallback_on_generation_error(client):
     clear_suggestions_cache()
     assert r.status_code == 200
     assert r.json() == _FALLBACK_SUGGESTIONS
+
+
+# ── Conversation sharing (public links) ───────────────────────────────────────
+
+import uuid as _uuid
+from datetime import datetime as _dt
+
+
+def _session_mock(share_token=None):
+    s = MagicMock()
+    s.id = _uuid.uuid4()
+    s.title = "Mi conversación"
+    s.created_at = _dt(2026, 6, 18, 12, 0, 0)
+    s.share_token = share_token
+    return s
+
+
+@pytest.mark.anyio
+async def test_share_session_requires_auth(client):
+    r = await client.post(f"/api/sessions/{_uuid.uuid4()}/share")
+    assert r.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_share_session_creates_token(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=_session_mock(share_token=None))
+    r = await client.post(
+        f"/api/sessions/{_uuid.uuid4()}/share",
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["token"]
+    assert body["path"] == f"/shared/{body['token']}"
+
+
+@pytest.mark.anyio
+async def test_share_session_not_found_for_non_owner(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    r = await client.post(
+        f"/api/sessions/{_uuid.uuid4()}/share",
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 404
+
+
+def _public_share_override(session):
+    async def _override():
+        sess = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = session
+        result.scalars.return_value.all.return_value = []  # no messages
+        sess.execute = AsyncMock(return_value=result)
+        yield sess
+    return _override
+
+
+@pytest.mark.anyio
+async def test_shared_view_is_public_no_auth(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = _public_share_override(_session_mock(share_token="tok123"))
+    r = await client.get("/api/shared/tok123")  # no Authorization header
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["title"] == "Mi conversación"
+    assert body["messages"] == []
+    # Identity must not leak on the public view.
+    assert "user_label" not in body and "user_id" not in body
+
+
+@pytest.mark.anyio
+async def test_shared_view_404_for_bad_token(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = _public_share_override(None)
+    r = await client.get("/api/shared/nope")
+    app.dependency_overrides.clear()
+    assert r.status_code == 404

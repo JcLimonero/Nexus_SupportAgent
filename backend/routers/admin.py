@@ -1,6 +1,7 @@
 import os
 import uuid
 import asyncio
+import secrets
 import shutil
 import tempfile
 from pathlib import Path
@@ -433,3 +434,23 @@ async def delete_conversation(
     await db.execute(delete(ChatMessage).where(ChatMessage.session_id == sid))
     await db.delete(session)
     await db.commit()
+
+
+@router.post("/conversations/{session_id}/share")
+async def share_conversation(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Create (or return) a public share token for any conversation (admin)."""
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de conversación inválido")
+    session = (await db.execute(select(ChatSession).where(ChatSession.id == sid))).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    if not session.share_token:
+        session.share_token = secrets.token_urlsafe(16)
+        await db.commit()
+    return {"token": session.share_token, "path": f"/shared/{session.share_token}"}

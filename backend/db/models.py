@@ -47,6 +47,8 @@ class ChatSession(Base):
     # registered users, "Invitado #xxxx" for guests. Avoids resolving anon ids.
     user_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Unguessable token for public read-only sharing (null = not shared).
+    share_token: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

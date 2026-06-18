@@ -191,6 +191,41 @@ export async function deleteConversation(sessionId: string) {
   if (!res.ok) throw new Error("Error al eliminar la conversación");
 }
 
+export async function shareSession(sessionId: string): Promise<{ token: string; path: string }> {
+  const res = await fetch(`${API_URL}/api/sessions/${sessionId}/share`, {
+    method: "POST",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("No se pudo crear el enlace para compartir");
+  return res.json();
+}
+
+export async function shareConversationAdmin(sessionId: string): Promise<{ token: string; path: string }> {
+  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}/share`, {
+    method: "POST",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("No se pudo crear el enlace para compartir");
+  return res.json();
+}
+
+export interface SharedConversation {
+  title: string | null;
+  created_at: string;
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    sources: { pdfs?: { file_name?: string }[]; videos?: { file_name?: string }[] } | null;
+  }[];
+}
+
+// Public — no auth header.
+export async function getSharedConversation(token: string): Promise<SharedConversation> {
+  const res = await fetch(`${API_URL}/api/shared/${token}`);
+  if (!res.ok) throw new Error("Conversación no encontrada");
+  return res.json();
+}
+
 export async function submitFeedback(messageId: string, rating: "up" | "down") {
   const res = await fetch(`${API_URL}/api/messages/${messageId}/feedback`, {
     method: "POST",
