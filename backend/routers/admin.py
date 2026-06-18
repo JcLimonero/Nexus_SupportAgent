@@ -223,7 +223,7 @@ async def delete_document(
 async def get_excerpt(
     chunk_id: str,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_admin),
+    _: dict = Depends(get_current_user),
 ):
     try:
         cid = uuid.UUID(chunk_id)

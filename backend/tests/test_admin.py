@@ -235,17 +235,45 @@ async def test_excerpt_requires_auth(client):
 
 
 @pytest.mark.anyio
-async def test_excerpt_requires_admin(client):
+async def test_excerpt_allows_regular_user(client):
+    # Source-reference viewing is available to any authenticated user, not just
+    # admins (the chat SourcePanel uses it). A missing chunk → 404, never 403.
     import uuid
     from db.connection import get_db
     from main import app
-    app.dependency_overrides[get_db] = make_db_override()
+    app.dependency_overrides[get_db] = make_db_override(user=None)
     response = await client.get(
         f"/api/admin/documents/excerpt/{uuid.uuid4()}",
         headers={"Authorization": f"Bearer {_user()}"},
     )
     app.dependency_overrides.clear()
-    assert response.status_code == 403
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_excerpt_returns_content_for_regular_user(client):
+    # A regular user must receive the actual chunk content (the SourcePanel
+    # renders it). Guards against re-locking this endpoint behind admin.
+    import uuid
+    from types import SimpleNamespace
+    from db.connection import get_db
+    from main import app
+    cid = uuid.uuid4()
+    chunk = SimpleNamespace(
+        id=cid, file_name="manual.pdf", source_type="pdf",
+        page_number=3, content="texto del fragmento",
+    )
+    app.dependency_overrides[get_db] = make_db_override(user=chunk)
+    response = await client.get(
+        f"/api/admin/documents/excerpt/{cid}",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["file_name"] == "manual.pdf"
+    assert body["content"] == "texto del fragmento"
+    assert body["page_number"] == 3
 
 
 @pytest.mark.anyio
