@@ -34,6 +34,7 @@ function ConversationsInner() {
   const params = useSearchParams();
   const { toast } = useToast();
   const userFilter = params.get("user");
+  const sharedId = params.get("id");
 
   const [filter, setFilter]       = useState<Filter>("all");
   const [search, setSearch]       = useState("");
@@ -75,6 +76,22 @@ function ConversationsInner() {
       toast("No se pudo abrir la conversación.", "error");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // Deep link: open the conversation referenced by ?id= on load / when it changes.
+  useEffect(() => {
+    if (user?.is_admin && sharedId) openDetail(sharedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sharedId]);
+
+  const handleShare = async (id: string) => {
+    const url = `${window.location.origin}/admin/conversations?id=${id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Enlace de la conversación copiado.", "success");
+    } catch {
+      toast("No se pudo copiar el enlace.", "error");
     }
   };
 
@@ -236,10 +253,22 @@ function ConversationsInner() {
                       Iniciada {fmt(detail.created_at)}
                     </p>
                   </div>
-                  <button onClick={() => handleDelete(detail.id)} disabled={deleting}
-                    style={{ fontSize: 10, color: "#c0392b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #c0392b", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", flexShrink: 0, opacity: deleting ? 0.5 : 1 }}>
-                    Eliminar
-                  </button>
+                  <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                    <button onClick={() => handleShare(detail.id)} title="Copiar enlace a esta conversación"
+                      style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                      </svg>
+                      Compartir
+                    </button>
+                    <button onClick={() => handleDelete(detail.id)} disabled={deleting}
+                      style={{ fontSize: 10, color: "#c0392b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #c0392b", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.5 : 1 }}>
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
                 <div className="px-5 py-5 space-y-3" style={{ maxHeight: "60vh", overflowY: "auto" }}>
                   {detail.messages.map((m) => {
