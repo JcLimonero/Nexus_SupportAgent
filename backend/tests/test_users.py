@@ -78,3 +78,65 @@ async def test_delete_self_forbidden(client):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 400
+
+
+# ── Admin password change (admin + non-admin targets) ─────────────────────────
+
+@pytest.mark.anyio
+async def test_change_password_requires_admin(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    r = await client.patch(
+        f"/api/users/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {make_jwt(is_admin=False)}"},
+        json={"password": "NewPass123!"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_change_password_weak_rejected_422(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    r = await client.patch(
+        f"/api/users/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {make_jwt(is_admin=True)}"},
+        json={"password": "short"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_change_password_user_not_found(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    r = await client.patch(
+        f"/api/users/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {make_jwt(is_admin=True)}"},
+        json={"password": "NewPass123!"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_change_password_success_hashes(client):
+    from db.connection import get_db
+    from main import app
+    target = _user("bob@x.com")  # non-admin target
+    app.dependency_overrides[get_db] = make_db_override(user=target)
+    with patch("routers.users.hash_password", return_value="hashed!") as hp:
+        r = await client.patch(
+            f"/api/users/{target.id}",
+            headers={"Authorization": f"Bearer {make_jwt(is_admin=True)}"},
+            json={"password": "NewPass123!"},
+        )
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    hp.assert_called_once_with("NewPass123!")
+    assert target.hashed_password == "hashed!"

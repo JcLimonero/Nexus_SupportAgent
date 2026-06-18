@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { getBearerToken } from "@/lib/auth";
@@ -25,6 +25,9 @@ export default function UsersPage() {
   const [newPassword, setNewPassword] = useState("");
   const [newIsAdmin, setNewIsAdmin]   = useState(false);
   const [creating, setCreating]       = useState(false);
+  const [pwUserId, setPwUserId]       = useState<string | null>(null);
+  const [pwValue, setPwValue]         = useState("");
+  const [savingPw, setSavingPw]       = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -88,6 +91,32 @@ export default function UsersPage() {
     patch(u, { is_admin: !u.is_admin }).then(() =>
       toast(`${u.email} ${!u.is_admin ? "es ahora administrador" : "ya no es administrador"}.`, "success")
     );
+  };
+
+  const startPw = (u: User) => { setPwUserId(u.id); setPwValue(""); };
+  const cancelPw = () => { setPwUserId(null); setPwValue(""); };
+
+  const savePassword = async (u: User) => {
+    if (pwValue.trim().length < 8) { toast("La contraseña debe tener al menos 8 caracteres.", "error"); return; }
+    setSavingPw(true);
+    try {
+      const token = await getBearerToken();
+      const res = await fetch(`${API}/api/users/${u.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwValue }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail?.[0]?.msg || data.detail || "Error al cambiar la contraseña");
+      }
+      toast(`Contraseña de ${u.email} actualizada.`, "success");
+      cancelPw();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Error al cambiar la contraseña", "error");
+    } finally {
+      setSavingPw(false);
+    }
   };
 
   const deleteUser = async (u: User) => {
@@ -211,7 +240,8 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {users.map((u, i) => (
-                <tr key={u.id} style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)` }}>
+                <Fragment key={u.id}>
+                <tr style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)` }}>
                   <td className="px-5 py-3" style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>{u.email}</td>
                   <td className="px-5 py-3">
                     <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: "1px solid var(--border-default)", color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)", backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent" }}>
@@ -229,6 +259,11 @@ export default function UsersPage() {
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Conversaciones
+                      </button>
+                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)")}>
+                        Contraseña
                       </button>
                       <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
@@ -248,6 +283,38 @@ export default function UsersPage() {
                     </div>
                   </td>
                 </tr>
+                {pwUserId === u.id && (
+                  <tr style={{ backgroundColor: "var(--bg-muted)" }}>
+                    <td colSpan={4} className="px-5 py-3">
+                      <form
+                        onSubmit={(e) => { e.preventDefault(); savePassword(u); }}
+                        className="flex items-center gap-3 flex-wrap"
+                      >
+                        <span className="gv-label" style={{ whiteSpace: "nowrap" }}>Nueva contraseña</span>
+                        <input
+                          type="password"
+                          autoFocus
+                          value={pwValue}
+                          onChange={(e) => setPwValue(e.target.value)}
+                          placeholder="Mínimo 8 caracteres, con número o símbolo"
+                          minLength={8}
+                          style={{ ...inputStyle, flex: 1, minWidth: 220, width: "auto" }}
+                          onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
+                          onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
+                        />
+                        <button type="submit" disabled={savingPw}
+                          style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1.5px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius-sm)", padding: "7px 16px", cursor: savingPw ? "not-allowed" : "pointer", opacity: savingPw ? 0.5 : 1 }}>
+                          {savingPw ? "Guardando..." : "Guardar"}
+                        </button>
+                        <button type="button" onClick={cancelPw}
+                          style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "6px 12px", cursor: "pointer" }}>
+                          Cancelar
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
               {users.length === 0 && (
                 <tr><td colSpan={4} className="px-5 py-10 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>No hay usuarios registrados.</td></tr>
