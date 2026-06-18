@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { localLogin } from "@/lib/auth";
+import { localLogin, guestLogin } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LoginPage() {
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword]     = useState("");
   const [error, setError]           = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const router = useRouter();
   const { user, loading, refresh } = useAuth();
 
@@ -30,6 +31,20 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Credenciales incorrectas");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGuest = async () => {
+    setGuestLoading(true);
+    setError("");
+    try {
+      await guestLogin();
+      refresh();
+      router.push("/chat");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo iniciar como invitado");
+    } finally {
+      setGuestLoading(false);
     }
   };
 
@@ -173,6 +188,42 @@ export default function LoginPage() {
               {submitting ? "Iniciando sesión..." : "Iniciar sesión"}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3" style={{ margin: "18px 0 14px" }}>
+            <div style={{ flex: 1, height: 1, backgroundColor: "var(--border-default)" }} />
+            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 9, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
+              o
+            </span>
+            <div style={{ flex: 1, height: 1, backgroundColor: "var(--border-default)" }} />
+          </div>
+
+          {/* Guest access */}
+          <button
+            type="button"
+            onClick={handleGuest}
+            disabled={guestLoading}
+            className="w-full py-2.5 transition-all disabled:opacity-50"
+            style={{
+              fontFamily: '"Barlow Condensed", sans-serif',
+              fontWeight: 700,
+              fontSize: 13,
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              backgroundColor: "transparent",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--input-border)",
+              borderRadius: "var(--radius)",
+              cursor: guestLoading ? "not-allowed" : "pointer",
+            }}
+            onMouseEnter={(e) => { if (!guestLoading) e.currentTarget.style.borderColor = "var(--input-focus)"; }}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--input-border)")}
+          >
+            {guestLoading ? "Entrando..." : "Continuar como invitado"}
+          </button>
+          <p style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 8, textAlign: "center", fontWeight: 300 }}>
+            Sin cuenta · tu conversación no se guardará en tu navegador.
+          </p>
         </div>
       </div>
     </div>

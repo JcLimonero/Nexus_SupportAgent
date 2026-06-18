@@ -48,6 +48,18 @@ class CreateUserRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     is_active: bool | None = None
     is_admin: bool | None = None
+    password: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        if not any(c.isdigit() or not c.isalpha() for c in v):
+            raise ValueError("La contraseña debe contener al menos un número o símbolo")
+        return v
 
 
 class UserResponse(BaseModel):
@@ -108,6 +120,8 @@ async def update_user(
         user.is_active = body.is_active
     if body.is_admin is not None:
         user.is_admin = body.is_admin
+    if body.password is not None:
+        user.hashed_password = hash_password(body.password)
 
     await db.commit()
     await db.refresh(user)

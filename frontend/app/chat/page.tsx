@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { localLogout } from "@/lib/auth";
-import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, submitFeedback } from "@/lib/api";
+import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, submitFeedback, shareSession } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -18,6 +19,8 @@ interface Session {
 export default function ChatPage() {
   const { user, loading, refresh } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
+  const [sharing, setSharing] = useState(false);
   const [sessions, setSessions]               = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages]               = useState<Message[]>([]);
@@ -38,9 +41,12 @@ export default function ChatPage() {
     if (!loading && !user) router.push("/");
   }, [user, loading, router]);
 
+  const isGuest = !!user?.is_anon;
+
   useEffect(() => {
     if (user) {
-      loadSessions();
+      // Guests have no persisted history sidebar — skip loading sessions.
+      if (!user.is_anon) loadSessions();
       getSuggestions().then(setSuggestions);
     }
   }, [user]);
@@ -96,6 +102,21 @@ export default function ChatPage() {
     localLogout();
     refresh();
     router.push("/");
+  };
+
+  const handleShare = async () => {
+    if (!currentSessionId || sharing) return;
+    setSharing(true);
+    try {
+      const { path } = await shareSession(currentSessionId);
+      const url = `${window.location.origin}${path}`;
+      await navigator.clipboard.writeText(url);
+      toast("Enlace copiado. Cualquiera con el enlace podrá ver esta conversación.", "success");
+    } catch {
+      toast("No se pudo crear el enlace para compartir.", "error");
+    } finally {
+      setSharing(false);
+    }
   };
 
   const stopStreaming = () => {
@@ -523,13 +544,15 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
       <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
-      {/* Sidebar — desktop */}
-      <div className="hidden md:flex flex-col h-full">
-        {sidebar}
-      </div>
+      {/* Sidebar — desktop (hidden for guests, who have no history) */}
+      {!isGuest && (
+        <div className="hidden md:flex flex-col h-full">
+          {sidebar}
+        </div>
+      )}
 
       {/* Sidebar — mobile overlay */}
-      {sidebarOpen && (
+      {!isGuest && sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-40 flex" style={{ animation: "nqt-fadeIn 0.2s ease both" }}>
           <div className="flex flex-col h-full" style={{ width: 256, animation: "nqt-slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
             {sidebar}
@@ -544,23 +567,88 @@ export default function ChatPage() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top bar */}
-        <div
-          className="md:hidden flex items-center gap-3 px-4 py-3"
-          style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
-        >
-          <button
-            onClick={() => setSidebarOpen(true)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
+        {/* Guest top bar — shown on all sizes (guests have no sidebar) */}
+        {isGuest ? (
+          <div
+            className="flex items-center gap-3 px-4 md:px-8 py-3"
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
-            NEXUS SUPPORT
-          </span>
-        </div>
+            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+              NEXUS SUPPORT
+            </span>
+            <span
+              style={{
+                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, letterSpacing: "1.5px",
+                textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-sm)", padding: "2px 8px",
+              }}
+            >
+              Modo invitado
+            </span>
+            <div className="flex items-center gap-3" style={{ marginLeft: "auto" }}>
+              <button
+                onClick={handleLogout}
+                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)", background: "none", border: "1px solid var(--input-border)", borderRadius: "var(--radius-sm)", padding: "5px 12px", cursor: "pointer" }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--input-focus)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--input-border)")}
+              >
+                Iniciar sesión
+              </button>
+              <ThemeToggle
+                className="transition-colors p-1"
+                style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
+              />
+            </div>
+          </div>
+        ) : (
+          /* Mobile top bar */
+          <div
+            className="md:hidden flex items-center gap-3 px-4 py-3"
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+          >
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+              NEXUS SUPPORT
+            </span>
+          </div>
+        )}
+
+        {/* Share toolbar — appears once the conversation has a saved session */}
+        {currentSessionId && messages.length > 0 && (
+          <div
+            className="flex items-center justify-end px-4 md:px-8 py-2"
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+          >
+            <button
+              onClick={handleShare}
+              disabled={sharing}
+              title="Copiar enlace público a esta conversación"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10,
+                letterSpacing: "1.5px", textTransform: "uppercase",
+                color: "var(--text-muted)", background: "none",
+                border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
+                padding: "5px 12px", cursor: sharing ? "not-allowed" : "pointer", opacity: sharing ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => { if (!sharing) { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; } }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              {sharing ? "Generando..." : "Compartir"}
+            </button>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3">

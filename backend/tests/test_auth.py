@@ -65,6 +65,43 @@ async def test_token_contains_is_admin(client):
     assert payload["is_admin"] is True
 
 
+# ── Anonymous / guest access ──────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_guest_token_issued(client):
+    response = await client.post("/api/auth/guest")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_anon"] is True
+    assert data["is_admin"] is False
+    assert data["email"].startswith("Invitado #")
+    # The minted token must carry is_anon and a non-admin anon uid.
+    payload = PyJWT.decode(data["access_token"], options={"verify_signature": False})
+    assert payload["is_anon"] is True
+    assert payload["is_admin"] is False
+    assert payload["uid"].startswith("anon:")
+
+
+@pytest.mark.anyio
+async def test_guest_token_disabled_returns_403(client):
+    from unittest.mock import patch
+    import auth.local_auth as la
+    with patch.object(la.settings, "allow_anonymous", False):
+        response = await client.post("/api/auth/guest")
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_guest_cannot_reach_admin(client):
+    """A guest token must not unlock admin endpoints (no privilege escalation)."""
+    gtok = (await client.post("/api/auth/guest")).json()["access_token"]
+    response = await client.get(
+        "/api/admin/conversations",
+        headers={"Authorization": f"Bearer {gtok}"},
+    )
+    assert response.status_code == 403
+
+
 @pytest.mark.anyio
 async def test_protected_endpoint_requires_token(client):
     response = await client.get("/api/sessions")

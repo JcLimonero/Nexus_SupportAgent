@@ -142,6 +142,90 @@ export async function getExcerpt(chunkId: string) {
   }>;
 }
 
+export interface ConversationSummary {
+  id: string;
+  user_id: string;
+  user_label: string | null;
+  is_anonymous: boolean;
+  title: string | null;
+  message_count: number;
+  created_at: string;
+  last_message_at: string | null;
+}
+
+export interface ConversationDetail extends Omit<ConversationSummary, "message_count" | "last_message_at"> {
+  messages: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    sources: { pdfs?: unknown[]; videos?: unknown[] } | null;
+    created_at: string;
+  }[];
+}
+
+export async function getConversations(params?: {
+  filter?: "all" | "registered" | "anonymous";
+  q?: string;
+  userId?: string;
+}): Promise<ConversationSummary[]> {
+  const qs = new URLSearchParams();
+  if (params?.filter) qs.set("filter", params.filter);
+  if (params?.q) qs.set("q", params.q);
+  if (params?.userId) qs.set("user_id", params.userId);
+  const res = await fetch(`${API_URL}/api/admin/conversations?${qs.toString()}`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al obtener conversaciones");
+  return res.json();
+}
+
+export async function getConversation(sessionId: string): Promise<ConversationDetail> {
+  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al obtener la conversación");
+  return res.json();
+}
+
+export async function deleteConversation(sessionId: string) {
+  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}`, {
+    method: "DELETE",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("Error al eliminar la conversación");
+}
+
+export async function shareSession(sessionId: string): Promise<{ token: string; path: string }> {
+  const res = await fetch(`${API_URL}/api/sessions/${sessionId}/share`, {
+    method: "POST",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("No se pudo crear el enlace para compartir");
+  return res.json();
+}
+
+export async function shareConversationAdmin(sessionId: string): Promise<{ token: string; path: string }> {
+  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}/share`, {
+    method: "POST",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("No se pudo crear el enlace para compartir");
+  return res.json();
+}
+
+export interface SharedConversation {
+  title: string | null;
+  created_at: string;
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    sources: { pdfs?: { file_name?: string }[]; videos?: { file_name?: string }[] } | null;
+  }[];
+}
+
+// Public — no auth header.
+export async function getSharedConversation(token: string): Promise<SharedConversation> {
+  const res = await fetch(`${API_URL}/api/shared/${token}`);
+  if (!res.ok) throw new Error("Conversación no encontrada");
+  return res.json();
+}
+
 export async function submitFeedback(messageId: string, rating: "up" | "down") {
   const res = await fetch(`${API_URL}/api/messages/${messageId}/feedback`, {
     method: "POST",

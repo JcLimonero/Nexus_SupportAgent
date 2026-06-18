@@ -321,3 +321,144 @@ async def test_serve_accessible_to_regular_user(client):
     )
     app.dependency_overrides.clear()
     assert response.status_code == 404
+
+
+# ── Conversation viewer (traceability / audit) ────────────────────────────────
+
+@pytest.mark.anyio
+async def test_conversations_requires_auth(client):
+    response = await client.get("/api/admin/conversations")
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_conversations_requires_admin(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        "/api/admin/conversations",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_conversation_detail_requires_admin(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_conversation_detail_invalid_id_422(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        "/api/admin/conversations/not-a-uuid",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_conversation_detail_404_for_missing(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    response = await client.get(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_conversation_delete_requires_admin(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.delete(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_conversation_delete_404_for_missing(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    response = await client.delete(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 404
+
+
+# ── Admin conversation share ──────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_admin_share_requires_admin(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    r = await client.post(
+        f"/api/admin/conversations/{uuid.uuid4()}/share",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_admin_share_404_for_missing(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    r = await client.post(
+        f"/api/admin/conversations/{uuid.uuid4()}/share",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_admin_share_creates_token(client):
+    import uuid
+    from unittest.mock import MagicMock
+    from db.connection import get_db
+    from main import app
+    session = MagicMock()
+    session.id = uuid.uuid4()
+    session.share_token = None
+    app.dependency_overrides[get_db] = make_db_override(user=session)
+    r = await client.post(
+        f"/api/admin/conversations/{session.id}/share",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["token"]
+    assert body["path"] == f"/shared/{body['token']}"

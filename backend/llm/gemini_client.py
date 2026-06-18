@@ -142,6 +142,87 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
         return {"answer": raw, "follow_ups": []}
 
 
+_SUGGESTION_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "label": {"type": "STRING"},
+            "prompt": {"type": "STRING"},
+        },
+        "required": ["label", "prompt"],
+    },
+}
+
+_SUGGESTION_INSTRUCTION = (
+    "Eres un asistente de soporte de TotalDealer. A partir de los fragmentos de "
+    "documentos proporcionados, genera preguntas que un usuario REAL podría hacer "
+    "y que se respondan con ese contenido.\n"
+    "Reglas:\n"
+    "- Cada pregunta debe basarse en la INFORMACIÓN del contenido (cómo hacer X, "
+    "cómo resolver Y, cómo configurar Z), NUNCA en el nombre del archivo o video.\n"
+    "- Prohibido mencionar nombres de archivo, 'Caso_01', versiones o títulos de documentos.\n"
+    "- 'label': 3-5 palabras, descriptivo del tema (sin nombres de archivo).\n"
+    "- 'prompt': la pregunta completa en español, natural, accionable.\n"
+    "- Responde solo en español."
+)
+
+
+def generate_suggestion_questions(samples: list[dict], count: int = 6) -> list[dict]:
+    """Generate content-based suggested questions from document samples.
+
+    `samples` = [{"file_name": str, "source_type": str, "content": str}, ...].
+    Returns [{"label": str, "prompt": str}, ...]. Raises on API error so the
+    caller can fall back to a safe generic set.
+    """
+    url = _ENDPOINT.format(project=settings.vertex_ai_project, model=settings.gemini_model)
+
+    blocks = []
+    for s in samples:
+        kind = "video" if s.get("source_type") == "video" else "documento"
+        blocks.append(f"[{kind}]\n{(s.get('content') or '')[:400]}")
+    corpus = "\n\n".join(blocks)
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": _SUGGESTION_INSTRUCTION}]},
+        "contents": [{
+            "role": "user",
+            "parts": [{"text": (
+                f"Contenido de referencia:\n{corpus}\n\n---\n"
+                f"Genera exactamente {count} preguntas sugeridas distintas, "
+                "cubriendo temas variados del contenido."
+            )}],
+        }],
+        "generationConfig": {
+            "maxOutputTokens": 1024,
+            "temperature": 0.4,
+            "responseMimeType": "application/json",
+            "responseSchema": _SUGGESTION_SCHEMA,
+            "thinkingConfig": {"thinkingBudget": settings.gemini_thinking_budget},
+        },
+    }
+
+    response = httpx.post(
+        url,
+        headers={"Authorization": f"Bearer {_get_token()}"},
+        json=payload,
+        timeout=30,
+    )
+    response.raise_for_status()
+    body = response.json()
+    parts = body.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    text_parts = [p["text"] for p in parts if "text" in p and not p.get("thought", False)]
+    raw = text_parts[-1] if text_parts else (parts[0].get("text", "[]") if parts else "[]")
+    items = json.loads(raw)
+    out = []
+    for it in items:
+        label = str(it.get("label", "")).strip()
+        prompt = str(it.get("prompt", "")).strip()
+        if label and prompt:
+            out.append({"label": label[:48], "prompt": prompt})
+    return out[:count]
+
+
 async def stream_gemini_response(history: list[dict], question: str, context: str):
     """Async generator yielding raw text deltas from the Gemini streaming API.
 

@@ -43,6 +43,12 @@ class ChatSession(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Denormalized identity for the admin conversation viewer: email for
+    # registered users, "Invitado #xxxx" for guests. Avoids resolving anon ids.
+    user_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Unguessable token for public read-only sharing (null = not shared).
+    share_token: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

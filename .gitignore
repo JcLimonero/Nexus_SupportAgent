@@ -9,6 +9,13 @@ venv/
 node_modules/
 .next/
 *.local
+tsconfig.tsbuildinfo
+
+# Local training corpus (large media — not part of the app)
+Recursos Capacitación TotalDealer/
+
+# Claude Code local memory
+memory/
 
 # Environment & secrets
 .env

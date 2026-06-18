@@ -475,3 +475,191 @@ async def test_chat_stream_answer_content_matches_tokens(client):
     done = next(e for e in events if e.get("done"))
 
     assert done["answer"] == streamed.rstrip()
+
+
+# ── Session identity (anonymous vs registered) ────────────────────────────────
+
+def test_guest_label_format():
+    from auth.local_auth import guest_label
+    assert guest_label("anon:ab12cd34ef") == "Invitado #ab12"
+
+
+def test_session_identity_for_guest():
+    from routers.chat import _session_identity
+    is_anon, label = _session_identity({"uid": "anon:ab12cd34", "is_anon": True, "email": "Invitado #ab12"})
+    assert is_anon is True
+    assert label == "Invitado #ab12"
+
+
+def test_session_identity_for_registered_user():
+    from routers.chat import _session_identity
+    is_anon, label = _session_identity({"uid": "uuid-123", "is_admin": False, "email": "ana@empresa.com"})
+    assert is_anon is False
+    assert label == "ana@empresa.com"
+
+
+# ── No-info fallback suppresses citations ─────────────────────────────────────
+
+def test_is_no_info_detects_fallback():
+    from routers.chat import _is_no_info
+    assert _is_no_info("No tengo información sobre ese tema en los documentos disponibles. "
+                       "Te recomiendo contactar al equipo de soporte.")
+    assert not _is_no_info("Para resolver un caso de refacciones sigue estos pasos...")
+
+
+# ── Content-based suggestions (never file names) ──────────────────────────────
+
+def _suggestions_db_override(rows):
+    async def _override():
+        session = AsyncMock()
+        result = MagicMock()
+        result.all.return_value = rows
+        session.execute = AsyncMock(return_value=result)
+        yield session
+    return _override
+
+
+@pytest.mark.anyio
+async def test_suggestions_fallback_when_no_docs(client):
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache, _FALLBACK_SUGGESTIONS
+    clear_suggestions_cache()
+    app.dependency_overrides[get_db] = _suggestions_db_override([])
+    r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+    assert r.status_code == 200
+    assert r.json() == _FALLBACK_SUGGESTIONS
+
+
+@pytest.mark.anyio
+async def test_suggestions_are_content_based_not_filenames(client):
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "Caso_01_Refacciones.docx"
+    row.source_type = "docx"
+    row.content = "Departamento: Refacciones. Se recibe ticket sobre existencia de piezas..."
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+
+    generated = [{"label": "Resolver refacciones", "prompt": "¿Cómo resuelvo un caso de refacciones?"}]
+    with patch("llm.gemini_client.generate_suggestion_questions", return_value=generated):
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data == generated
+    # No suggestion may leak a file name / case id / extension.
+    for s in data:
+        assert ".docx" not in s["prompt"] and "Caso_01" not in s["prompt"]
+        assert ".docx" not in s["label"] and "Caso_01" not in s["label"]
+
+
+@pytest.mark.anyio
+async def test_suggestions_fallback_on_generation_error(client):
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache, _FALLBACK_SUGGESTIONS
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "x.pdf"; row.source_type = "pdf"; row.content = "algo"
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+    with patch("llm.gemini_client.generate_suggestion_questions", side_effect=RuntimeError("boom")):
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+    assert r.status_code == 200
+    assert r.json() == _FALLBACK_SUGGESTIONS
+
+
+# ── Conversation sharing (public links) ───────────────────────────────────────
+
+import uuid as _uuid
+from datetime import datetime as _dt
+
+
+def _session_mock(share_token=None):
+    s = MagicMock()
+    s.id = _uuid.uuid4()
+    s.title = "Mi conversación"
+    s.created_at = _dt(2026, 6, 18, 12, 0, 0)
+    s.share_token = share_token
+    return s
+
+
+@pytest.mark.anyio
+async def test_share_session_requires_auth(client):
+    r = await client.post(f"/api/sessions/{_uuid.uuid4()}/share")
+    assert r.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_share_session_creates_token(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=_session_mock(share_token=None))
+    r = await client.post(
+        f"/api/sessions/{_uuid.uuid4()}/share",
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["token"]
+    assert body["path"] == f"/shared/{body['token']}"
+
+
+@pytest.mark.anyio
+async def test_share_session_not_found_for_non_owner(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    r = await client.post(
+        f"/api/sessions/{_uuid.uuid4()}/share",
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    app.dependency_overrides.clear()
+    assert r.status_code == 404
+
+
+def _public_share_override(session):
+    async def _override():
+        sess = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = session
+        result.scalars.return_value.all.return_value = []  # no messages
+        sess.execute = AsyncMock(return_value=result)
+        yield sess
+    return _override
+
+
+@pytest.mark.anyio
+async def test_shared_view_is_public_no_auth(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = _public_share_override(_session_mock(share_token="tok123"))
+    r = await client.get("/api/shared/tok123")  # no Authorization header
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["title"] == "Mi conversación"
+    assert body["messages"] == []
+    # Identity must not leak on the public view.
+    assert "user_label" not in body and "user_id" not in body
+
+
+@pytest.mark.anyio
+async def test_shared_view_404_for_bad_token(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = _public_share_override(None)
+    r = await client.get("/api/shared/nope")
+    app.dependency_overrides.clear()
+    assert r.status_code == 404
