@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { MarkdownContent } from "@/components/MessageBubble";
 import { useToast } from "@/components/Toast";
 import {
   getConversations,
@@ -259,9 +260,15 @@ function ConversationsInner() {
                           <p style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 4 }}>
                             {isUser ? "Usuario" : "Asistente"} · {fmt(m.created_at)}
                           </p>
-                          <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
-                            {m.content}
-                          </p>
+                          {isUser ? (
+                            <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                              {m.content}
+                            </p>
+                          ) : (
+                            <div style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.65 }}>
+                              <MarkdownContent>{m.content}</MarkdownContent>
+                            </div>
+                          )}
                           {srcs.length > 0 && (
                             <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
                               {srcs.map((f, i) => (

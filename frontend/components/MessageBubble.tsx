@@ -109,6 +109,16 @@ const mdComponents: Components = {
   ),
 };
 
+// Reusable markdown renderer (same styling as chat bubbles) — used by the chat
+// view and the admin conversation viewer so assistant text never shows raw.
+export function MarkdownContent({ children }: { children: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={mdComponents}>
+      {children}
+    </ReactMarkdown>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   streaming = false,
