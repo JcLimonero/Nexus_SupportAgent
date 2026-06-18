@@ -188,6 +188,9 @@ async def upload_file(
     async with AsyncSessionLocal() as flush_db:
         await flush_db.execute(delete(ResponseCache))
         await flush_db.commit()
+    # Suggested questions are derived from the corpus — refresh them too.
+    from routers.chat import clear_suggestions_cache
+    clear_suggestions_cache()
 
     return {"status": "processing", "file_name": file.filename, "url": file_url}
 
@@ -216,6 +219,8 @@ async def delete_document(
     await db.execute(delete(DocumentChunk).where(DocumentChunk.file_name == file_name))
     await db.execute(delete(ResponseCache))  # knowledge base changed — flush cache
     await db.commit()
+    from routers.chat import clear_suggestions_cache
+    clear_suggestions_cache()
     return {"status": "deleted", "file_name": file_name}
 
 

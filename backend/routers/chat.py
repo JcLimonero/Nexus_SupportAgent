@@ -1,6 +1,5 @@
 import json as _json
 import logging
-import re
 import uuid
 import asyncio
 from datetime import datetime
@@ -24,6 +23,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
 
 _CACHE_DISTANCE_THRESHOLD = 0.05  # cosine distance; 0.05 ≈ similarity 0.95
+
+
+# The exact fallback the LLM emits when the context doesn't answer the question.
+# When it fires we must NOT attach document citations (retrieval may still have
+# returned loosely-related chunks, which would be misleading as "sources").
+_NO_INFO_PREFIX = "No tengo información sobre ese tema"
+
+
+def _is_no_info(answer: str) -> bool:
+    return answer.strip().startswith(_NO_INFO_PREFIX)
 
 
 def _session_identity(user: dict) -> tuple[bool, str]:
@@ -128,6 +137,10 @@ async def chat(
     gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
     answer = gemini_result["answer"]
     follow_ups = gemini_result.get("follow_ups", [])
+
+    # Don't cite documents when the model says it has no relevant info.
+    if _is_no_info(answer):
+        pdf_sources, video_sources = [], []
 
     # Persist both messages
     db.add(ChatMessage(session_id=session.id, role="user", content=request.message))
@@ -296,6 +309,9 @@ async def chat_stream(
             if yielded < len(accumulated):
                 yield f"data: {_json.dumps({'token': accumulated[yielded:]})}\n\n"
 
+        # Don't cite documents when the model reports no relevant info.
+        final_pdfs, final_videos = ([], []) if _is_no_info(answer) else (pdf_sources, video_sources)
+
         # Persist messages in a fresh session to avoid closed-connection issues
         assistant_msg_id = uuid.uuid4()
         try:
@@ -310,7 +326,7 @@ async def chat_stream(
                     session_id=uuid.UUID(session_id_str),
                     role="assistant",
                     content=answer,
-                    sources={"pdfs": pdf_sources, "videos": video_sources},
+                    sources={"pdfs": final_pdfs, "videos": final_videos},
                 ))
                 await save_db.commit()
         except Exception as exc:
@@ -321,11 +337,11 @@ async def chat_stream(
             question_embedding,
             user_message,
             answer,
-            {"pdfs": pdf_sources, "videos": video_sources},
+            {"pdfs": final_pdfs, "videos": final_videos},
             follow_ups_list,
         )
 
-        yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': answer, 'pdf_sources': pdf_sources, 'video_sources': video_sources, 'follow_ups': follow_ups_list})}\n\n"
+        yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': answer, 'pdf_sources': final_pdfs, 'video_sources': final_videos, 'follow_ups': follow_ups_list})}\n\n"
 
     return StreamingResponse(
         generate(),
@@ -334,31 +350,24 @@ async def chat_stream(
     )
 
 
-_CLEAN_PATTERNS = [
-    r"\bVersion\s+[\d.]+\b",
-    r"\bVerion\s+[\d.]+\b",
-    r"\.(pdf|mp4|docx|pptx|txt|md|csv)\b",
-    r"\bManual de (Usuario |Configuraci[oó]n |[Cc]onfguracion )",
-    r"\bManual de\b",
-    r"^Configuraci[oó]n\s+",  # strip leading "Configuración" from video titles
+# Generic fallback shown only if generation fails or the KB is empty — these are
+# content-style questions, never file names.
+_FALLBACK_SUGGESTIONS = [
+    {"label": "Configuración inicial", "prompt": "¿Cómo configuro el sistema por primera vez?"},
+    {"label": "Resolver un caso", "prompt": "¿Cómo resuelvo un caso de soporte paso a paso?"},
+    {"label": "Facturación", "prompt": "¿Cómo emito una factura en el sistema?"},
 ]
 
+# Suggestions are content-derived (via Gemini) and identical for everyone, so we
+# cache them. Invalidated on document upload/delete; otherwise refreshed by TTL.
+_SUGGESTION_TTL = 1800  # 30 min
+_suggestion_cache: dict = {"value": None, "expiry": 0.0}
+_suggestion_lock = asyncio.Lock()
 
-def _derive_suggestion(file_name: str, source_type: str) -> dict:
-    label = file_name
-    for pat in _CLEAN_PATTERNS:
-        label = re.sub(pat, "", label, flags=re.IGNORECASE)
-    label = label.strip().strip("-").strip()
-    # Truncate display label
-    display = label if len(label) <= 48 else label[:45] + "..."
-    low = label.lower()
-    if "configur" in low or "autorespuesta" in low or "blueservice" in low or "ads" in low:
-        prompt = f"¿Cómo configuro {label}?"
-    elif source_type == "video":
-        prompt = f"Explícame el proceso de {label.lower()}"
-    else:
-        prompt = f"¿Cómo funciona {label}?"
-    return {"label": display, "prompt": prompt}
+
+def clear_suggestions_cache() -> None:
+    _suggestion_cache["value"] = None
+    _suggestion_cache["expiry"] = 0.0
 
 
 @router.get("/suggestions")
@@ -366,14 +375,44 @@ async def get_suggestions(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Return up to 6 suggested questions derived from indexed document names."""
-    result = await db.execute(
-        select(DocumentChunk.file_name, DocumentChunk.source_type)
-        .distinct(DocumentChunk.file_name)
-        .limit(6)
-    )
-    rows = result.all()
-    return [_derive_suggestion(row.file_name, row.source_type) for row in rows]
+    """Return content-based suggested questions (cached), never file names."""
+    import time
+    from llm.gemini_client import generate_suggestion_questions
+
+    now = time.monotonic()
+    if _suggestion_cache["value"] is not None and now < _suggestion_cache["expiry"]:
+        return _suggestion_cache["value"]
+
+    async with _suggestion_lock:
+        # Re-check after acquiring the lock (another request may have filled it).
+        now = time.monotonic()
+        if _suggestion_cache["value"] is not None and now < _suggestion_cache["expiry"]:
+            return _suggestion_cache["value"]
+
+        # One representative content snippet per document, capped.
+        result = await db.execute(
+            select(DocumentChunk.file_name, DocumentChunk.source_type, DocumentChunk.content)
+            .distinct(DocumentChunk.file_name)
+            .order_by(DocumentChunk.file_name, DocumentChunk.chunk_index)
+            .limit(12)
+        )
+        samples = [
+            {"file_name": r.file_name, "source_type": r.source_type, "content": r.content}
+            for r in result.all()
+        ]
+
+        suggestions = _FALLBACK_SUGGESTIONS
+        if samples:
+            try:
+                generated = await asyncio.to_thread(generate_suggestion_questions, samples, 6)
+                if generated:
+                    suggestions = generated
+            except Exception as exc:
+                logger.error("Suggestion generation failed, using fallback: %s", exc)
+
+        _suggestion_cache["value"] = suggestions
+        _suggestion_cache["expiry"] = time.monotonic() + _SUGGESTION_TTL
+        return suggestions
 
 
 @router.get("/sessions")

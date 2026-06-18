@@ -496,3 +496,84 @@ def test_session_identity_for_registered_user():
     is_anon, label = _session_identity({"uid": "uuid-123", "is_admin": False, "email": "ana@empresa.com"})
     assert is_anon is False
     assert label == "ana@empresa.com"
+
+
+# ── No-info fallback suppresses citations ─────────────────────────────────────
+
+def test_is_no_info_detects_fallback():
+    from routers.chat import _is_no_info
+    assert _is_no_info("No tengo información sobre ese tema en los documentos disponibles. "
+                       "Te recomiendo contactar al equipo de soporte.")
+    assert not _is_no_info("Para resolver un caso de refacciones sigue estos pasos...")
+
+
+# ── Content-based suggestions (never file names) ──────────────────────────────
+
+def _suggestions_db_override(rows):
+    async def _override():
+        session = AsyncMock()
+        result = MagicMock()
+        result.all.return_value = rows
+        session.execute = AsyncMock(return_value=result)
+        yield session
+    return _override
+
+
+@pytest.mark.anyio
+async def test_suggestions_fallback_when_no_docs(client):
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache, _FALLBACK_SUGGESTIONS
+    clear_suggestions_cache()
+    app.dependency_overrides[get_db] = _suggestions_db_override([])
+    r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+    assert r.status_code == 200
+    assert r.json() == _FALLBACK_SUGGESTIONS
+
+
+@pytest.mark.anyio
+async def test_suggestions_are_content_based_not_filenames(client):
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "Caso_01_Refacciones.docx"
+    row.source_type = "docx"
+    row.content = "Departamento: Refacciones. Se recibe ticket sobre existencia de piezas..."
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+
+    generated = [{"label": "Resolver refacciones", "prompt": "¿Cómo resuelvo un caso de refacciones?"}]
+    with patch("llm.gemini_client.generate_suggestion_questions", return_value=generated):
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data == generated
+    # No suggestion may leak a file name / case id / extension.
+    for s in data:
+        assert ".docx" not in s["prompt"] and "Caso_01" not in s["prompt"]
+        assert ".docx" not in s["label"] and "Caso_01" not in s["label"]
+
+
+@pytest.mark.anyio
+async def test_suggestions_fallback_on_generation_error(client):
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache, _FALLBACK_SUGGESTIONS
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "x.pdf"; row.source_type = "pdf"; row.content = "algo"
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+    with patch("llm.gemini_client.generate_suggestion_questions", side_effect=RuntimeError("boom")):
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+    assert r.status_code == 200
+    assert r.json() == _FALLBACK_SUGGESTIONS
