@@ -235,17 +235,19 @@ async def test_excerpt_requires_auth(client):
 
 
 @pytest.mark.anyio
-async def test_excerpt_requires_admin(client):
+async def test_excerpt_allows_regular_user(client):
+    # Source-reference viewing is available to any authenticated user, not just
+    # admins (the chat SourcePanel uses it). A missing chunk → 404, never 403.
     import uuid
     from db.connection import get_db
     from main import app
-    app.dependency_overrides[get_db] = make_db_override()
+    app.dependency_overrides[get_db] = make_db_override(user=None)
     response = await client.get(
         f"/api/admin/documents/excerpt/{uuid.uuid4()}",
         headers={"Authorization": f"Bearer {_user()}"},
     )
     app.dependency_overrides.clear()
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 @pytest.mark.anyio
