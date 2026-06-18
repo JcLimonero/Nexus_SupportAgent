@@ -321,3 +321,93 @@ async def test_serve_accessible_to_regular_user(client):
     )
     app.dependency_overrides.clear()
     assert response.status_code == 404
+
+
+# ── Conversation viewer (traceability / audit) ────────────────────────────────
+
+@pytest.mark.anyio
+async def test_conversations_requires_auth(client):
+    response = await client.get("/api/admin/conversations")
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_conversations_requires_admin(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        "/api/admin/conversations",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_conversation_detail_requires_admin(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_conversation_detail_invalid_id_422(client):
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.get(
+        "/api/admin/conversations/not-a-uuid",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_conversation_detail_404_for_missing(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    response = await client.get(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_conversation_delete_requires_admin(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    response = await client.delete(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_user()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_conversation_delete_404_for_missing(client):
+    import uuid
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override(user=None)
+    response = await client.delete(
+        f"/api/admin/conversations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {_admin()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 404

@@ -142,6 +142,55 @@ export async function getExcerpt(chunkId: string) {
   }>;
 }
 
+export interface ConversationSummary {
+  id: string;
+  user_id: string;
+  user_label: string | null;
+  is_anonymous: boolean;
+  title: string | null;
+  message_count: number;
+  created_at: string;
+  last_message_at: string | null;
+}
+
+export interface ConversationDetail extends Omit<ConversationSummary, "message_count" | "last_message_at"> {
+  messages: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    sources: { pdfs?: unknown[]; videos?: unknown[] } | null;
+    created_at: string;
+  }[];
+}
+
+export async function getConversations(params?: {
+  filter?: "all" | "registered" | "anonymous";
+  q?: string;
+  userId?: string;
+}): Promise<ConversationSummary[]> {
+  const qs = new URLSearchParams();
+  if (params?.filter) qs.set("filter", params.filter);
+  if (params?.q) qs.set("q", params.q);
+  if (params?.userId) qs.set("user_id", params.userId);
+  const res = await fetch(`${API_URL}/api/admin/conversations?${qs.toString()}`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al obtener conversaciones");
+  return res.json();
+}
+
+export async function getConversation(sessionId: string): Promise<ConversationDetail> {
+  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al obtener la conversación");
+  return res.json();
+}
+
+export async function deleteConversation(sessionId: string) {
+  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}`, {
+    method: "DELETE",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error("Error al eliminar la conversación");
+}
+
 export async function submitFeedback(messageId: string, rating: "up" | "down") {
   const res = await fetch(`${API_URL}/api/messages/${messageId}/feedback`, {
     method: "POST",

@@ -150,12 +150,20 @@ export default function AdminPage() {
               Documentos, estadísticas y gestión de usuarios.
             </p>
             {user?.is_admin && (
-              <button
-                onClick={() => router.push("/admin/users")}
-                style={{ marginTop: 8, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", paddingLeft: 11 }}
-              >
-                Gestionar usuarios →
-              </button>
+              <div className="flex items-center gap-4" style={{ paddingLeft: 11, marginTop: 8 }}>
+                <button
+                  onClick={() => router.push("/admin/users")}
+                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  Gestionar usuarios →
+                </button>
+                <button
+                  onClick={() => router.push("/admin/conversations")}
+                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  Ver conversaciones →
+                </button>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-3 mt-1">

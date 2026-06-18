@@ -225,6 +225,11 @@ export default function UsersPage() {
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
+                      <button onClick={() => router.push(`/admin/conversations?user=${u.id}`)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
+                        Conversaciones
+                      </button>
                       <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>

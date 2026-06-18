@@ -22,6 +22,7 @@ settings = get_settings()
 
 _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/auth/login":   (20, 60),   # 20 req / 60 s per IP (brute-force guard)
+    "/api/auth/guest":   (30, 60),   # 30 guest tokens / 60 s per IP (mint-abuse guard)
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/chat":         (60, 60),
     "/api/admin/upload": (60, 60),   # 60 uploads / 60 s per IP (admin-only; bulk KB seeding)
@@ -83,6 +84,12 @@ async def _migrate():
     async with AsyncSessionLocal() as db:
         await db.execute(text(
             "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS title TEXT"
+        ))
+        await db.execute(text(
+            "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_label TEXT"
+        ))
+        await db.execute(text(
+            "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN NOT NULL DEFAULT FALSE"
         ))
         await db.commit()
 

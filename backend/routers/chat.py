@@ -14,6 +14,7 @@ from sqlalchemy import select, distinct
 from db.connection import get_db, AsyncSessionLocal
 from db.models import ChatSession, ChatMessage, DocumentChunk, MessageFeedback, ResponseCache
 from auth.firebase_verify import get_current_user
+from auth.local_auth import guest_label
 from retrieval.vector_search import search_chunks, embed_text
 from retrieval.context_builder import build_context
 from llm.gemini_client import ask_gemini, stream_gemini_response
@@ -23,6 +24,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
 
 _CACHE_DISTANCE_THRESHOLD = 0.05  # cosine distance; 0.05 ≈ similarity 0.95
+
+
+def _session_identity(user: dict) -> tuple[bool, str]:
+    """(is_anonymous, user_label) for a new session, from the token claims."""
+    is_anon = bool(user.get("is_anon"))
+    if is_anon:
+        return True, guest_label(user["uid"])
+    return False, user.get("email") or user["uid"]
 
 
 async def _lookup_cache(db: AsyncSession, embedding: list[float]) -> ResponseCache | None:
@@ -94,7 +103,8 @@ async def chat(
         title = request.message.strip()
         if len(title) > 60:
             title = title[:57] + "..."
-        session = ChatSession(user_id=user_id, title=title)
+        is_anon, label = _session_identity(user)
+        session = ChatSession(user_id=user_id, title=title, user_label=label, is_anonymous=is_anon)
         db.add(session)
         await db.flush()
 
@@ -170,7 +180,8 @@ async def chat_stream(
         title = request.message.strip()
         if len(title) > 60:
             title = title[:57] + "..."
-        session = ChatSession(user_id=user_id, title=title)
+        is_anon, label = _session_identity(user)
+        session = ChatSession(user_id=user_id, title=title, user_label=label, is_anonymous=is_anon)
         db.add(session)
         await db.flush()
         await db.commit()

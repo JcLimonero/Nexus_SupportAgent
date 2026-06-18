@@ -475,3 +475,24 @@ async def test_chat_stream_answer_content_matches_tokens(client):
     done = next(e for e in events if e.get("done"))
 
     assert done["answer"] == streamed.rstrip()
+
+
+# ── Session identity (anonymous vs registered) ────────────────────────────────
+
+def test_guest_label_format():
+    from auth.local_auth import guest_label
+    assert guest_label("anon:ab12cd34ef") == "Invitado #ab12"
+
+
+def test_session_identity_for_guest():
+    from routers.chat import _session_identity
+    is_anon, label = _session_identity({"uid": "anon:ab12cd34", "is_anon": True, "email": "Invitado #ab12"})
+    assert is_anon is True
+    assert label == "Invitado #ab12"
+
+
+def test_session_identity_for_registered_user():
+    from routers.chat import _session_identity
+    is_anon, label = _session_identity({"uid": "uuid-123", "is_admin": False, "email": "ana@empresa.com"})
+    assert is_anon is False
+    assert label == "ana@empresa.com"

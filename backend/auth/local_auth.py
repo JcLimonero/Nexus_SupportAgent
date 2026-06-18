@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -38,6 +39,27 @@ def create_token(user: User) -> str:
     return jwt.encode(payload, settings.local_jwt_secret, algorithm="HS256")
 
 
+def create_guest_token() -> tuple[str, str, str]:
+    """Mint a short-lived anonymous token. Returns (token, uid, label)."""
+    guest_uid = f"anon:{uuid.uuid4().hex}"
+    label = guest_label(guest_uid)
+    payload = {
+        "uid": guest_uid,
+        "email": label,        # human label so the UI has something to show
+        "is_admin": False,
+        "is_anon": True,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=settings.guest_jwt_expire_hours),
+    }
+    token = jwt.encode(payload, settings.local_jwt_secret, algorithm="HS256")
+    return token, guest_uid, label
+
+
+def guest_label(guest_uid: str) -> str:
+    """'anon:ab12cd...' → 'Invitado #ab12'. Stable per guest session."""
+    suffix = guest_uid.split(":", 1)[-1][:4] if ":" in guest_uid else guest_uid[:4]
+    return f"Invitado #{suffix}"
+
+
 def verify_local_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.local_jwt_secret, algorithms=["HS256"])
@@ -59,6 +81,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     email: str
     is_admin: bool
+    is_anon: bool = False
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -76,3 +99,12 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         email=user.email,
         is_admin=user.is_admin,
     )
+
+
+@router.post("/guest", response_model=TokenResponse)
+async def guest():
+    """Issue an anonymous session token for users without an account."""
+    if not settings.allow_anonymous:
+        raise HTTPException(status_code=403, detail="El acceso de invitados está deshabilitado")
+    token, _uid, label = create_guest_token()
+    return TokenResponse(access_token=token, email=label, is_admin=False, is_anon=True)

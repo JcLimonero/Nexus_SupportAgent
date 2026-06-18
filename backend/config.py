@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     local_jwt_secret: str = "local-dev-secret-change-in-production"
     local_jwt_expire_hours: int = 30  # reduced from 72 h — limit stolen-token window
 
+    # ── Anonymous (guest) access ─────────────────────────────────────────────
+    # When True, /api/auth/guest mints short-lived tokens so people without an
+    # account (e.g. clients) can use the chat. Set False to require login.
+    allow_anonymous: bool = True
+    guest_jwt_expire_hours: int = 6  # guests get a tighter window than registered users
+
     initial_admin_email: str = "admin@nexus.local"
     initial_admin_password: str = "ChangeMe123!"
 

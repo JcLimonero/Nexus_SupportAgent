@@ -315,3 +315,116 @@ async def dashboard_stats(
         "cache":         {"entries": cache_entries, "total_hits": int(cache_hits)},
         "feedback":      {"up": thumbs_up, "down": thumbs_down},
     }
+
+
+# ── Conversation viewer (traceability / audit) ────────────────────────────────
+
+@router.get("/conversations")
+async def list_conversations(
+    filter: str = "all",            # all | registered | anonymous
+    q: str | None = None,           # search across label + title
+    user_id: str | None = None,     # drill-in from the users panel
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+
+    msg_count = func.count(ChatMessage.id).label("message_count")
+    last_at = func.max(ChatMessage.created_at).label("last_message_at")
+    stmt = (
+        select(ChatSession, msg_count, last_at)
+        .outerjoin(ChatMessage, ChatMessage.session_id == ChatSession.id)
+        .group_by(ChatSession.id)
+        .order_by(func.coalesce(last_at, ChatSession.created_at).desc())
+    )
+
+    if filter == "registered":
+        stmt = stmt.where(ChatSession.is_anonymous == False)  # noqa: E712
+    elif filter == "anonymous":
+        stmt = stmt.where(ChatSession.is_anonymous == True)   # noqa: E712
+    if user_id:
+        stmt = stmt.where(ChatSession.user_id == user_id)
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(
+            func.coalesce(ChatSession.user_label, "").ilike(like)
+            | func.coalesce(ChatSession.title, "").ilike(like)
+        )
+
+    rows = (await db.execute(stmt.limit(limit).offset(offset))).all()
+    return [
+        {
+            "id": str(s.id),
+            "user_id": s.user_id,
+            "user_label": s.user_label,
+            "is_anonymous": s.is_anonymous,
+            "title": s.title,
+            "message_count": int(count or 0),
+            "created_at": s.created_at.isoformat(),
+            "last_message_at": last.isoformat() if last else None,
+        }
+        for s, count, last in rows
+    ]
+
+
+@router.get("/conversations/{session_id}")
+async def get_conversation(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de conversación inválido")
+    session = (await db.execute(select(ChatSession).where(ChatSession.id == sid))).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    msgs = (await db.execute(
+        select(ChatMessage).where(ChatMessage.session_id == sid).order_by(ChatMessage.created_at)
+    )).scalars().all()
+    return {
+        "id": str(session.id),
+        "user_id": session.user_id,
+        "user_label": session.user_label,
+        "is_anonymous": session.is_anonymous,
+        "title": session.title,
+        "created_at": session.created_at.isoformat(),
+        "messages": [
+            {
+                "id": str(m.id),
+                "role": m.role,
+                "content": m.content,
+                "sources": m.sources,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in msgs
+        ],
+    }
+
+
+@router.delete("/conversations/{session_id}", status_code=204)
+async def delete_conversation(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de conversación inválido")
+    session = (await db.execute(select(ChatSession).where(ChatSession.id == sid))).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    # Remove feedback on this session's messages, then messages, then the session.
+    msg_ids = (await db.execute(
+        select(ChatMessage.id).where(ChatMessage.session_id == sid)
+    )).scalars().all()
+    if msg_ids:
+        await db.execute(delete(MessageFeedback).where(MessageFeedback.message_id.in_(msg_ids)))
+    await db.execute(delete(ChatMessage).where(ChatMessage.session_id == sid))
+    await db.delete(session)
+    await db.commit()
