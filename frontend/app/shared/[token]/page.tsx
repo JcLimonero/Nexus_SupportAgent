@@ -88,7 +88,7 @@ export default function SharedConversationPage() {
                     {srcs.length > 0 && (
                       <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
                         {srcs.map((f, j) => (
-                          <span key={j} title={f} style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "0.5px", color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span key={j} title={f} style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "0.5px", color: isUser ? "rgba(255,255,255,0.9)" : "var(--text-muted)", border: `1px solid ${isUser ? "rgba(255,255,255,0.45)" : "var(--border-default)"}`, borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {f}
                           </span>
                         ))}

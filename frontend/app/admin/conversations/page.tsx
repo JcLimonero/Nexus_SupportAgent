@@ -279,31 +279,37 @@ function ConversationsInner() {
                       ...((m.sources?.pdfs as { file_name?: string }[] | undefined) ?? []),
                       ...((m.sources?.videos as { file_name?: string }[] | undefined) ?? []),
                     ].map((s) => s.file_name).filter(Boolean) as string[];
+                    // User bubble is the solid blue --bubble-user-bg, so its text must
+                    // use the paired light color (--bubble-user-text), like the chat.
+                    const labelColor = isUser ? "rgba(255,255,255,0.75)" : "var(--text-faint)";
+                    const textColor = isUser ? "var(--bubble-user-text)" : "var(--text-secondary)";
+                    const chipColor = isUser ? "rgba(255,255,255,0.9)" : "var(--text-muted)";
+                    const chipBorder = isUser ? "rgba(255,255,255,0.45)" : "var(--border-default)";
                     return (
                       <div key={m.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
                         <div style={{
                           maxWidth: "82%", padding: "10px 14px",
-                          backgroundColor: isUser ? "var(--bubble-user-bg, var(--bg-muted))" : "var(--bubble-ai-bg)",
-                          border: `1px solid ${isUser ? "var(--border-default)" : "var(--bubble-ai-border)"}`,
+                          backgroundColor: isUser ? "var(--bubble-user-bg)" : "var(--bubble-ai-bg)",
+                          border: isUser ? "none" : "1px solid var(--bubble-ai-border)",
                           borderLeft: isUser ? undefined : "3px solid var(--nqt-blue, #0ea5e9)",
                           borderRadius: "var(--radius)",
                         }}>
-                          <p style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 4 }}>
+                          <p style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: labelColor, marginBottom: 4 }}>
                             {isUser ? "Usuario" : "Asistente"} · {fmt(m.created_at)}
                           </p>
                           {isUser ? (
-                            <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                            <p style={{ fontSize: 13, color: textColor, fontWeight: 300, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
                               {m.content}
                             </p>
                           ) : (
-                            <div style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.65 }}>
+                            <div style={{ fontSize: 13, color: textColor, fontWeight: 300, lineHeight: 1.65 }}>
                               <MarkdownContent>{m.content}</MarkdownContent>
                             </div>
                           )}
                           {srcs.length > 0 && (
                             <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
                               {srcs.map((f, i) => (
-                                <span key={i} title={f} style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "0.5px", color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span key={i} title={f} style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "0.5px", color: chipColor, border: `1px solid ${chipBorder}`, borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {f}
                                 </span>
                               ))}
