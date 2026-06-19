@@ -149,3 +149,38 @@ describe("MessageBubble — follow-up chips", () => {
     expect(screen.queryByText("Chip?")).not.toBeInTheDocument();
   });
 });
+
+describe("MessageBubble — copy & timestamp", () => {
+  it("shows a copy button on assistant messages with content", () => {
+    render(<MessageBubble message={{ role: "assistant", content: "Hola" }} />);
+    expect(screen.getByLabelText("Copiar respuesta")).toBeInTheDocument();
+  });
+
+  it("does not show a copy button on user messages", () => {
+    render(<MessageBubble message={{ role: "user", content: "Hola" }} />);
+    expect(screen.queryByLabelText("Copiar respuesta")).not.toBeInTheDocument();
+  });
+
+  it("does not show a copy button while streaming", () => {
+    render(<MessageBubble message={{ role: "assistant", content: "Hola" }} streaming />);
+    expect(screen.queryByLabelText("Copiar respuesta")).not.toBeInTheDocument();
+  });
+
+  it("writes the message content to the clipboard when copy is clicked", () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<MessageBubble message={{ role: "assistant", content: "Texto a copiar" }} />);
+    fireEvent.click(screen.getByLabelText("Copiar respuesta"));
+    expect(writeText).toHaveBeenCalledWith("Texto a copiar");
+  });
+
+  it("renders a HH:MM timestamp when created_at is provided", () => {
+    render(<MessageBubble message={{ role: "assistant", content: "Hola", created_at: "2026-06-19T14:32:00Z" }} />);
+    expect(screen.getByText(/\d{1,2}:\d{2}/)).toBeInTheDocument();
+  });
+
+  it("renders no timestamp when created_at is absent", () => {
+    render(<MessageBubble message={{ role: "assistant", content: "Hola" }} />);
+    expect(screen.queryByText(/\d{1,2}:\d{2}/)).not.toBeInTheDocument();
+  });
+});

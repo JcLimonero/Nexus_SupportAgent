@@ -1,5 +1,6 @@
 "use client";
-import { memo } from "react";
+import { memo, useState } from "react";
+import { IconButton } from "./ui/IconButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -28,6 +29,15 @@ export interface Message {
   };
   follow_ups?: string[];
   feedback?: "up" | "down";
+  created_at?: string;
+}
+
+// Short local time stamp (HH:MM) shown under each bubble.
+function fmtTime(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
 
 const mdComponents: Components = {
@@ -137,10 +147,22 @@ export const MessageBubble = memo(function MessageBubble({
   onRetry?: () => void;
 }) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
   const hasSources =
     message.sources &&
     (message.sources.pdfs.length > 0 || message.sources.videos.length > 0);
   const hasFollowUps = !isUser && message.follow_ups && message.follow_ups.length > 0 && onFollowUp;
+  const timestamp = fmtTime(message.created_at);
+  // Action row (copy/feedback/retry) shows on completed assistant messages.
+  const showActions = !isUser && !streaming && !!message.content;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* clipboard unavailable */ }
+  };
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -264,9 +286,21 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {/* Feedback + retry */}
-        {!isUser && !streaming && (onFeedback || onRetry) && (
+        {/* Copy + feedback + retry */}
+        {showActions && (
           <div className="flex items-center gap-1 px-1">
+            <IconButton label={copied ? "Copiado" : "Copiar respuesta"} tone="accent" onClick={handleCopy}>
+              {copied ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+            </IconButton>
             {onFeedback && (
               <>
                 <button
@@ -377,6 +411,16 @@ export const MessageBubble = memo(function MessageBubble({
               ))}
             </div>
           </div>
+        )}
+
+        {/* Timestamp */}
+        {timestamp && !streaming && (
+          <span
+            className="px-1"
+            style={{ fontSize: 9, fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", color: "var(--text-faint)" }}
+          >
+            {timestamp}
+          </span>
         )}
       </div>
     </div>
