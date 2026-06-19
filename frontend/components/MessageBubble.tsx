@@ -1,5 +1,6 @@
 "use client";
-import { memo } from "react";
+import { memo, useState } from "react";
+import { IconButton } from "./ui/IconButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -28,6 +29,15 @@ export interface Message {
   };
   follow_ups?: string[];
   feedback?: "up" | "down";
+  created_at?: string;
+}
+
+// Short local time stamp (HH:MM) shown under each bubble.
+function fmtTime(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
 
 const mdComponents: Components = {
@@ -35,13 +45,13 @@ const mdComponents: Components = {
     <p style={{ marginBottom: "0.65em", lineHeight: 1.7 }} className="last:mb-0">{children}</p>
   ),
   h1: ({ children }) => (
-    <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: "1.15em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.5em", color: "var(--text-primary)" }}>{children}</p>
+    <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: "1.15em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.5em", color: "var(--text-primary)" }}>{children}</p>
   ),
   h2: ({ children }) => (
-    <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: "1.05em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.4em", color: "var(--text-primary)" }}>{children}</p>
+    <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: "1.05em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.4em", color: "var(--text-primary)" }}>{children}</p>
   ),
   h3: ({ children }) => (
-    <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: "0.95em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.35em", color: "var(--text-primary)" }}>{children}</p>
+    <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: "0.95em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.35em", color: "var(--text-primary)" }}>{children}</p>
   ),
   strong: ({ children }) => (
     <strong style={{ fontWeight: 600, color: "var(--text-primary)" }}>{children}</strong>
@@ -93,7 +103,7 @@ const mdComponents: Components = {
     <thead style={{ backgroundColor: "var(--bg-muted)", borderBottom: "2px solid var(--nqt-blue, #0ea5e9)" }}>{children}</thead>
   ),
   th: ({ children }) => (
-    <th style={{ padding: "6px 12px", textAlign: "left", fontFamily: '"Barlow Condensed", sans-serif', fontSize: "0.85em", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+    <th style={{ padding: "6px 12px", textAlign: "left", fontFamily: "var(--font-condensed)", fontSize: "0.85em", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
       {children}
     </th>
   ),
@@ -137,10 +147,22 @@ export const MessageBubble = memo(function MessageBubble({
   onRetry?: () => void;
 }) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
   const hasSources =
     message.sources &&
     (message.sources.pdfs.length > 0 || message.sources.videos.length > 0);
   const hasFollowUps = !isUser && message.follow_ups && message.follow_ups.length > 0 && onFollowUp;
+  const timestamp = fmtTime(message.created_at);
+  // Action row (copy/feedback/retry) shows on completed assistant messages.
+  const showActions = !isUser && !streaming && !!message.content;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* clipboard unavailable */ }
+  };
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -196,7 +218,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="flex items-center gap-1.5 transition-all"
                 style={{
                   fontSize: 10,
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 600,
                   letterSpacing: "1px",
                   textTransform: "uppercase",
@@ -231,7 +253,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="flex items-center gap-1.5 transition-all"
                 style={{
                   fontSize: 10,
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 600,
                   letterSpacing: "1px",
                   textTransform: "uppercase",
@@ -264,9 +286,21 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {/* Feedback + retry */}
-        {!isUser && !streaming && (onFeedback || onRetry) && (
+        {/* Copy + feedback + retry */}
+        {showActions && (
           <div className="flex items-center gap-1 px-1">
+            <IconButton label={copied ? "Copiado" : "Copiar respuesta"} tone="accent" onClick={handleCopy}>
+              {copied ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+            </IconButton>
             {onFeedback && (
               <>
                 <button
@@ -339,7 +373,7 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Follow-ups */}
         {hasFollowUps && (
           <div className="flex flex-col gap-1.5 px-1 pt-1">
-            <span style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
+            <span style={{ fontSize: 9, fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
               Preguntas relacionadas
             </span>
             <div className="flex flex-col gap-1">
@@ -350,7 +384,7 @@ export const MessageBubble = memo(function MessageBubble({
                   className="text-left transition-all"
                   style={{
                     fontSize: 12,
-                    fontFamily: '"Barlow", sans-serif',
+                    fontFamily: "var(--font-body)",
                     fontWeight: 300,
                     backgroundColor: "var(--bg-muted)",
                     color: "var(--text-secondary)",
@@ -377,6 +411,16 @@ export const MessageBubble = memo(function MessageBubble({
               ))}
             </div>
           </div>
+        )}
+
+        {/* Timestamp */}
+        {timestamp && !streaming && (
+          <span
+            className="px-1"
+            style={{ fontSize: 9, fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", color: "var(--text-faint)" }}
+          >
+            {timestamp}
+          </span>
         )}
       </div>
     </div>

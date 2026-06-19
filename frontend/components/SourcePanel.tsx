@@ -24,6 +24,8 @@ export function SourcePanel({
   const [opening, setOpening] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const currentGcsUrlRef = useRef<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
@@ -44,11 +46,34 @@ export function SourcePanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.gcs_url]);
 
+  // Escape to close + focus trap. While open, focus is held inside the panel
+  // and restored to the previously focused element when it closes.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (!source) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    const focusable = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+    const t = setTimeout(() => {
+      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(focusable);
+      (nodes && nodes.length ? nodes[0] : panelRef.current)?.focus();
+    }, 0);
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(focusable);
+      if (!nodes || nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", handler);
+      restoreRef.current?.focus?.();
+    };
+  }, [source, onClose]);
 
   // Sync ref on every render so async callbacks can detect stale fetches
   currentGcsUrlRef.current = source?.gcs_url ?? null;
@@ -94,6 +119,11 @@ export function SourcePanel({
 
       {/* Slide-in panel */}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={source.file_name}
+        tabIndex={-1}
         className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
         style={{
           width: "min(500px, 100vw)",
@@ -101,6 +131,7 @@ export function SourcePanel({
           borderLeft: "1px solid var(--border-default)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.25)",
           animation: "nqt-slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
+          outline: "none",
         }}
       >
         {/* Header */}
@@ -112,18 +143,18 @@ export function SourcePanel({
             <div className="min-w-0 flex-1">
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <div style={{ width: 3, height: 16, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
+                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
                   {isVideo ? "Video de referencia" : "Fragmento de contexto"}
                 </p>
               </div>
               <p
                 title={source.file_name}
-                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 15, color: "#ffffff", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 15, color: "#ffffff", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {source.file_name}
               </p>
               {source.page_number != null && (
-                <p style={{ fontSize: 11, color: "#475569", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, marginTop: 3 }}>
+                <p style={{ fontSize: 11, color: "#475569", fontFamily: "var(--font-condensed)", letterSpacing: 1, marginTop: 3 }}>
                   Página {source.page_number}
                 </p>
               )}
@@ -160,7 +191,7 @@ export function SourcePanel({
           )}
 
           {loading && (
-            <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: "2px", textTransform: "uppercase" }}>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", letterSpacing: "2px", textTransform: "uppercase" }}>
               Cargando...
             </p>
           )}
@@ -176,7 +207,7 @@ export function SourcePanel({
           )}
           {data && !loading && (
             <>
-              <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: 14 }}>
+              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: 14 }}>
                 Texto extraído por el modelo
               </p>
               <p style={{ fontSize: 13, fontWeight: 300, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", borderLeft: "2px solid var(--nqt-blue, #0ea5e9)", paddingLeft: 14 }}>
@@ -196,7 +227,7 @@ export function SourcePanel({
               onClick={openDocument}
               disabled={opening}
               style={{
-                fontFamily: '"Barlow Condensed", sans-serif',
+                fontFamily: "var(--font-condensed)",
                 fontWeight: 700,
                 fontSize: 11,
                 letterSpacing: "1.5px",
@@ -220,7 +251,7 @@ export function SourcePanel({
           )}
           <button
             onClick={onClose}
-            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
+            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
           >

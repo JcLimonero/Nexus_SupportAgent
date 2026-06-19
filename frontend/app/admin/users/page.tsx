@@ -5,8 +5,11 @@ import { useAuth } from "@/lib/AuthProvider";
 import { getBearerToken } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
+import { ConfirmDialog } from "@/components/ui";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type PendingAction = { type: "admin" | "delete"; user: User };
 
 interface User {
   id: string;
@@ -28,6 +31,8 @@ export default function UsersPage() {
   const [pwUserId, setPwUserId]       = useState<string | null>(null);
   const [pwValue, setPwValue]         = useState("");
   const [savingPw, setSavingPw]       = useState(false);
+  const [pending, setPending]         = useState<PendingAction | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -86,11 +91,11 @@ export default function UsersPage() {
     );
   };
 
-  const toggleAdmin = (u: User) => {
-    if (!confirm(`¿${u.is_admin ? "Revocar" : "Conceder"} permisos de administrador a ${u.email}?`)) return;
-    patch(u, { is_admin: !u.is_admin }).then(() =>
-      toast(`${u.email} ${!u.is_admin ? "es ahora administrador" : "ya no es administrador"}.`, "success")
-    );
+  const toggleAdmin = (u: User) => setPending({ type: "admin", user: u });
+
+  const doToggleAdmin = async (u: User) => {
+    await patch(u, { is_admin: !u.is_admin });
+    toast(`${u.email} ${!u.is_admin ? "es ahora administrador" : "ya no es administrador"}.`, "success");
   };
 
   const startPw = (u: User) => { setPwUserId(u.id); setPwValue(""); };
@@ -119,8 +124,9 @@ export default function UsersPage() {
     }
   };
 
-  const deleteUser = async (u: User) => {
-    if (!confirm(`¿Eliminar a ${u.email}? Esta acción no se puede deshacer.`)) return;
+  const deleteUser = (u: User) => setPending({ type: "delete", user: u });
+
+  const doDeleteUser = async (u: User) => {
     const token = await getBearerToken();
     const res = await fetch(`${API}/api/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
@@ -128,6 +134,18 @@ export default function UsersPage() {
       fetchUsers();
     } else {
       toast("Error al eliminar el usuario.", "error");
+    }
+  };
+
+  const runPending = async () => {
+    if (!pending) return;
+    setActionLoading(true);
+    try {
+      if (pending.type === "admin") await doToggleAdmin(pending.user);
+      else await doDeleteUser(pending.user);
+    } finally {
+      setActionLoading(false);
+      setPending(null);
     }
   };
 
@@ -162,7 +180,7 @@ export default function UsersPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-              <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
+              <h1 style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
                 Gestión de usuarios
               </h1>
             </div>
@@ -171,7 +189,7 @@ export default function UsersPage() {
             <ThemeToggle className="p-1 transition-colors" style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties} />
             <button
               onClick={() => router.push("/admin")}
-              style={{ fontSize: 10, color: "#64748b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: 10, color: "#64748b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
             >
@@ -205,12 +223,12 @@ export default function UsersPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase" }}>
+                <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase" }}>
                   <input type="checkbox" checked={newIsAdmin} onChange={(e) => setNewIsAdmin(e.target.checked)} style={{ accentColor: "var(--text-primary)", width: 14, height: 14 }} />
                   Administrador
                 </label>
                 <button type="submit" disabled={creating} className="transition-colors disabled:opacity-40"
-                  style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "2px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius)", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
+                  style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "2px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius)", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
                   onMouseEnter={(e) => { if (!creating) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
                 >
@@ -225,14 +243,15 @@ export default function UsersPage() {
         <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
             <span className="gv-label">Usuarios registrados</span>
-            <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif' }}>({users.length})</span>
+            <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({users.length})</span>
           </div>
 
-          <table className="w-full" style={{ borderCollapse: "collapse" }}>
+          <div className="overflow-x-auto">
+          <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 760 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--nqt-blue, #0ea5e9)", backgroundColor: "var(--bg-muted)" }}>
                 {["Email", "Rol", "Estado", "Acciones"].map((h) => (
-                  <th key={h} className="text-left px-5 py-3" style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                  <th key={h} className="text-left px-5 py-3" style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)" }}>
                     {h}
                   </th>
                 ))}
@@ -244,38 +263,38 @@ export default function UsersPage() {
                 <tr style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)` }}>
                   <td className="px-5 py-3" style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>{u.email}</td>
                   <td className="px-5 py-3">
-                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: "1px solid var(--border-default)", color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)", backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent" }}>
+                    <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: "1px solid var(--border-default)", color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)", backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent" }}>
                       {u.is_admin ? "Admin" : "Usuario"}
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: `1px solid ${u.is_active ? "#4a7c4a" : "#c0392b"}`, color: u.is_active ? "#4a7c4a" : "#c0392b" }}>
+                    <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: `1px solid ${u.is_active ? "#4a7c4a" : "#c0392b"}`, color: u.is_active ? "#4a7c4a" : "#c0392b" }}>
                       {u.is_active ? "Activo" : "Inactivo"}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <button onClick={() => router.push(`/admin/conversations?user=${u.id}`)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => router.push(`/admin/conversations?user=${u.id}`)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Conversaciones
                       </button>
-                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)")}>
                         Contraseña
                       </button>
-                      <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         {u.is_active ? "Desactivar" : "Activar"}
                       </button>
-                      <button onClick={() => toggleAdmin(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => toggleAdmin(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         {u.is_admin ? "Revocar admin" : "Hacer admin"}
                       </button>
-                      <button onClick={() => deleteUser(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => deleteUser(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "#c0392b")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Eliminar
@@ -303,11 +322,11 @@ export default function UsersPage() {
                           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
                         />
                         <button type="submit" disabled={savingPw}
-                          style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1.5px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius-sm)", padding: "7px 16px", cursor: savingPw ? "not-allowed" : "pointer", opacity: savingPw ? 0.5 : 1 }}>
+                          style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "1.5px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius-sm)", padding: "7px 16px", cursor: savingPw ? "not-allowed" : "pointer", opacity: savingPw ? 0.5 : 1 }}>
                           {savingPw ? "Guardando..." : "Guardar"}
                         </button>
                         <button type="button" onClick={cancelPw}
-                          style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "6px 12px", cursor: "pointer" }}>
+                          style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "6px 12px", cursor: "pointer" }}>
                           Cancelar
                         </button>
                       </form>
@@ -321,8 +340,24 @@ export default function UsersPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pending}
+        title={pending?.type === "delete" ? "Eliminar usuario" : pending?.user.is_admin ? "Revocar administrador" : "Conceder administrador"}
+        message={
+          pending?.type === "delete"
+            ? `¿Eliminar a ${pending.user.email}? Esta acción no se puede deshacer.`
+            : `¿${pending?.user.is_admin ? "Revocar" : "Conceder"} permisos de administrador a ${pending?.user.email}?`
+        }
+        confirmLabel={pending?.type === "delete" ? "Eliminar" : "Confirmar"}
+        danger={pending?.type === "delete"}
+        loading={actionLoading}
+        onConfirm={runPending}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }

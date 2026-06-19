@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MarkdownContent } from "@/components/MessageBubble";
 import { useToast } from "@/components/Toast";
+import { ConfirmDialog } from "@/components/ui";
 import {
   getConversations,
   getConversation,
@@ -45,6 +46,8 @@ function ConversationsInner() {
   const [detail, setDetail]       = useState<ConversationDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleting, setDeleting]   = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [visible, setVisible]     = useState(25);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -53,6 +56,7 @@ function ConversationsInner() {
   const load = useCallback(async () => {
     setFetching(true);
     try {
+      setVisible(25);
       setList(await getConversations({
         filter,
         q: search.trim() || undefined,
@@ -97,8 +101,9 @@ function ConversationsInner() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta conversación y todos sus mensajes? No se puede deshacer.")) return;
+  const confirmDelete = async () => {
+    const id = pendingDelete;
+    if (!id) return;
     setDeleting(true);
     try {
       await deleteConversation(id);
@@ -109,6 +114,7 @@ function ConversationsInner() {
       toast("Error al eliminar la conversación.", "error");
     } finally {
       setDeleting(false);
+      setPendingDelete(null);
     }
   };
 
@@ -122,7 +128,7 @@ function ConversationsInner() {
 
   const badge = (anon: boolean) => (
     <span style={{
-      fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 600, letterSpacing: "1px",
+      fontFamily: "var(--font-condensed)", fontSize: 9, fontWeight: 600, letterSpacing: "1px",
       textTransform: "uppercase", padding: "1px 6px", borderRadius: "var(--radius-sm)",
       border: `1px solid ${anon ? "var(--nqt-blue, #0ea5e9)" : "var(--border-default)"}`,
       color: anon ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)",
@@ -139,7 +145,7 @@ function ConversationsInner() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-              <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
+              <h1 style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
                 Conversaciones
               </h1>
             </div>
@@ -148,7 +154,7 @@ function ConversationsInner() {
             </p>
             {userFilter && (
               <button onClick={() => router.push("/admin/conversations")}
-                style={{ marginTop: 6, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", paddingLeft: 11 }}>
+                style={{ marginTop: 6, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", paddingLeft: 11 }}>
                 Ver todas →
               </button>
             )}
@@ -156,7 +162,7 @@ function ConversationsInner() {
           <div className="flex items-center gap-3 mt-1">
             <ThemeToggle className="p-1 transition-colors" style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties} />
             <button onClick={() => router.push("/admin")}
-              style={{ fontSize: 10, color: "#64748b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: 10, color: "#64748b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}>
               ← Admin
@@ -173,7 +179,7 @@ function ConversationsInner() {
               {FILTERS.map((f) => (
                 <button key={f.key} onClick={() => setFilter(f.key)}
                   style={{
-                    fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: "1.5px",
+                    fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px",
                     textTransform: "uppercase", padding: "6px 14px", cursor: "pointer", borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border-default)",
                     backgroundColor: filter === f.key ? "var(--btn-primary-bg)" : "transparent",
@@ -195,19 +201,19 @@ function ConversationsInner() {
           </div>
         )}
 
-        <div className="grid gap-5" style={{ gridTemplateColumns: "minmax(280px, 360px) 1fr" }}>
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-[minmax(280px,360px)_1fr]">
           {/* List */}
           <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden", alignSelf: "start" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
               <span className="gv-label">Conversaciones</span>
-              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif' }}>({list.length})</span>
+              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({list.length})</span>
             </div>
             <div style={{ maxHeight: "65vh", overflowY: "auto" }}>
               {fetching && <p style={{ padding: "16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>Cargando...</p>}
               {!fetching && list.length === 0 && (
                 <p style={{ padding: "24px 16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300, textAlign: "center" }}>No hay conversaciones.</p>
               )}
-              {list.map((c) => (
+              {list.slice(0, visible).map((c) => (
                 <button key={c.id} onClick={() => openDetail(c.id)}
                   className="w-full text-left px-4 py-3 transition-colors"
                   style={{
@@ -224,11 +230,20 @@ function ConversationsInner() {
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {c.title ?? "(sin título)"}
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: "0.5px", marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", marginTop: 2 }}>
                     {c.message_count} mensajes · {fmt(c.last_message_at)}
                   </div>
                 </button>
               ))}
+              {!fetching && list.length > visible && (
+                <button
+                  onClick={() => setVisible((v) => v + 25)}
+                  className="w-full text-center px-4 py-3"
+                  style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", background: "none", border: "none", borderTop: "1px solid var(--border-default)", cursor: "pointer" }}
+                >
+                  Cargar más ({list.length - visible})
+                </button>
+              )}
             </div>
           </div>
 
@@ -251,13 +266,13 @@ function ConversationsInner() {
                       <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>{detail.user_label ?? detail.user_id}</span>
                     </div>
                     <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>{detail.title ?? "(sin título)"}</p>
-                    <p style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: "0.5px", marginTop: 2 }}>
+                    <p style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", marginTop: 2 }}>
                       Iniciada {fmt(detail.created_at)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                     <button onClick={() => handleShare(detail.id)} title="Copiar enlace a esta conversación"
-                      style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+                      style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -266,8 +281,8 @@ function ConversationsInner() {
                       </svg>
                       Compartir
                     </button>
-                    <button onClick={() => handleDelete(detail.id)} disabled={deleting}
-                      style={{ fontSize: 10, color: "#c0392b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #c0392b", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.5 : 1 }}>
+                    <button onClick={() => setPendingDelete(detail.id)} disabled={deleting}
+                      style={{ fontSize: 10, color: "#c0392b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #c0392b", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.5 : 1 }}>
                       Eliminar
                     </button>
                   </div>
@@ -294,7 +309,7 @@ function ConversationsInner() {
                           borderLeft: isUser ? undefined : "3px solid var(--nqt-blue, #0ea5e9)",
                           borderRadius: "var(--radius)",
                         }}>
-                          <p style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: labelColor, marginBottom: 4 }}>
+                          <p style={{ fontSize: 9, fontFamily: "var(--font-condensed)", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: labelColor, marginBottom: 4 }}>
                             {isUser ? "Usuario" : "Asistente"} · {fmt(m.created_at)}
                           </p>
                           {isUser ? (
@@ -309,7 +324,7 @@ function ConversationsInner() {
                           {srcs.length > 0 && (
                             <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
                               {srcs.map((f, i) => (
-                                <span key={i} title={f} style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "0.5px", color: chipColor, border: `1px solid ${chipBorder}`, borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span key={i} title={f} style={{ fontSize: 9, fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "0.5px", color: chipColor, border: `1px solid ${chipBorder}`, borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {f}
                                 </span>
                               ))}
@@ -328,6 +343,17 @@ function ConversationsInner() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Eliminar conversación"
+        message="¿Eliminar esta conversación y todos sus mensajes? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

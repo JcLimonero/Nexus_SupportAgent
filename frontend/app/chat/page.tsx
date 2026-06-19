@@ -33,6 +33,9 @@ export default function ChatPage() {
   const [editingTitle, setEditingTitle]       = useState("");
   const [deletingId, setDeletingId]           = useState<string | null>(null);
   const [isStreaming, setIsStreaming]         = useState(false);
+  const [atBottom, setAtBottom]               = useState(true);
+  const [sessionQuery, setSessionQuery]       = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const abortRef   = useRef<AbortController | null>(null);
@@ -51,9 +54,34 @@ export default function ChatPage() {
     }
   }, [user]);
 
+  // Auto-scroll only when the user is already at the bottom, so a stream never
+  // yanks them down while they're reading earlier content.
   useEffect(() => {
+    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending, atBottom]);
+
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  };
+
+  const scrollToBottom = () => {
+    setAtBottom(true);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  };
+
+  // Desktop sidebar collapse preference (persisted; mobile uses the overlay).
+  useEffect(() => {
+    setSidebarCollapsed(localStorage.getItem("sidebarCollapsed") === "1");
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
+      return next;
+    });
+  };
 
   const loadSessions = async () => {
     try { setSessions(await getSessions()); } catch {}
@@ -135,7 +163,7 @@ export default function ChatPage() {
     setIsStreaming(false);
     setMessages((p) => [
       ...p,
-      { role: "user", content: text },
+      { role: "user", content: text, created_at: new Date().toISOString() },
       { role: "assistant", content: "", sources: { pdfs: [], videos: [] }, follow_ups: [] },
     ]);
 
@@ -235,6 +263,7 @@ export default function ChatPage() {
                   videos: event.video_sources as Array<{ file_name: string; gcs_url: string }>,
                 },
                 follow_ups: aborted ? last.follow_ups : event.follow_ups,
+                created_at: last.created_at ?? new Date().toISOString(),
               };
             }
             return updated;
@@ -332,13 +361,37 @@ export default function ChatPage() {
     );
   }
 
+  // Bucket a session by recency for the grouped sidebar list.
+  const sessionBucket = (iso: string): string => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const t = new Date(iso).getTime();
+    const day = 86400000;
+    if (t >= startOfToday.getTime()) return "Hoy";
+    if (t >= startOfToday.getTime() - day) return "Ayer";
+    if (t >= startOfToday.getTime() - 7 * day) return "Últimos 7 días";
+    return "Anteriores";
+  };
+  const BUCKET_ORDER = ["Hoy", "Ayer", "Últimos 7 días", "Anteriores"];
+
+  const q = sessionQuery.trim().toLowerCase();
+  const filteredSessions = q
+    ? sessions.filter(
+        (s) => (s.title ?? "").toLowerCase().includes(q) || fmt(s.created_at).toLowerCase().includes(q),
+      )
+    : sessions;
+  const groupedSessions = BUCKET_ORDER.map((label) => ({
+    label,
+    items: filteredSessions.filter((s) => sessionBucket(s.created_at) === label),
+  })).filter((g) => g.items.length > 0);
+
   const sidebar = (
     <aside
       className="flex flex-col h-full"
       style={{ backgroundColor: "var(--bg-sidebar)", width: 256, flexShrink: 0 }}
     >
       {/* Brand header */}
-      <div className="px-5 py-5" style={{ borderBottom: "1px solid #1e3a5f" }}>
+      <div className="px-5 py-5 relative" style={{ borderBottom: "1px solid #1e3a5f" }}>
         <Image
           src="/brand/nqt-logo-white.png"
           alt="Nexus Q Tech"
@@ -348,9 +401,23 @@ export default function ChatPage() {
           unoptimized
           style={{ display: "block", width: 160, height: "auto" }}
         />
-        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 8 }}>
+        <div style={{ fontFamily: "var(--font-condensed)", fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 8 }}>
           Soporte · TotalDealer
         </div>
+        {/* Collapse (desktop only — mobile closes via the overlay backdrop) */}
+        <button
+          onClick={toggleSidebarCollapsed}
+          aria-label="Ocultar barra lateral"
+          title="Ocultar barra lateral"
+          className="hidden md:flex"
+          style={{ position: "absolute", top: 12, right: 12, alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "#7e9cc2", padding: 4, lineHeight: 1 }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
       </div>
 
       {/* New chat */}
@@ -359,7 +426,7 @@ export default function ChatPage() {
           onClick={newChat}
           className="w-full py-2.5 px-3 text-center transition-colors"
           style={{
-            fontFamily: '"Barlow Condensed", sans-serif',
+            fontFamily: "var(--font-condensed)",
             fontWeight: 700,
             fontSize: 11,
             letterSpacing: "2px",
@@ -378,14 +445,49 @@ export default function ChatPage() {
         </button>
       </div>
 
+      {/* Session filter — only when there's enough history to be worth searching */}
+      {sessions.length > 4 && (
+        <div className="px-4 py-2.5" style={{ borderBottom: "1px solid #1e3a5f" }}>
+          <input
+            value={sessionQuery}
+            onChange={(e) => setSessionQuery(e.target.value)}
+            placeholder="Buscar conversación..."
+            aria-label="Buscar conversación"
+            className="w-full focus:outline-none"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 300,
+              background: "#0d2137",
+              color: "#e2e8f0",
+              border: "1px solid #1e3a5f",
+              borderRadius: "var(--radius-sm)",
+              padding: "6px 10px",
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "#0ea5e9")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "#1e3a5f")}
+          />
+        </div>
+      )}
+
       {/* Session list */}
       <nav className="flex-1 overflow-y-auto py-2">
         {sessions.length === 0 && (
-          <p style={{ padding: "12px 16px", fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase" }}>
+          <p style={{ padding: "12px 16px", fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase" }}>
             Sin conversaciones
           </p>
         )}
-        {sessions.map((s) => (
+        {sessions.length > 0 && groupedSessions.length === 0 && (
+          <p style={{ padding: "12px 16px", fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase" }}>
+            Sin resultados
+          </p>
+        )}
+        {groupedSessions.map((group) => (
+          <div key={group.label}>
+            <p style={{ padding: "10px 16px 4px", fontSize: 9, color: "#7e9cc2", fontFamily: "var(--font-condensed)", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>
+              {group.label}
+            </p>
+            {group.items.map((s) => (
           <div
             key={s.id}
             className="group relative"
@@ -413,7 +515,7 @@ export default function ChatPage() {
                 onBlur={() => commitEdit(s.id)}
                 className="w-full px-4 py-2.5 focus:outline-none"
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontSize: 12,
                   background: "#0d2137",
                   color: "#e2e8f0",
@@ -424,19 +526,19 @@ export default function ChatPage() {
             ) : deletingId === s.id ? (
               /* Delete confirmation */
               <div className="px-4 py-2.5">
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#fca5a5", marginBottom: 6 }}>
+                <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#fca5a5", marginBottom: 6 }}>
                   ¿Eliminar conversación?
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => confirmDelete(s.id)}
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
+                    style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
                   >
                     Eliminar
                   </button>
                   <button
                     onClick={() => setDeletingId(null)}
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#64748b", border: "1px solid #1e3a5f", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
+                    style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#64748b", border: "1px solid #1e3a5f", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
                   >
                     Cancelar
                   </button>
@@ -449,10 +551,10 @@ export default function ChatPage() {
                 className="w-full text-left px-4 py-2.5 pr-16"
                 style={{ background: "none", border: "none", cursor: "pointer" }}
               >
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 12, color: currentSessionId === s.id ? "#ffffff" : "#94a3b8", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: "var(--font-condensed)", fontSize: 12, color: currentSessionId === s.id ? "#ffffff" : "#94a3b8", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {s.title ?? fmt(s.created_at)}
                 </span>
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#2d5282", display: "block" }}>
+                <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#7e9cc2", display: "block" }}>
                   {fmt(s.created_at)}
                 </span>
               </button>
@@ -465,9 +567,10 @@ export default function ChatPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); startEdit(s); }}
                   title="Renombrar"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#2d5282", padding: 4, lineHeight: 1 }}
+                  aria-label="Renombrar conversación"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#7e9cc2", padding: 4, lineHeight: 1 }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#94a3b8")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -478,9 +581,10 @@ export default function ChatPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); setDeletingId(s.id); setEditingId(null); }}
                   title="Eliminar"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#2d5282", padding: 4, lineHeight: 1 }}
+                  aria-label="Eliminar conversación"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#7e9cc2", padding: 4, lineHeight: 1 }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -491,13 +595,15 @@ export default function ChatPage() {
               </div>
             )}
           </div>
+            ))}
+          </div>
         ))}
       </nav>
 
       {/* Footer */}
       <div className="px-4 py-4 space-y-2" style={{ borderTop: "1px solid #1e3a5f" }}>
         {user && (
-          <p style={{ fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {user.email}
           </p>
         )}
@@ -506,7 +612,7 @@ export default function ChatPage() {
             onClick={() => router.push("/admin")}
             className="w-full py-2 px-3 text-center transition-colors"
             style={{
-              fontFamily: '"Barlow Condensed", sans-serif',
+              fontFamily: "var(--font-condensed)",
               fontWeight: 600,
               fontSize: 10,
               letterSpacing: "2px",
@@ -526,15 +632,15 @@ export default function ChatPage() {
         <div className="flex items-center justify-between pt-1">
           <button
             onClick={handleLogout}
-            style={{ fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
           >
             Cerrar sesión
           </button>
           <ThemeToggle
             className="transition-colors p-1"
-            style={{ color: "#2d5282", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
+            style={{ color: "#7e9cc2", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
           />
         </div>
       </div>
@@ -544,8 +650,8 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
       <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
-      {/* Sidebar — desktop (hidden for guests, who have no history) */}
-      {!isGuest && (
+      {/* Sidebar — desktop (hidden for guests, or when collapsed) */}
+      {!isGuest && !sidebarCollapsed && (
         <div className="hidden md:flex flex-col h-full">
           {sidebar}
         </div>
@@ -566,19 +672,41 @@ export default function ChatPage() {
       )}
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Reopen sidebar (desktop only, shown when collapsed) */}
+        {!isGuest && sidebarCollapsed && (
+          <button
+            onClick={toggleSidebarCollapsed}
+            aria-label="Mostrar barra lateral"
+            title="Mostrar barra lateral"
+            className="hidden md:flex"
+            style={{
+              position: "absolute", top: 10, left: 10, zIndex: 30,
+              alignItems: "center", justifyContent: "center", width: 34, height: 34,
+              borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-surface)",
+              border: "1px solid var(--border-default)", color: "var(--text-muted)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
         {/* Guest top bar — shown on all sizes (guests have no sidebar) */}
         {isGuest ? (
           <div
-            className="flex items-center gap-3 px-4 md:px-8 py-3"
+            className="flex items-center gap-3 px-4 md:px-8 py-3 flex-wrap"
             style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
           >
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
               NEXUS SUPPORT
             </span>
             <span
               style={{
-                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, letterSpacing: "1.5px",
+                fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, letterSpacing: "1.5px",
                 textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", border: "1px solid var(--border-default)",
                 borderRadius: "var(--radius-sm)", padding: "2px 8px",
               }}
@@ -588,7 +716,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-3" style={{ marginLeft: "auto" }}>
               <button
                 onClick={handleLogout}
-                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)", background: "none", border: "1px solid var(--input-border)", borderRadius: "var(--radius-sm)", padding: "5px 12px", cursor: "pointer" }}
+                style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)", background: "none", border: "1px solid var(--input-border)", borderRadius: "var(--radius-sm)", padding: "5px 12px", cursor: "pointer" }}
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--input-focus)")}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--input-border)")}
               >
@@ -608,13 +736,14 @@ export default function ChatPage() {
           >
             <button
               onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menú de conversaciones"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
               NEXUS SUPPORT
             </span>
           </div>
@@ -632,7 +761,7 @@ export default function ChatPage() {
               title="Copiar enlace público a esta conversación"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10,
+                fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
                 letterSpacing: "1.5px", textTransform: "uppercase",
                 color: "var(--text-muted)", background: "none",
                 border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
@@ -651,13 +780,13 @@ export default function ChatPage() {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3">
+        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3" onScroll={handleMessagesScroll}>
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-8" style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
               {/* Heading */}
               <div className="text-center">
                 <div style={{ width: 36, height: 3, background: "linear-gradient(90deg, #0ea5e9, #06b6d4)", margin: "0 auto 16px", borderRadius: 2 }} />
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
+                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
                   ¿EN QUÉ PUEDO<br />AYUDARTE?
                 </p>
                 <p className="mt-3 font-light" style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.65 }}>
@@ -665,10 +794,10 @@ export default function ChatPage() {
                 </p>
               </div>
 
-              {/* Suggestion cards */}
+              {/* Suggestion cards — cap at 4 so the welcome block stays vertically centered */}
               {suggestions.length > 0 && (
                 <div className="grid grid-cols-1 gap-2 w-full" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-                  {suggestions.map((s, i) => (
+                  {suggestions.slice(0, 4).map((s, i) => (
                     <button
                       key={i}
                       onClick={() => handleQuestionClick(s.prompt)}
@@ -693,7 +822,7 @@ export default function ChatPage() {
                         e.currentTarget.style.borderLeftColor = "var(--nqt-blue, #0ea5e9)";
                       }}
                     >
-                      <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", display: "block", marginBottom: 4 }}>
+                      <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", display: "block", marginBottom: 4 }}>
                         {s.label}
                       </span>
                       <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.4, fontWeight: 300 }}>
@@ -759,6 +888,39 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
+        {/* Scroll-to-bottom — shown when the user has scrolled up from the latest reply */}
+        {!atBottom && messages.length > 0 && (
+          <button
+            onClick={scrollToBottom}
+            aria-label="Ir a la respuesta más reciente"
+            title="Ir abajo"
+            style={{
+              position: "absolute",
+              bottom: 88,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              backgroundColor: "var(--bg-surface)",
+              border: "1px solid var(--border-strong)",
+              color: "var(--nqt-blue, #0ea5e9)",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+              cursor: "pointer",
+              animation: "nqt-fadeIn 0.2s ease both",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <polyline points="19 12 12 19 5 12" />
+            </svg>
+          </button>
+        )}
+
         {/* Input bar */}
         <div
           className="px-4 md:px-8 py-4"
@@ -796,7 +958,7 @@ export default function ChatPage() {
                 onClick={stopStreaming}
                 className="px-5 py-2.5 shrink-0 transition-colors"
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 700,
                   fontSize: 11,
                   letterSpacing: "2px",
@@ -818,7 +980,7 @@ export default function ChatPage() {
                 disabled={!input.trim()}
                 className="btn-send px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 700,
                   fontSize: 11,
                   letterSpacing: "2px",
@@ -836,7 +998,7 @@ export default function ChatPage() {
               </button>
             )}
           </form>
-          <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+          <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
             {sending ? "Generando respuesta · Detener para cancelar" : "Enter para enviar · Shift+Enter para nueva línea"}
           </p>
         </div>
