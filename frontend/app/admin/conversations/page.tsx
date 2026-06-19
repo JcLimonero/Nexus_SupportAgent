@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MarkdownContent } from "@/components/MessageBubble";
 import { useToast } from "@/components/Toast";
+import { ConfirmDialog } from "@/components/ui";
 import {
   getConversations,
   getConversation,
@@ -45,6 +46,7 @@ function ConversationsInner() {
   const [detail, setDetail]       = useState<ConversationDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleting, setDeleting]   = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -97,8 +99,9 @@ function ConversationsInner() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta conversación y todos sus mensajes? No se puede deshacer.")) return;
+  const confirmDelete = async () => {
+    const id = pendingDelete;
+    if (!id) return;
     setDeleting(true);
     try {
       await deleteConversation(id);
@@ -109,6 +112,7 @@ function ConversationsInner() {
       toast("Error al eliminar la conversación.", "error");
     } finally {
       setDeleting(false);
+      setPendingDelete(null);
     }
   };
 
@@ -266,7 +270,7 @@ function ConversationsInner() {
                       </svg>
                       Compartir
                     </button>
-                    <button onClick={() => handleDelete(detail.id)} disabled={deleting}
+                    <button onClick={() => setPendingDelete(detail.id)} disabled={deleting}
                       style={{ fontSize: 10, color: "#c0392b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #c0392b", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.5 : 1 }}>
                       Eliminar
                     </button>
@@ -328,6 +332,17 @@ function ConversationsInner() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Eliminar conversación"
+        message="¿Eliminar esta conversación y todos sus mensajes? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

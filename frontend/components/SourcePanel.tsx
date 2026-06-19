@@ -24,6 +24,8 @@ export function SourcePanel({
   const [opening, setOpening] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const currentGcsUrlRef = useRef<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
@@ -44,11 +46,34 @@ export function SourcePanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.gcs_url]);
 
+  // Escape to close + focus trap. While open, focus is held inside the panel
+  // and restored to the previously focused element when it closes.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (!source) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    const focusable = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+    const t = setTimeout(() => {
+      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(focusable);
+      (nodes && nodes.length ? nodes[0] : panelRef.current)?.focus();
+    }, 0);
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(focusable);
+      if (!nodes || nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", handler);
+      restoreRef.current?.focus?.();
+    };
+  }, [source, onClose]);
 
   // Sync ref on every render so async callbacks can detect stale fetches
   currentGcsUrlRef.current = source?.gcs_url ?? null;
@@ -94,6 +119,11 @@ export function SourcePanel({
 
       {/* Slide-in panel */}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={source.file_name}
+        tabIndex={-1}
         className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
         style={{
           width: "min(500px, 100vw)",
@@ -101,6 +131,7 @@ export function SourcePanel({
           borderLeft: "1px solid var(--border-default)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.25)",
           animation: "nqt-slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
+          outline: "none",
         }}
       >
         {/* Header */}

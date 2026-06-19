@@ -5,8 +5,11 @@ import { useAuth } from "@/lib/AuthProvider";
 import { getBearerToken } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
+import { ConfirmDialog } from "@/components/ui";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type PendingAction = { type: "admin" | "delete"; user: User };
 
 interface User {
   id: string;
@@ -28,6 +31,8 @@ export default function UsersPage() {
   const [pwUserId, setPwUserId]       = useState<string | null>(null);
   const [pwValue, setPwValue]         = useState("");
   const [savingPw, setSavingPw]       = useState(false);
+  const [pending, setPending]         = useState<PendingAction | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -86,11 +91,11 @@ export default function UsersPage() {
     );
   };
 
-  const toggleAdmin = (u: User) => {
-    if (!confirm(`¿${u.is_admin ? "Revocar" : "Conceder"} permisos de administrador a ${u.email}?`)) return;
-    patch(u, { is_admin: !u.is_admin }).then(() =>
-      toast(`${u.email} ${!u.is_admin ? "es ahora administrador" : "ya no es administrador"}.`, "success")
-    );
+  const toggleAdmin = (u: User) => setPending({ type: "admin", user: u });
+
+  const doToggleAdmin = async (u: User) => {
+    await patch(u, { is_admin: !u.is_admin });
+    toast(`${u.email} ${!u.is_admin ? "es ahora administrador" : "ya no es administrador"}.`, "success");
   };
 
   const startPw = (u: User) => { setPwUserId(u.id); setPwValue(""); };
@@ -119,8 +124,9 @@ export default function UsersPage() {
     }
   };
 
-  const deleteUser = async (u: User) => {
-    if (!confirm(`¿Eliminar a ${u.email}? Esta acción no se puede deshacer.`)) return;
+  const deleteUser = (u: User) => setPending({ type: "delete", user: u });
+
+  const doDeleteUser = async (u: User) => {
     const token = await getBearerToken();
     const res = await fetch(`${API}/api/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
@@ -128,6 +134,18 @@ export default function UsersPage() {
       fetchUsers();
     } else {
       toast("Error al eliminar el usuario.", "error");
+    }
+  };
+
+  const runPending = async () => {
+    if (!pending) return;
+    setActionLoading(true);
+    try {
+      if (pending.type === "admin") await doToggleAdmin(pending.user);
+      else await doDeleteUser(pending.user);
+    } finally {
+      setActionLoading(false);
+      setPending(null);
     }
   };
 
@@ -323,6 +341,21 @@ export default function UsersPage() {
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pending}
+        title={pending?.type === "delete" ? "Eliminar usuario" : pending?.user.is_admin ? "Revocar administrador" : "Conceder administrador"}
+        message={
+          pending?.type === "delete"
+            ? `¿Eliminar a ${pending.user.email}? Esta acción no se puede deshacer.`
+            : `¿${pending?.user.is_admin ? "Revocar" : "Conceder"} permisos de administrador a ${pending?.user.email}?`
+        }
+        confirmLabel={pending?.type === "delete" ? "Eliminar" : "Confirmar"}
+        danger={pending?.type === "delete"}
+        loading={actionLoading}
+        onConfirm={runPending}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }

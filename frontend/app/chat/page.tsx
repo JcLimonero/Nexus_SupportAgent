@@ -381,7 +381,7 @@ export default function ChatPage() {
       {/* Session list */}
       <nav className="flex-1 overflow-y-auto py-2">
         {sessions.length === 0 && (
-          <p style={{ padding: "12px 16px", fontSize: 10, color: "#2d5282", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase" }}>
+          <p style={{ padding: "12px 16px", fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase" }}>
             Sin conversaciones
           </p>
         )}
@@ -452,7 +452,7 @@ export default function ChatPage() {
                 <span style={{ fontFamily: "var(--font-condensed)", fontSize: 12, color: currentSessionId === s.id ? "#ffffff" : "#94a3b8", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {s.title ?? fmt(s.created_at)}
                 </span>
-                <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#2d5282", display: "block" }}>
+                <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#7e9cc2", display: "block" }}>
                   {fmt(s.created_at)}
                 </span>
               </button>
@@ -465,9 +465,10 @@ export default function ChatPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); startEdit(s); }}
                   title="Renombrar"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#2d5282", padding: 4, lineHeight: 1 }}
+                  aria-label="Renombrar conversación"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#7e9cc2", padding: 4, lineHeight: 1 }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#94a3b8")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -478,9 +479,10 @@ export default function ChatPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); setDeletingId(s.id); setEditingId(null); }}
                   title="Eliminar"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#2d5282", padding: 4, lineHeight: 1 }}
+                  aria-label="Eliminar conversación"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#7e9cc2", padding: 4, lineHeight: 1 }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -497,7 +499,7 @@ export default function ChatPage() {
       {/* Footer */}
       <div className="px-4 py-4 space-y-2" style={{ borderTop: "1px solid #1e3a5f" }}>
         {user && (
-          <p style={{ fontSize: 10, color: "#2d5282", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {user.email}
           </p>
         )}
@@ -526,15 +528,15 @@ export default function ChatPage() {
         <div className="flex items-center justify-between pt-1">
           <button
             onClick={handleLogout}
-            style={{ fontSize: 10, color: "#2d5282", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: 10, color: "#7e9cc2", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
           >
             Cerrar sesión
           </button>
           <ThemeToggle
             className="transition-colors p-1"
-            style={{ color: "#2d5282", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
+            style={{ color: "#7e9cc2", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
           />
         </div>
       </div>
@@ -608,9 +610,10 @@ export default function ChatPage() {
           >
             <button
               onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menú de conversaciones"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
