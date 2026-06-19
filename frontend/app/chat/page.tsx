@@ -35,6 +35,7 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming]         = useState(false);
   const [atBottom, setAtBottom]               = useState(true);
   const [sessionQuery, setSessionQuery]       = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const abortRef   = useRef<AbortController | null>(null);
@@ -67,6 +68,19 @@ export default function ChatPage() {
   const scrollToBottom = () => {
     setAtBottom(true);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Desktop sidebar collapse preference (persisted; mobile uses the overlay).
+  useEffect(() => {
+    setSidebarCollapsed(localStorage.getItem("sidebarCollapsed") === "1");
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
+      return next;
+    });
   };
 
   const loadSessions = async () => {
@@ -377,7 +391,7 @@ export default function ChatPage() {
       style={{ backgroundColor: "var(--bg-sidebar)", width: 256, flexShrink: 0 }}
     >
       {/* Brand header */}
-      <div className="px-5 py-5" style={{ borderBottom: "1px solid #1e3a5f" }}>
+      <div className="px-5 py-5 relative" style={{ borderBottom: "1px solid #1e3a5f" }}>
         <Image
           src="/brand/nqt-logo-white.png"
           alt="Nexus Q Tech"
@@ -390,6 +404,20 @@ export default function ChatPage() {
         <div style={{ fontFamily: "var(--font-condensed)", fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 8 }}>
           Soporte · TotalDealer
         </div>
+        {/* Collapse (desktop only — mobile closes via the overlay backdrop) */}
+        <button
+          onClick={toggleSidebarCollapsed}
+          aria-label="Ocultar barra lateral"
+          title="Ocultar barra lateral"
+          className="hidden md:flex"
+          style={{ position: "absolute", top: 12, right: 12, alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "#7e9cc2", padding: 4, lineHeight: 1 }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "#7e9cc2")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
       </div>
 
       {/* New chat */}
@@ -622,8 +650,8 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
       <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
-      {/* Sidebar — desktop (hidden for guests, who have no history) */}
-      {!isGuest && (
+      {/* Sidebar — desktop (hidden for guests, or when collapsed) */}
+      {!isGuest && !sidebarCollapsed && (
         <div className="hidden md:flex flex-col h-full">
           {sidebar}
         </div>
@@ -645,6 +673,28 @@ export default function ChatPage() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Reopen sidebar (desktop only, shown when collapsed) */}
+        {!isGuest && sidebarCollapsed && (
+          <button
+            onClick={toggleSidebarCollapsed}
+            aria-label="Mostrar barra lateral"
+            title="Mostrar barra lateral"
+            className="hidden md:flex"
+            style={{
+              position: "absolute", top: 10, left: 10, zIndex: 30,
+              alignItems: "center", justifyContent: "center", width: 34, height: 34,
+              borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-surface)",
+              border: "1px solid var(--border-default)", color: "var(--text-muted)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
         {/* Guest top bar — shown on all sizes (guests have no sidebar) */}
         {isGuest ? (
           <div
