@@ -183,4 +183,14 @@ describe("MessageBubble — copy & timestamp", () => {
     render(<MessageBubble message={{ role: "assistant", content: "Hola" }} />);
     expect(screen.queryByText(/\d{1,2}:\d{2}/)).not.toBeInTheDocument();
   });
+
+  it("includes a screen-reader author cue for assistant messages", () => {
+    render(<MessageBubble message={{ role: "assistant", content: "Respuesta" }} />);
+    expect(screen.getByText(/Asistente:/)).toBeInTheDocument();
+  });
+
+  it("includes a screen-reader author cue for user messages", () => {
+    render(<MessageBubble message={{ role: "user", content: "Pregunta" }} />);
+    expect(screen.getByText(/Tú:/)).toBeInTheDocument();
+  });
 });

@@ -1,5 +1,5 @@
 "use client";
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { IconButton } from "./ui/IconButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -38,6 +38,44 @@ function fmtTime(iso?: string): string | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
   return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+}
+
+// Fenced code block with a copy button (a recognized AI-chat pattern). The
+// button reads the rendered text so it copies exactly what the user sees.
+function CodeBlock({ children }: { children: React.ReactNode }) {
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(preRef.current?.textContent ?? "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* clipboard unavailable */ }
+  };
+  return (
+    <div style={{ position: "relative", marginBottom: "0.65em" }}>
+      <button
+        onClick={copy}
+        aria-label={copied ? "Código copiado" : "Copiar código"}
+        title={copied ? "Copiado" : "Copiar"}
+        style={{
+          position: "absolute", top: 6, right: 6, display: "flex", alignItems: "center", justifyContent: "center",
+          width: 26, height: 26, background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-sm)", color: copied ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)",
+          cursor: "pointer", lineHeight: 1,
+        }}
+      >
+        {copied ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+        )}
+      </button>
+      <pre ref={preRef} style={{ backgroundColor: "var(--bg-muted)", border: "1px solid var(--border-default)", borderLeft: "3px solid var(--nqt-blue, #0ea5e9)", borderRadius: "var(--radius)", padding: "12px 14px", overflowX: "auto", marginBottom: 0, fontSize: "0.82em", fontFamily: '"Courier New", Courier, monospace', lineHeight: 1.6, color: "var(--text-primary)" }}>
+        {children}
+      </pre>
+    </div>
+  );
 }
 
 const mdComponents: Components = {
@@ -81,11 +119,7 @@ const mdComponents: Components = {
       </code>
     );
   },
-  pre: ({ children }) => (
-    <pre style={{ backgroundColor: "var(--bg-muted)", border: "1px solid var(--border-default)", borderLeft: "3px solid var(--nqt-blue, #0ea5e9)", borderRadius: "var(--radius)", padding: "12px 14px", overflowX: "auto", marginBottom: "0.65em", fontSize: "0.82em", fontFamily: '"Courier New", Courier, monospace', lineHeight: 1.6, color: "var(--text-primary)" }}>
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   blockquote: ({ children }) => (
     <blockquote style={{ borderLeft: "3px solid var(--nqt-blue, #0ea5e9)", paddingLeft: "1em", marginLeft: 0, marginBottom: "0.65em", color: "var(--text-muted)", fontStyle: "italic" }}>
       {children}
@@ -191,6 +225,8 @@ export const MessageBubble = memo(function MessageBubble({
                 }
           }
         >
+          {/* Screen-reader author cue so the chat log is navigable by speaker */}
+          <span className="sr-only">{isUser ? "Tú: " : "Asistente: "}</span>
           {isUser ? (
             message.content
           ) : (

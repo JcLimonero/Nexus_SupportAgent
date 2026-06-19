@@ -779,8 +779,16 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3" onScroll={handleMessagesScroll}>
+        {/* Messages — live region so screen readers announce streamed replies
+            (polite + non-atomic so only new content is read, not the whole log) */}
+        <div
+          className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3"
+          onScroll={handleMessagesScroll}
+          role="log"
+          aria-live="polite"
+          aria-atomic="false"
+          aria-relevant="additions text"
+        >
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-8" style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
               {/* Heading */}
