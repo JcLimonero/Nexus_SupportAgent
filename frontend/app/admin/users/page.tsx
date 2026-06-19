@@ -246,7 +246,8 @@ export default function UsersPage() {
             <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({users.length})</span>
           </div>
 
-          <table className="w-full" style={{ borderCollapse: "collapse" }}>
+          <div className="overflow-x-auto">
+          <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 760 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--nqt-blue, #0ea5e9)", backgroundColor: "var(--bg-muted)" }}>
                 {["Email", "Rol", "Estado", "Acciones"].map((h) => (
@@ -339,6 +340,7 @@ export default function UsersPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

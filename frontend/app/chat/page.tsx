@@ -648,7 +648,7 @@ export default function ChatPage() {
         {/* Guest top bar — shown on all sizes (guests have no sidebar) */}
         {isGuest ? (
           <div
-            className="flex items-center gap-3 px-4 md:px-8 py-3"
+            className="flex items-center gap-3 px-4 md:px-8 py-3 flex-wrap"
             style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
           >
             <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>

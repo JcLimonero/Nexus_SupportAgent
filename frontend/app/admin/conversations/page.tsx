@@ -47,6 +47,7 @@ function ConversationsInner() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleting, setDeleting]   = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [visible, setVisible]     = useState(25);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/chat");
@@ -55,6 +56,7 @@ function ConversationsInner() {
   const load = useCallback(async () => {
     setFetching(true);
     try {
+      setVisible(25);
       setList(await getConversations({
         filter,
         q: search.trim() || undefined,
@@ -199,7 +201,7 @@ function ConversationsInner() {
           </div>
         )}
 
-        <div className="grid gap-5" style={{ gridTemplateColumns: "minmax(280px, 360px) 1fr" }}>
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-[minmax(280px,360px)_1fr]">
           {/* List */}
           <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden", alignSelf: "start" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
@@ -211,7 +213,7 @@ function ConversationsInner() {
               {!fetching && list.length === 0 && (
                 <p style={{ padding: "24px 16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300, textAlign: "center" }}>No hay conversaciones.</p>
               )}
-              {list.map((c) => (
+              {list.slice(0, visible).map((c) => (
                 <button key={c.id} onClick={() => openDetail(c.id)}
                   className="w-full text-left px-4 py-3 transition-colors"
                   style={{
@@ -233,6 +235,15 @@ function ConversationsInner() {
                   </div>
                 </button>
               ))}
+              {!fetching && list.length > visible && (
+                <button
+                  onClick={() => setVisible((v) => v + 25)}
+                  className="w-full text-center px-4 py-3"
+                  style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", background: "none", border: "none", borderTop: "1px solid var(--border-default)", cursor: "pointer" }}
+                >
+                  Cargar más ({list.length - visible})
+                </button>
+              )}
             </div>
           </div>
 
