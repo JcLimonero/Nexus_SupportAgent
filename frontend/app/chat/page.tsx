@@ -794,10 +794,10 @@ export default function ChatPage() {
                 </p>
               </div>
 
-              {/* Suggestion cards */}
+              {/* Suggestion cards — cap at 4 so the welcome block stays vertically centered */}
               {suggestions.length > 0 && (
                 <div className="grid grid-cols-1 gap-2 w-full" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-                  {suggestions.map((s, i) => (
+                  {suggestions.slice(0, 4).map((s, i) => (
                     <button
                       key={i}
                       onClick={() => handleQuestionClick(s.prompt)}
