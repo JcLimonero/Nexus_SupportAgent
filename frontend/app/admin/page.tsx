@@ -40,8 +40,8 @@ function StatCard({ label, value, sub }: { label: string; value: number | string
       borderRadius: "var(--radius)",
       padding: "16px 20px",
     }}>
-      <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
-      <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 28, fontWeight: 700, color: "var(--nqt-blue, #0ea5e9)", lineHeight: 1 }}>{value}</p>
+      <p style={{ fontFamily: "var(--font-condensed)", fontSize: 9, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
+      <p style={{ fontFamily: "var(--font-condensed)", fontSize: 28, fontWeight: 700, color: "var(--nqt-blue, #0ea5e9)", lineHeight: 1 }}>{value}</p>
       {sub && <p style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4, fontWeight: 300 }}>{sub}</p>}
     </div>
   );
@@ -142,7 +142,7 @@ export default function AdminPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-              <h1 style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
+              <h1 style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
                 Panel de administración
               </h1>
             </div>
@@ -153,13 +153,13 @@ export default function AdminPage() {
               <div className="flex items-center gap-4" style={{ paddingLeft: 11, marginTop: 8 }}>
                 <button
                   onClick={() => router.push("/admin/users")}
-                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
                 >
                   Gestionar usuarios →
                 </button>
                 <button
                   onClick={() => router.push("/admin/conversations")}
-                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
                 >
                   Ver conversaciones →
                 </button>
@@ -173,7 +173,7 @@ export default function AdminPage() {
             />
             <button
               onClick={() => router.push("/chat")}
-              style={{ fontSize: 10, color: "#64748b", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: 10, color: "#64748b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
             >
@@ -187,7 +187,7 @@ export default function AdminPage() {
 
         {/* Stats grid */}
         <div>
-          <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+          <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
             Resumen del sistema
           </p>
           {stats ? (
@@ -233,7 +233,7 @@ export default function AdminPage() {
 
         {/* Upload zone */}
         <div>
-          <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+          <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
             Subir documentos
           </p>
           <div
@@ -254,14 +254,14 @@ export default function AdminPage() {
               <div style={{ fontSize: 28, marginBottom: 12, color: dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--text-faint)" }}>
                 {uploading ? "⏳" : "↑"}
               </div>
-              <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
+              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
                 {uploading
                   ? uploadProgress
                     ? `Subiendo ${uploadProgress.current} de ${uploadProgress.total}...`
                     : "Subiendo y lanzando indexación..."
                   : "Arrastra archivos · o haz clic para seleccionar"}
               </p>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
                 PDF · MP4 · DOCX · PPTX · TXT · MD · CSV · máx. 100 MB
               </p>
             </label>
@@ -273,11 +273,11 @@ export default function AdminPage() {
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)" }}>
             <div>
               <span className="gv-label">Documentos indexados</span>
-              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif' }}>({docs.length})</span>
+              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({docs.length})</span>
             </div>
             <button
               onClick={() => { loadDocs(); loadStats(); }}
-              style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
             >
@@ -310,7 +310,7 @@ export default function AdminPage() {
                         <span
                           className="shrink-0"
                           style={{
-                            fontFamily: '"Barlow Condensed", sans-serif',
+                            fontFamily: "var(--font-condensed)",
                             fontSize: 9,
                             fontWeight: 700,
                             letterSpacing: "1.5px",
@@ -333,7 +333,7 @@ export default function AdminPage() {
                   <button
                     onClick={() => handleDelete(doc.file_name)}
                     className="shrink-0 ml-4 transition-colors"
-                    style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                    style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                   >
@@ -368,7 +368,7 @@ export default function AdminPage() {
           >
             {/* Modal header */}
             <div className="px-6 pt-6 pb-4">
-              <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 16, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 16, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
                 Eliminar documento
               </p>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.6 }}>
@@ -388,7 +388,7 @@ export default function AdminPage() {
               <button
                 onClick={() => setPendingDelete(null)}
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 600,
                   fontSize: 11,
                   letterSpacing: "1.5px",
@@ -409,7 +409,7 @@ export default function AdminPage() {
                 onClick={confirmDelete}
                 disabled={deleting}
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 700,
                   fontSize: 11,
                   letterSpacing: "1.5px",

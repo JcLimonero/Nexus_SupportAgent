@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,6 +8,11 @@ html, body {
 
 /* ── Nexus Q Tech design tokens ────────────────────────────────────────────── */
 :root {
+  /* fonts — variables provided by next/font in layout.tsx, with web-safe fallbacks.
+     Reference these everywhere instead of repeating the family strings inline. */
+  --font-body:      var(--font-barlow), "Barlow", system-ui, sans-serif;
+  --font-condensed: var(--font-barlow-condensed), "Barlow Condensed", system-ui, sans-serif;
+
   /* brand */
   --nqt-blue:      #0ea5e9;
   --nqt-blue-dark: #0284c7;
@@ -182,7 +185,7 @@ html.dark {
 /* ── Base resets ───────────────────────────────────────────────────────────── */
 @layer base {
   body {
-    font-family: "Barlow", sans-serif;
+    font-family: var(--font-body);
     font-weight: 300;
     background-color: var(--bg-page);
     color: var(--text-primary);
@@ -190,7 +193,7 @@ html.dark {
   }
 
   .nqt-label {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: var(--font-condensed);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 2px;
@@ -200,7 +203,7 @@ html.dark {
 
   /* keep old alias so existing uses don't break */
   .gv-label {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: var(--font-condensed);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 2px;
@@ -209,7 +212,7 @@ html.dark {
   }
 
   .gv-heading {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: var(--font-condensed);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: -0.5px;
@@ -219,5 +222,87 @@ html.dark {
     outline: 2px solid var(--nqt-blue);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
+  }
+}
+
+/* ── Component kit ──────────────────────────────────────────────────────────
+   Shared classes for the React kit in components/ui/. Hover/focus live in CSS
+   (not inline JS handlers) so they theme centrally and respect the cascade. */
+@layer components {
+  /* Condensed uppercase button label shared by every variant */
+  .nqt-btn {
+    font-family: var(--font-condensed);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .nqt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .nqt-btn--sm { font-size: 10px; letter-spacing: 1.5px; padding: 6px 12px; }
+  .nqt-btn--md { font-size: 11px; padding: 10px 20px; }
+
+  .nqt-btn--primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; }
+  .nqt-btn--primary:not(:disabled):hover { background-color: var(--btn-primary-hover); }
+  .nqt-btn--primary:active:not(:disabled) { transform: scale(0.97); }
+
+  .nqt-btn--ghost { background-color: transparent; color: var(--text-secondary); border: 1px solid var(--input-border); }
+  .nqt-btn--ghost:not(:disabled):hover { border-color: var(--input-focus); color: var(--text-primary); }
+
+  .nqt-btn--danger { background-color: #ef4444; color: #fff; border: none; }
+  .nqt-btn--danger:not(:disabled):hover { background-color: #dc2626; }
+
+  /* Icon-only button — inherits color, tints on hover */
+  .nqt-iconbtn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    color: var(--text-faint);
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nqt-iconbtn:hover { color: var(--text-muted); }
+  .nqt-iconbtn--accent:hover { color: var(--nqt-blue); }
+  .nqt-iconbtn--danger:hover { color: #f87171; }
+
+  /* Surface card with the signature 3px blue left-accent */
+  .nqt-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+  }
+  .nqt-card--accent { border-left: 3px solid var(--nqt-blue); }
+
+  /* Text input / textarea */
+  .nqt-input {
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-weight: 300;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .nqt-input:focus { border-color: var(--input-focus); }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   Honor the OS preference: disable the decorative keyframe animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

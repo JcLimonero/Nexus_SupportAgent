@@ -11,24 +11,23 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Barlow", "sans-serif"],
-        condensed: ['"Barlow Condensed"', "sans-serif"],
+        // Backed by the next/font CSS variables defined in app/layout.tsx.
+        sans: ["var(--font-body)"],
+        condensed: ["var(--font-condensed)"],
       },
       colors: {
-        gv: {
-          black:        "#222222",
-          gray:         "#98989A",
-          "gray-light": "#f0f0f0",
-          "gray-mid":   "#d8d8d8",
-          white:        "#ffffff",
-          border:       "#e0e0e0",
-          "page-bg":    "#ebebeb",
+        // Nexus Q Tech brand palette (mirrors the CSS variables in globals.css).
+        nqt: {
+          blue: "#0ea5e9",
+          "blue-dark": "#0284c7",
+          navy: "#0a2540",
+          "navy-mid": "#1e3a5f",
+          cyan: "#06b6d4",
         },
       },
       letterSpacing: {
-        "gv-label": "3px",
-        "gv-btn":   "2.5px",
-        "gv-small": "2px",
+        label: "2px",
+        btn: "2px",
       },
     },
   },

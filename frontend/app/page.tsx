@@ -51,7 +51,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ background: "linear-gradient(135deg, #071929 0%, #0a2540 100%)" }}>
-        <span style={{ color: "#94a3b8", fontSize: 12, letterSpacing: 2, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600 }}>
+        <span style={{ color: "#94a3b8", fontSize: 12, letterSpacing: 2, fontFamily: "var(--font-condensed)", fontWeight: 600 }}>
           CARGANDO...
         </span>
       </div>
@@ -102,10 +102,10 @@ export default function LoginPage() {
               <Image src="/brand/nqt-mark-sm.png" alt="Nexus Q Tech" width={30} height={30} priority unoptimized style={{ display: "block", objectFit: "contain" }} />
             </div>
             <div>
-              <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 18, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1, lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 18, color: "#ffffff", textTransform: "uppercase", letterSpacing: 1, lineHeight: 1 }}>
                 Nexus Support
               </div>
-              <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 500, fontSize: 10, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2px", marginTop: 2 }}>
+              <div style={{ fontFamily: "var(--font-condensed)", fontWeight: 500, fontSize: 10, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2px", marginTop: 2 }}>
                 TotalDealer · AI Agent
               </div>
             </div>
@@ -170,7 +170,7 @@ export default function LoginPage() {
               disabled={submitting}
               className="w-full py-2.5 transition-all disabled:opacity-50"
               style={{
-                fontFamily: '"Barlow Condensed", sans-serif',
+                fontFamily: "var(--font-condensed)",
                 fontWeight: 700,
                 fontSize: 13,
                 letterSpacing: "2px",
@@ -192,7 +192,7 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="flex items-center gap-3" style={{ margin: "18px 0 14px" }}>
             <div style={{ flex: 1, height: 1, backgroundColor: "var(--border-default)" }} />
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 9, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 9, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
               o
             </span>
             <div style={{ flex: 1, height: 1, backgroundColor: "var(--border-default)" }} />
@@ -205,7 +205,7 @@ export default function LoginPage() {
             disabled={guestLoading}
             className="w-full py-2.5 transition-all disabled:opacity-50"
             style={{
-              fontFamily: '"Barlow Condensed", sans-serif',
+              fontFamily: "var(--font-condensed)",
               fontWeight: 700,
               fontSize: 13,
               letterSpacing: "2px",

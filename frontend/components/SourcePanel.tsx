@@ -112,18 +112,18 @@ export function SourcePanel({
             <div className="min-w-0 flex-1">
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <div style={{ width: 3, height: 16, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
+                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
                   {isVideo ? "Video de referencia" : "Fragmento de contexto"}
                 </p>
               </div>
               <p
                 title={source.file_name}
-                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 15, color: "#ffffff", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 15, color: "#ffffff", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {source.file_name}
               </p>
               {source.page_number != null && (
-                <p style={{ fontSize: 11, color: "#475569", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, marginTop: 3 }}>
+                <p style={{ fontSize: 11, color: "#475569", fontFamily: "var(--font-condensed)", letterSpacing: 1, marginTop: 3 }}>
                   Página {source.page_number}
                 </p>
               )}
@@ -160,7 +160,7 @@ export function SourcePanel({
           )}
 
           {loading && (
-            <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: "2px", textTransform: "uppercase" }}>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", letterSpacing: "2px", textTransform: "uppercase" }}>
               Cargando...
             </p>
           )}
@@ -176,7 +176,7 @@ export function SourcePanel({
           )}
           {data && !loading && (
             <>
-              <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: 14 }}>
+              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: 14 }}>
                 Texto extraído por el modelo
               </p>
               <p style={{ fontSize: 13, fontWeight: 300, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", borderLeft: "2px solid var(--nqt-blue, #0ea5e9)", paddingLeft: 14 }}>
@@ -196,7 +196,7 @@ export function SourcePanel({
               onClick={openDocument}
               disabled={opening}
               style={{
-                fontFamily: '"Barlow Condensed", sans-serif',
+                fontFamily: "var(--font-condensed)",
                 fontWeight: 700,
                 fontSize: 11,
                 letterSpacing: "1.5px",
@@ -220,7 +220,7 @@ export function SourcePanel({
           )}
           <button
             onClick={onClose}
-            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
+            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
           >

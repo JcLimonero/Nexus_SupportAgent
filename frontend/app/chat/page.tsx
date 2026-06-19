@@ -348,7 +348,7 @@ export default function ChatPage() {
           unoptimized
           style={{ display: "block", width: 160, height: "auto" }}
         />
-        <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 8 }}>
+        <div style={{ fontFamily: "var(--font-condensed)", fontWeight: 500, fontSize: 9, color: "#0ea5e9", textTransform: "uppercase", letterSpacing: "2.5px", marginTop: 8 }}>
           Soporte · TotalDealer
         </div>
       </div>
@@ -359,7 +359,7 @@ export default function ChatPage() {
           onClick={newChat}
           className="w-full py-2.5 px-3 text-center transition-colors"
           style={{
-            fontFamily: '"Barlow Condensed", sans-serif',
+            fontFamily: "var(--font-condensed)",
             fontWeight: 700,
             fontSize: 11,
             letterSpacing: "2px",
@@ -381,7 +381,7 @@ export default function ChatPage() {
       {/* Session list */}
       <nav className="flex-1 overflow-y-auto py-2">
         {sessions.length === 0 && (
-          <p style={{ padding: "12px 16px", fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase" }}>
+          <p style={{ padding: "12px 16px", fontSize: 10, color: "#2d5282", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase" }}>
             Sin conversaciones
           </p>
         )}
@@ -413,7 +413,7 @@ export default function ChatPage() {
                 onBlur={() => commitEdit(s.id)}
                 className="w-full px-4 py-2.5 focus:outline-none"
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontSize: 12,
                   background: "#0d2137",
                   color: "#e2e8f0",
@@ -424,19 +424,19 @@ export default function ChatPage() {
             ) : deletingId === s.id ? (
               /* Delete confirmation */
               <div className="px-4 py-2.5">
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#fca5a5", marginBottom: 6 }}>
+                <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#fca5a5", marginBottom: 6 }}>
                   ¿Eliminar conversación?
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => confirmDelete(s.id)}
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
+                    style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
                   >
                     Eliminar
                   </button>
                   <button
                     onClick={() => setDeletingId(null)}
-                    style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#64748b", border: "1px solid #1e3a5f", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
+                    style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", background: "transparent", color: "#64748b", border: "1px solid #1e3a5f", cursor: "pointer", padding: "3px 8px", borderRadius: "var(--radius-sm)" }}
                   >
                     Cancelar
                   </button>
@@ -449,10 +449,10 @@ export default function ChatPage() {
                 className="w-full text-left px-4 py-2.5 pr-16"
                 style={{ background: "none", border: "none", cursor: "pointer" }}
               >
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 12, color: currentSessionId === s.id ? "#ffffff" : "#94a3b8", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: "var(--font-condensed)", fontSize: 12, color: currentSessionId === s.id ? "#ffffff" : "#94a3b8", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {s.title ?? fmt(s.created_at)}
                 </span>
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#2d5282", display: "block" }}>
+                <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "#2d5282", display: "block" }}>
                   {fmt(s.created_at)}
                 </span>
               </button>
@@ -497,7 +497,7 @@ export default function ChatPage() {
       {/* Footer */}
       <div className="px-4 py-4 space-y-2" style={{ borderTop: "1px solid #1e3a5f" }}>
         {user && (
-          <p style={{ fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: 10, color: "#2d5282", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {user.email}
           </p>
         )}
@@ -506,7 +506,7 @@ export default function ChatPage() {
             onClick={() => router.push("/admin")}
             className="w-full py-2 px-3 text-center transition-colors"
             style={{
-              fontFamily: '"Barlow Condensed", sans-serif',
+              fontFamily: "var(--font-condensed)",
               fontWeight: 600,
               fontSize: 10,
               letterSpacing: "2px",
@@ -526,7 +526,7 @@ export default function ChatPage() {
         <div className="flex items-center justify-between pt-1">
           <button
             onClick={handleLogout}
-            style={{ fontSize: 10, color: "#2d5282", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: 10, color: "#2d5282", fontFamily: "var(--font-condensed)", letterSpacing: 1, textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#2d5282")}
           >
@@ -573,12 +573,12 @@ export default function ChatPage() {
             className="flex items-center gap-3 px-4 md:px-8 py-3"
             style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
           >
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
               NEXUS SUPPORT
             </span>
             <span
               style={{
-                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: 10, letterSpacing: "1.5px",
+                fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, letterSpacing: "1.5px",
                 textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", border: "1px solid var(--border-default)",
                 borderRadius: "var(--radius-sm)", padding: "2px 8px",
               }}
@@ -588,7 +588,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-3" style={{ marginLeft: "auto" }}>
               <button
                 onClick={handleLogout}
-                style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)", background: "none", border: "1px solid var(--input-border)", borderRadius: "var(--radius-sm)", padding: "5px 12px", cursor: "pointer" }}
+                style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)", background: "none", border: "1px solid var(--input-border)", borderRadius: "var(--radius-sm)", padding: "5px 12px", cursor: "pointer" }}
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--input-focus)")}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--input-border)")}
               >
@@ -614,7 +614,7 @@ export default function ChatPage() {
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
               NEXUS SUPPORT
             </span>
           </div>
@@ -632,7 +632,7 @@ export default function ChatPage() {
               title="Copiar enlace público a esta conversación"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10,
+                fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
                 letterSpacing: "1.5px", textTransform: "uppercase",
                 color: "var(--text-muted)", background: "none",
                 border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
@@ -657,7 +657,7 @@ export default function ChatPage() {
               {/* Heading */}
               <div className="text-center">
                 <div style={{ width: 36, height: 3, background: "linear-gradient(90deg, #0ea5e9, #06b6d4)", margin: "0 auto 16px", borderRadius: 2 }} />
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
+                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
                   ¿EN QUÉ PUEDO<br />AYUDARTE?
                 </p>
                 <p className="mt-3 font-light" style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.65 }}>
@@ -693,7 +693,7 @@ export default function ChatPage() {
                         e.currentTarget.style.borderLeftColor = "var(--nqt-blue, #0ea5e9)";
                       }}
                     >
-                      <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", display: "block", marginBottom: 4 }}>
+                      <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", display: "block", marginBottom: 4 }}>
                         {s.label}
                       </span>
                       <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.4, fontWeight: 300 }}>
@@ -796,7 +796,7 @@ export default function ChatPage() {
                 onClick={stopStreaming}
                 className="px-5 py-2.5 shrink-0 transition-colors"
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 700,
                   fontSize: 11,
                   letterSpacing: "2px",
@@ -818,7 +818,7 @@ export default function ChatPage() {
                 disabled={!input.trim()}
                 className="btn-send px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
                 style={{
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 700,
                   fontSize: 11,
                   letterSpacing: "2px",
@@ -836,7 +836,7 @@ export default function ChatPage() {
               </button>
             )}
           </form>
-          <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: '"Barlow Condensed", sans-serif', letterSpacing: 1 }}>
+          <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
             {sending ? "Generando respuesta · Detener para cancelar" : "Enter para enviar · Shift+Enter para nueva línea"}
           </p>
         </div>

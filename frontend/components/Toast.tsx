@@ -76,7 +76,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               cursor: "default",
             }}
           >
-            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 1 }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 1 }}>
               {icon(t.kind)}
             </span>
             <span style={{ flex: 1, lineHeight: 1.5 }}>{t.text}</span>

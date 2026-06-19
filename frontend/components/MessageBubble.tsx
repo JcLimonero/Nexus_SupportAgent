@@ -35,13 +35,13 @@ const mdComponents: Components = {
     <p style={{ marginBottom: "0.65em", lineHeight: 1.7 }} className="last:mb-0">{children}</p>
   ),
   h1: ({ children }) => (
-    <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: "1.15em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.5em", color: "var(--text-primary)" }}>{children}</p>
+    <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: "1.15em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.5em", color: "var(--text-primary)" }}>{children}</p>
   ),
   h2: ({ children }) => (
-    <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: "1.05em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.4em", color: "var(--text-primary)" }}>{children}</p>
+    <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: "1.05em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.4em", color: "var(--text-primary)" }}>{children}</p>
   ),
   h3: ({ children }) => (
-    <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, fontSize: "0.95em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.35em", color: "var(--text-primary)" }}>{children}</p>
+    <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: "0.95em", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.35em", color: "var(--text-primary)" }}>{children}</p>
   ),
   strong: ({ children }) => (
     <strong style={{ fontWeight: 600, color: "var(--text-primary)" }}>{children}</strong>
@@ -93,7 +93,7 @@ const mdComponents: Components = {
     <thead style={{ backgroundColor: "var(--bg-muted)", borderBottom: "2px solid var(--nqt-blue, #0ea5e9)" }}>{children}</thead>
   ),
   th: ({ children }) => (
-    <th style={{ padding: "6px 12px", textAlign: "left", fontFamily: '"Barlow Condensed", sans-serif', fontSize: "0.85em", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+    <th style={{ padding: "6px 12px", textAlign: "left", fontFamily: "var(--font-condensed)", fontSize: "0.85em", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
       {children}
     </th>
   ),
@@ -196,7 +196,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="flex items-center gap-1.5 transition-all"
                 style={{
                   fontSize: 10,
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 600,
                   letterSpacing: "1px",
                   textTransform: "uppercase",
@@ -231,7 +231,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="flex items-center gap-1.5 transition-all"
                 style={{
                   fontSize: 10,
-                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontFamily: "var(--font-condensed)",
                   fontWeight: 600,
                   letterSpacing: "1px",
                   textTransform: "uppercase",
@@ -339,7 +339,7 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Follow-ups */}
         {hasFollowUps && (
           <div className="flex flex-col gap-1.5 px-1 pt-1">
-            <span style={{ fontSize: 9, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
+            <span style={{ fontSize: 9, fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-faint)" }}>
               Preguntas relacionadas
             </span>
             <div className="flex flex-col gap-1">
@@ -350,7 +350,7 @@ export const MessageBubble = memo(function MessageBubble({
                   className="text-left transition-all"
                   style={{
                     fontSize: 12,
-                    fontFamily: '"Barlow", sans-serif',
+                    fontFamily: "var(--font-body)",
                     fontWeight: 300,
                     backgroundColor: "var(--bg-muted)",
                     color: "var(--text-secondary)",
