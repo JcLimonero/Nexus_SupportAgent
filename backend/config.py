@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     vertex_ai_location: str = "us-central1"
     gcs_bucket_name: str = ""
 
+    # ── CORS (production) ────────────────────────────────────────────────────
+    # Exact frontend origin allowed to call the API, e.g.
+    # https://nexus-frontend-xxxx.us-central1.run.app. When unset in production
+    # we fall back to a regex that matches any *.run.app origin.
+    frontend_url: str = ""
+
     # ── LLM (Gemini via Vertex AI) ───────────────────────────────────────────
     gemini_model: str = "gemini-3.5-flash"
     # Thinking budget (tokens). gemini-3.5-flash is a reasoning model whose
