@@ -145,6 +145,21 @@ gcloud run deploy nexus-backend \
   --set-env-vars="AUTH_PROVIDER=local,STORAGE_PROVIDER=gcs,EMBEDDING_PROVIDER=vertexai,EMBEDDING_DIMENSIONS=768,GCS_BUCKET_NAME=nexus-agent-docs-988042937611,VERTEX_AI_PROJECT=nexus-support-agent,VERTEX_AI_LOCATION=us-central1"
 ```
 
+**Frontend** — `NEXT_PUBLIC_API_URL` is inlined into the browser bundle at **build time**, so it must be passed as a `--build-arg` (a Cloud Run runtime env var does *not* reach the client). First get the deployed backend URL, then build with it:
+
+```bash
+BACKEND_URL=$(gcloud run services describe nexus-backend \
+  --region=us-central1 --project=nexus-support-agent --format='value(status.url)')
+
+docker build --build-arg NEXT_PUBLIC_API_URL="$BACKEND_URL" \
+  -t us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/frontend:latest ./frontend
+docker push us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/frontend:latest
+
+gcloud run deploy nexus-frontend \
+  --image=us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/frontend:latest \
+  --region=us-central1 --project=nexus-support-agent --allow-unauthenticated
+```
+
 ### CI/CD (GitHub Actions)
 
 Deploys are manual-trigger only (`workflow_dispatch`). Every push/PR runs: backend tests → pip-audit → frontend tests → Docker build check.

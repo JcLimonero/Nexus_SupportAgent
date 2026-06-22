@@ -20,8 +20,10 @@ memory/
 # Environment & secrets
 .env
 service-account.json
+gcp-credentials.json
 *.json.key
 *.p12
+*.pfx
 
 # OS
 .DS_Store

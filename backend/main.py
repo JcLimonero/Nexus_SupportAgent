@@ -133,16 +133,21 @@ app = FastAPI(
 # Rate limiting before any auth processing
 app.add_middleware(_RateLimitMiddleware)
 
-# CORS — explicit origin list; never wildcard with credentials
-_allowed_origins = (
-    settings.gcs_bucket_name
-    and ["https://*.run.app"]   # replaced at deploy time by frontend URL env
-    or ["http://localhost:3000", "http://127.0.0.1:3000"]
-)
+# CORS — never wildcard with credentials. In production we allow the exact
+# frontend origin when FRONTEND_URL is set, and otherwise fall back to a regex
+# matching any Cloud Run (*.run.app) host (a literal "https://*.run.app" string
+# is NOT glob-matched by Starlette and would block every request).
+_cors_kwargs: dict = {}
+if _is_prod:
+    _cors_kwargs["allow_origins"] = [settings.frontend_url] if settings.frontend_url else []
+    if not settings.frontend_url:
+        _cors_kwargs["allow_origin_regex"] = r"https://[a-z0-9.-]+\.run\.app"
+else:
+    _cors_kwargs["allow_origins"] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
+    **_cors_kwargs,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

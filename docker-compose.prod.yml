@@ -1,0 +1,128 @@
+# ── Nexus Support Agent — on-premises production stack (Windows Server + IIS) ──
+#
+# Mirrors the proven VGD_AGENTE_IA deployment pattern on the same server:
+#   db       — PostgreSQL 16 + pgvector (this app's OWN database; isolated)
+#   backend  — FastAPI + uvicorn (chat API, SSE streaming, health)
+#   frontend — Next.js standalone (built with the public origin baked in)
+#   nginx    — internal reverse proxy; the ONLY service bound to the host,
+#              on 127.0.0.1 only. IIS (ARR) terminates TLS and proxies to it.
+#
+# Traffic:  Browser → IIS :<https-port> (TLS, cert for app-nexusqtech.com)
+#                   → 127.0.0.1:${NGINX_HOST_PORT} (this nginx)
+#                   → frontend:3000 / backend:8000
+#
+# Usage on the server (from the repo root):
+#   cp .env.prod.example .env     # fill in real values
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Isolation: nothing here binds a public port; only nginx on 127.0.0.1.
+# Pick NGINX_HOST_PORT as a FREE localhost port (VGD already uses 8080).
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── App database (pgvector) — isolated to this project ─────────────────────
+  db:
+    image: pgvector/pgvector:0.8.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexus_agent
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No host port — only the backend reaches it on the internal network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      AUTH_PROVIDER: local
+      STORAGE_PROVIDER: local
+      EMBEDDING_PROVIDER: local
+      EMBEDDING_DIMENSIONS: "384"
+      DATABASE_URL: postgresql+asyncpg://nexus:${DB_PASSWORD}@db:5432/nexus_agent
+      LOCAL_JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      LOCAL_STORAGE_PATH: /data
+      INITIAL_ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      INITIAL_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ALLOW_ANONYMOUS: ${ALLOW_ANONYMOUS:-true}
+      # Gemini (the LLM) runs on Vertex AI — required even with local embeddings.
+      VERTEX_AI_PROJECT: ${VERTEX_AI_PROJECT:?set VERTEX_AI_PROJECT in .env}
+      VERTEX_AI_LOCATION: ${VERTEX_AI_LOCATION:-us-central1}
+      GEMINI_MODEL: gemini-3.5-flash
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
+      RATE_LIMIT_ENABLED: "true"
+    volumes:
+      - nexus_data:/data                                   # uploaded PDFs/MP4s (local storage)
+      - ./gcp-credentials.json:/app/gcp-credentials.json:ro  # Gemini service account (never committed)
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000   # no --reload in prod
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    expose:
+      - "8000"
+
+  # ── Next.js frontend (standalone) ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle at build time. Must equal the public
+        # origin users hit through IIS, e.g. https://app-nexusqtech.com:8443
+        # (omit the port only if IIS serves it on 443). Same-origin → no CORS.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/.next/cache:size=128m,mode=1777
+    depends_on:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    expose:
+      - "3000"
+
+  # ── Internal reverse proxy (the only host-bound service) ───────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      # localhost ONLY — IIS proxies here. Pick a FREE port (VGD uses 8080).
+      - "127.0.0.1:${NGINX_HOST_PORT:-8082}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+  nexus_data:
+
+networks:
+  internal:
+    driver: bridge

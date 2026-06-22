@@ -1,0 +1,206 @@
+================================================================================
+NEXUS SUPPORT AGENT — DEPLOYMENT CONTEXT (Windows Server + IIS)
+Target server: 74.208.78.55   ·   Domain: https://app-nexusqtech.com
+================================================================================
+
+OBJETIVO
+--------
+Desplegar el Nexus Support Agent en el servidor 74.208.78.55, servido a través
+de IIS sobre HTTPS, accesible en https://app-nexusqtech.com, SIN tocar ni
+afectar los demás proyectos que ya corren en ese servidor (p. ej. VGD).
+
+REGLA DE ORO — AISLAMIENTO (este servidor es COMPARTIDO)
+-------------------------------------------------------
+Otro proyecto (VGD_AGENTE_IA) ya está desplegado aquí y usa:
+  - IIS en los puertos 80 y 443
+  - Docker nginx en 127.0.0.1:8080
+  - PostgreSQL nativo del servidor en :5432 (su DWH)
+
+Por lo tanto, para Nexus:
+  - NO usar los puertos 80, 443 ni 8080.
+  - NO modificar sitios IIS, Application Pools, bindings ni web.config ajenos.
+  - NO ejecutar `iisreset` (afecta a TODOS los sitios). Si hiciera falta,
+    reciclar SOLO el Application Pool propio de Nexus.
+  - NO cambiar la configuración GLOBAL de ARR (ya está habilitada por VGD;
+    Nexus la reutiliza tal cual).
+  - Todo Nexus vive en su propia carpeta de repo + su propio sitio IIS + su
+    propio Application Pool + sus propios puertos libres.
+
+ARQUITECTURA DEL STACK (igual patrón que VGD)
+---------------------------------------------
+Docker Compose (docker-compose.prod.yml) con 4 servicios:
+  - db        → PostgreSQL 16 + pgvector  (base de datos PROPIA de Nexus)
+  - backend   → FastAPI + uvicorn (chat API, streaming SSE, /health)
+  - frontend  → Next.js standalone (UI; el origen público se hornea al build)
+  - nginx     → reverse proxy interno; ÚNICO servicio publicado, en
+                127.0.0.1:<NGINX_HOST_PORT> (solo localhost, no expuesto)
+
+IIS actúa como reverse proxy externo (ARR + URL Rewrite, ya instalados):
+  Usuario → IIS :<PUERTO_HTTPS_LIBRE> (TLS, cert de app-nexusqtech.com)
+          → 127.0.0.1:<NGINX_HOST_PORT> (nginx de Nexus)
+          → frontend:3000 / backend:8000
+  backend → GCP / Gemini (internet)
+
+Como el navegador solo habla con UN origen (https://app-nexusqtech.com:<puerto>)
+y nginx enruta /api internamente, NO hay CORS entre dominios.
+
+DIFERENCIAS CLAVE RESPECTO A VGD
+--------------------------------
+  - Nexus trae su PROPIA base de datos pgvector en Docker. NO se conecta al
+    PostgreSQL nativo del servidor → NO hay que tocar pg_hba.conf.
+  - Nexus NO usa Alembic. Al arrancar, el backend crea el esquema y aplica
+    micro-migraciones automáticamente, y SIEMBRA el primer admin desde
+    ADMIN_EMAIL / ADMIN_PASSWORD. No hay comandos manuales de migración/seed.
+  - Embeddings en local (all-MiniLM-L6-v2, 384 dims); el modelo se descarga en
+    el primer arranque (requiere internet). El LLM sigue siendo Gemini (Vertex).
+
+ARCHIVOS QUE DEBEN EXISTIR EN LA RAÍZ DEL REPO (no están en git)
+----------------------------------------------------------------
+  1. .env                  → copiar de .env.prod.example y completar valores
+  2. gcp-credentials.json  → service account de GCP con rol Vertex AI User
+Verificar: dir .env  y  dir gcp-credentials.json
+
+PASOS PARA EL DEPLOY (ejecutar en orden, verificando cada uno)
+--------------------------------------------------------------
+
+[ ] PASO 1 — Verificar Docker
+      docker --version ; docker compose version ; docker ps
+      (si el servicio no responde: Start-Service docker)
+
+[ ] PASO 2 — Clonar/actualizar el repo en una carpeta propia de Nexus
+      Ej.:  C:\inetpub\NexusSupport\Nexus_SupportAgent
+      git clone <repo> ; o  git pull
+      (rama con estos archivos de deploy: fix-frontend-prod-api-url, o main
+       una vez mergeada)
+
+[ ] PASO 3 — Crear los archivos secretos
+      copy .env.prod.example .env   → editar .env con valores reales
+      Colocar gcp-credentials.json en la raíz del repo.
+      Generar secretos:
+        python -c "import secrets;print(secrets.token_hex(32))"   (JWT_SECRET)
+        python -c "import secrets;print(secrets.token_urlsafe(24))" (DB_PASSWORD)
+
+[ ] PASO 4 — Elegir puertos LIBRES   ← CRÍTICO en este servidor compartido
+      Ver qué está ocupado (PowerShell):
+        $used = Get-NetTCPConnection -State Listen -EA SilentlyContinue |
+                Select-Object -ExpandProperty LocalPort
+        8081..8099 + 8443 | ForEach-Object {
+          "{0} -> {1}" -f $_, ($(if ($_ -in $used) {'EN USO'} else {'LIBRE'}))
+        }
+        Get-WebSite | ft Name,State,PhysicalPath -A
+        Get-WebBinding | ft protocol,bindingInformation -A
+
+      Elegir:
+        - NGINX_HOST_PORT  : puerto localhost para el nginx de Docker (NO 8080).
+                             Default sugerido: 8082.
+        - PUERTO_HTTPS_IIS : puerto público del binding HTTPS en IIS (NO 443).
+                             Default sugerido: 8443.
+
+      Reflejarlos en:
+        a) .env                → NGINX_HOST_PORT, y PUBLIC_ORIGIN
+                                 (= https://app-nexusqtech.com:<PUERTO_HTTPS_IIS>)
+        b) iis/web.config      → la línea url="http://localhost:8082/{R:1}"
+                                 (cambiar 8082 si usas otro NGINX_HOST_PORT)
+
+[ ] PASO 5 — Levantar el stack
+      docker compose -f docker-compose.prod.yml up -d --build
+      docker compose -f docker-compose.prod.yml ps
+        → nginx debe mostrar: 127.0.0.1:<NGINX_HOST_PORT>->80/tcp
+      El backend, al arrancar, crea el esquema + siembra el admin
+      automáticamente (ver logs):
+        docker compose -f docker-compose.prod.yml logs -f backend
+
+[ ] PASO 6 — Probar el stack localmente (en el servidor)
+      curl http://127.0.0.1:<NGINX_HOST_PORT>/health          → 200
+      curl http://127.0.0.1:<NGINX_HOST_PORT>/                 → HTML de la UI
+
+[ ] PASO 7 — Certificado TLS para app-nexusqtech.com
+      Opción recomendada (dominio público): Let's Encrypt con win-acme.
+        - Como IIS :80 lo usa VGD, preferir validación DNS-01 (no usa el :80),
+          o importar un PFX ya emitido para app-nexusqtech.com.
+      Importar/ubicar el cert en LocalMachine\My y anotar su Thumbprint:
+        Get-ChildItem Cert:\LocalMachine\My | ft Subject,NotAfter,Thumbprint -A
+      El cert debe cubrir app-nexusqtech.com y no estar vencido.
+
+[ ] PASO 8 — Crear el sitio IIS de Nexus (aislado)
+      - Nuevo Application Pool propio (p. ej. "NexusPool").
+      - Nuevo sitio (p. ej. "Nexus"), carpeta física vacía propia
+        (el contenido lo sirve Docker, no IIS).
+      - Binding HTTPS en el PUERTO_HTTPS_IIS elegido, hostname
+        app-nexusqtech.com, con el cert del Paso 7 asignado.
+      PowerShell de ejemplo (ajustar nombres/puerto/thumbprint):
+        Import-Module WebAdministration
+        New-WebAppPool -Name "NexusPool"
+        New-Website -Name "Nexus" -PhysicalPath "C:\inetpub\NexusSupport\site" `
+          -ApplicationPool "NexusPool" -Port <PUERTO_HTTPS_IIS> `
+          -HostHeader "app-nexusqtech.com" -Ssl
+        $cert = Get-ChildItem Cert:\LocalMachine\My |
+                ? { $_.Thumbprint -eq "<THUMBPRINT>" }
+        (Get-WebBinding -Name "Nexus" -Protocol https).AddSslCertificate(
+          $cert.Thumbprint, "My")
+
+[ ] PASO 9 — Colocar el web.config SOLO en la carpeta del sitio Nexus
+      Copy-Item iis\web.config "C:\inetpub\NexusSupport\site\web.config"
+      NUNCA copiarlo a wwwroot ni a la carpeta de otro sitio.
+      (ARR ya está habilitado globalmente por VGD; no reconfigurar ARR global.)
+
+[ ] PASO 10 — Verificar de extremo a extremo
+      1. docker compose -f docker-compose.prod.yml ps   (4 servicios "Up")
+      2. Desde el servidor:
+           curl http://127.0.0.1:<NGINX_HOST_PORT>/health     → 200
+      3. Desde otra máquina / navegador:
+           https://app-nexusqtech.com:<PUERTO_HTTPS_IIS>      → carga la UI
+      4. Iniciar sesión con ADMIN_EMAIL / ADMIN_PASSWORD.
+      5. Hacer una pregunta: confirmar que la respuesta llega en streaming
+         (tokens en vivo) y muestra fuentes. Si NO hay streaming, ver
+         "Problemas" abajo (buffering de ARR).
+      6. CAMBIAR la contraseña del admin tras el primer ingreso.
+
+ACTUALIZACIÓN (git pull)
+------------------------
+  cd C:\inetpub\NexusSupport\Nexus_SupportAgent
+  git pull
+  docker compose -f docker-compose.prod.yml up -d --build
+  → El esquema se migra solo al arrancar. Los datos persisten en los
+    volúmenes pgdata / nexus_data (no se borran con "up -d --build").
+  → NO hace falta tocar IIS ni el web.config en actualizaciones normales.
+  → NUNCA usar "down -v" en producción (borra los volúmenes/datos).
+
+PROBLEMAS Y SOLUCIONES
+----------------------
+- IIS 502 Bad Gateway:
+    El stack no está corriendo o el puerto del web.config no coincide con
+    NGINX_HOST_PORT. Verificar docker compose ps y la URL del web.config.
+
+- La respuesta del chat NO llega en streaming (aparece toda de golpe):
+    ARR está bufferizando. nginx ya tiene proxy_buffering off; si persiste,
+    el buffer de respuesta de ARR es global y lo administra el dueño del
+    servidor. Consultar con el administrador ANTES de cambiar ajustes
+    globales de ARR (afectan a VGD y demás apps).
+
+- Nadie puede iniciar sesión:
+    Revisar que ADMIN_EMAIL/ADMIN_PASSWORD estaban en .env en el primer
+    arranque. Si se cambiaron después, recrear el usuario o borrar el volumen
+    pgdata SOLO si la base está vacía (¡cuidado en prod!).
+
+- Error de cert (ERR_CERT_*) o HTTPS cuelga:
+    El binding HTTPS del sitio Nexus no tiene cert válido para
+    app-nexusqtech.com. Reasignar (Paso 7/8).
+
+- backend no arranca:
+    docker compose -f docker-compose.prod.yml logs backend
+    Causas comunes: .env incompleto, JWT_SECRET débil, falta
+    gcp-credentials.json, o sin internet para Gemini/descarga del modelo.
+
+- Puerto elegido "EN USO":
+    Elegir otro libre y actualizar .env (NGINX_HOST_PORT/PUBLIC_ORIGIN) y/o el
+    binding IIS y el web.config. NUNCA apropiarse del puerto de otra app.
+
+NOTAS
+-----
+- Datos persistentes en volúmenes Docker: pgdata (BD) y nexus_data (archivos
+  subidos). Sobreviven reinicios; solo se pierden con "down -v".
+- Subidas de documentos hasta 100 MB (PDF/MP4/DOCX/…); límites alineados en
+  nginx (client_max_body_size 105m) e IIS (maxAllowedContentLength).
+- /docs y /redoc están bloqueados por nginx en este despliegue.
+================================================================================

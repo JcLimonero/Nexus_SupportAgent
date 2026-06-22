@@ -3,6 +3,12 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so the
+# backend URL must be present during `npm run build` (a runtime env var on Cloud
+# Run does NOT reach the browser bundle). The CI/CD deploy passes this via
+# --build-arg; default keeps local image builds working.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build
 
 FROM node:20-alpine
