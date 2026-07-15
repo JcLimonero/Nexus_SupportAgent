@@ -15,7 +15,7 @@ from db.connection import get_db, AsyncSessionLocal
 from db.models import DocumentChunk, ResponseCache, User, ChatSession, ChatMessage, MessageFeedback
 from auth.firebase_verify import get_current_user
 from ingestion.pdf_processor import extract_pdf_chunks
-from ingestion.video_processor import extract_video_chunks
+from ingestion.video_processor import extract_media_chunks
 from ingestion.document_processor import extract_document_chunks
 from retrieval.vector_search import embed_document
 from config import get_settings
@@ -32,21 +32,29 @@ _BINARY_MIME = {
     ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
     ".pptx": {"application/vnd.openxmlformats-officedocument.presentationml.presentation"},
 }
+# Audio formats — magic-byte validated by MIME family (any audio/*). All decode
+# through the same ffmpeg → Whisper path as video, so they transcribe identically.
+_AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg"}
 # Plain-text formats have no magic bytes — validated by a UTF-8 text-decode check.
 _TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
 
-_ALLOWED_EXTENSIONS = set(_BINARY_MIME) | _TEXT_EXTENSIONS
+_ALLOWED_EXTENSIONS = set(_BINARY_MIME) | _AUDIO_EXTENSIONS | _TEXT_EXTENSIONS
 
 # Extension → source_type used for storage subfolder and DocumentChunk.source_type.
 _SOURCE_TYPE = {
     ".pdf": "pdf", ".mp4": "video", ".docx": "docx",
     ".pptx": "pptx", ".txt": "txt", ".md": "md", ".csv": "csv",
+    ".mp3": "audio", ".m4a": "audio", ".wav": "audio", ".ogg": "audio",
 }
 
 # Content-type used when serving files back from local storage.
 _SERVE_MIME = {
     ".pdf":  "application/pdf",
     ".mp4":  "video/mp4",
+    ".mp3":  "audio/mpeg",
+    ".m4a":  "audio/mp4",
+    ".wav":  "audio/wav",
+    ".ogg":  "audio/ogg",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".txt":  "text/plain; charset=utf-8",
@@ -116,8 +124,8 @@ async def _process_and_index(file_path: str, file_name: str, file_url: str, sour
     try:
         if source_type == "pdf":
             chunks = await asyncio.to_thread(extract_pdf_chunks, file_path, file_name, file_url)
-        elif source_type == "video":
-            chunks = await asyncio.to_thread(extract_video_chunks, file_path, file_name, file_url)
+        elif source_type in ("video", "audio"):
+            chunks = await asyncio.to_thread(extract_media_chunks, file_path, file_name, file_url, source_type)
         else:
             chunks = await asyncio.to_thread(extract_document_chunks, file_path, file_name, file_url, ext)
 
@@ -132,6 +140,7 @@ async def _process_and_index(file_path: str, file_name: str, file_url: str, sour
                     gcs_url=chunk["gcs_url"],
                     page_number=chunk["page_number"],
                     chunk_index=chunk["chunk_index"],
+                    start_time=chunk.get("start_time"),
                 ))
             await db.commit()
     finally:
@@ -151,7 +160,7 @@ async def upload_file(
     if ext not in _ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="Solo se aceptan archivos PDF, MP4, DOCX, PPTX, TXT, MD y CSV",
+            detail="Solo se aceptan archivos PDF, MP4, MP3, M4A, WAV, OGG, DOCX, PPTX, TXT, MD y CSV",
         )
 
     source_type = _SOURCE_TYPE[ext]
@@ -165,6 +174,15 @@ async def upload_file(
     if ext in _TEXT_EXTENSIONS:
         # No magic bytes for plain text; reject binary disguised as text.
         if not _looks_like_text(content):
+            raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
+    elif ext in _AUDIO_EXTENSIONS:
+        # Accept any audio/* container; .m4a shares the MP4 box so may report
+        # video/mp4. ffmpeg sorts out the actual codec downstream.
+        kind = filetype.guess(content[:8192])
+        ok = kind is not None and (
+            kind.mime.startswith("audio/") or (ext == ".m4a" and kind.mime == "video/mp4")
+        )
+        if not ok:
             raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
     else:
         # Magic bytes for binary formats. OOXML (docx/pptx) is zip-based and the

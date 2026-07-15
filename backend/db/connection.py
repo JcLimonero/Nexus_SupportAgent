@@ -26,6 +26,11 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        # create_all only adds missing tables, not columns — backfill the media
+        # deep-link column on databases created before it existed.
+        await conn.execute(text(
+            "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS start_time DOUBLE PRECISION"
+        ))
         await conn.execute(text("""
             CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
             ON document_chunks USING hnsw (embedding vector_cosine_ops)

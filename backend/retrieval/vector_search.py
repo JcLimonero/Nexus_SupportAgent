@@ -89,6 +89,7 @@ async def search_chunks(
             "file_name": r.file_name,
             "gcs_url": r.gcs_url,
             "page_number": r.page_number,
+            "start_time": r.start_time,
         }
         for r in result.scalars().all()
     ]

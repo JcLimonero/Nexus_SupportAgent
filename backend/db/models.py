@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, Boolean
+from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from pgvector.sqlalchemy import Vector
@@ -29,10 +29,13 @@ class DocumentChunk(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list] = mapped_column(Vector(settings.embedding_dimensions))
-    source_type: Mapped[str] = mapped_column(String(10), nullable=False)  # 'pdf' | 'video'
+    source_type: Mapped[str] = mapped_column(String(10), nullable=False)  # 'pdf' | 'video' | 'audio' | doc ext
     file_name: Mapped[str] = mapped_column(Text, nullable=False)
     gcs_url: Mapped[str] = mapped_column(Text, nullable=False)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Seconds into a video/audio file where this chunk's transcript begins, so
+    # the player can jump straight to it. Null for pdf/doc chunks.
+    start_time: Mapped[float | None] = mapped_column(Float, nullable=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

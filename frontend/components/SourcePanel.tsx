@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { getExcerpt, getDocumentBlobUrl } from "@/lib/api";
-import type { PdfSource } from "./MessageBubble";
+import { isAudioSource, fmtTimestamp, type PdfSource } from "./MessageBubble";
 
 interface ExcerptData {
   chunk_id: string;
@@ -26,6 +26,17 @@ export function SourcePanel({
   const currentGcsUrlRef = useRef<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
+
+  // Jump to the cited moment once the browser knows the media's duration —
+  // seeking before "loadedmetadata" is ignored (MDN currentTime).
+  const seekToStart = () => {
+    const el = mediaRef.current;
+    const t = source?.start_time;
+    if (el && t != null && t > 0) {
+      try { el.currentTime = t; } catch { /* seek unavailable */ }
+    }
+  };
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
@@ -81,9 +92,12 @@ export function SourcePanel({
   if (!source) return null;
 
   const isLocal = source.gcs_url.startsWith("/data/");
-  // Only MP4 uses the inline player; every other type (pdf, docx, pptx, txt,
-  // md, csv) opens/downloads in a new tab.
-  const isVideo = source.file_name.toLowerCase().endsWith(".mp4");
+  // Video and audio use the inline player; every other type (pdf, docx, pptx,
+  // txt, md, csv) opens/downloads in a new tab.
+  const isAudio = isAudioSource(source);
+  const isVideo = source.source_type === "video" || source.file_name.toLowerCase().endsWith(".mp4");
+  const isMedia = isVideo || isAudio;
+  const jumpLabel = fmtTimestamp(source.start_time);
 
   const openDocument = async () => {
     if (!isLocal) {
@@ -96,7 +110,7 @@ export function SourcePanel({
     try {
       const blobUrl = await getDocumentBlobUrl(source.gcs_url);
       if (currentGcsUrlRef.current !== fetchFor) { URL.revokeObjectURL(blobUrl); return; }
-      if (isVideo) {
+      if (isMedia) {
         setVideoUrl(blobUrl);
       } else {
         window.open(blobUrl, "_blank");
@@ -144,7 +158,7 @@ export function SourcePanel({
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <div style={{ width: 3, height: 16, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
                 <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
-                  {isVideo ? "Video de referencia" : "Fragmento de contexto"}
+                  {isAudio ? "Audio de referencia" : isVideo ? "Video de referencia" : "Fragmento de contexto"}
                 </p>
               </div>
               <p
@@ -176,17 +190,39 @@ export function SourcePanel({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          {/* Inline video player */}
-          {videoUrl && isVideo && (
-            <div style={{ marginBottom: 20, borderRadius: "var(--radius)", overflow: "hidden", border: "1px solid var(--border-default)" }}>
-              <video
-                controls
-                autoPlay
-                style={{ width: "100%", backgroundColor: "#000", display: "block" }}
-                src={videoUrl}
-              >
-                Tu navegador no soporta video HTML5.
-              </video>
+          {/* Inline video / audio player, seeking to the cited moment */}
+          {videoUrl && isMedia && (
+            <div style={{ marginBottom: 20 }}>
+              {jumpLabel && (
+                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>
+                  ▶ Reproduciendo desde {jumpLabel}
+                </p>
+              )}
+              <div style={{ borderRadius: "var(--radius)", overflow: "hidden", border: "1px solid var(--border-default)" }}>
+                {isVideo ? (
+                  <video
+                    ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                    controls
+                    autoPlay
+                    onLoadedMetadata={seekToStart}
+                    style={{ width: "100%", backgroundColor: "#000", display: "block" }}
+                    src={videoUrl}
+                  >
+                    Tu navegador no soporta video HTML5.
+                  </video>
+                ) : (
+                  <audio
+                    ref={mediaRef as React.RefObject<HTMLAudioElement>}
+                    controls
+                    autoPlay
+                    onLoadedMetadata={seekToStart}
+                    style={{ width: "100%", display: "block", padding: 12, backgroundColor: "var(--bg-muted)" }}
+                    src={videoUrl}
+                  >
+                    Tu navegador no soporta audio HTML5.
+                  </audio>
+                )}
+              </div>
             </div>
           )}
 
@@ -245,8 +281,8 @@ export function SourcePanel({
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
             >
               {opening
-                ? isVideo ? "Cargando..." : "Abriendo..."
-                : isVideo ? "Ver video" : "Ver documento"}
+                ? isMedia ? "Cargando..." : "Abriendo..."
+                : isAudio ? "Escuchar audio" : isVideo ? "Ver video" : "Ver documento"}
             </button>
           )}
           <button
