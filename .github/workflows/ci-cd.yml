@@ -67,6 +67,12 @@ jobs:
       - name: Audit Python dependencies
         working-directory: backend
         run: |
+          # transformers (transitive via sentence-transformers==3.0.1, which pins
+          # transformers<5 so the 5.3.0 fix is unreachable without a major bump).
+          # Both CVEs are RCE via from_pretrained() on an attacker-controlled
+          # config.json; this app only loads one pinned, trusted embedding model
+          # (all-MiniLM-L6-v2) and never loads user-supplied models, so neither
+          # is reachable here. Revisit when sentence-transformers moves to 5.x.
           pip-audit --requirement requirements.txt \
             --ignore-vuln PYSEC-2022-42969 \
             --ignore-vuln PYSEC-2025-183 \
@@ -74,7 +80,9 @@ jobs:
             --ignore-vuln GHSA-6w46-j5rx-g56g \
             --ignore-vuln PYSEC-2025-217 \
             --ignore-vuln GHSA-69w3-r845-3855 \
-            --ignore-vuln GHSA-rrmf-rvhw-rf47
+            --ignore-vuln GHSA-rrmf-rvhw-rf47 \
+            --ignore-vuln PYSEC-2026-2289 \
+            --ignore-vuln PYSEC-2026-2290
 
   # ── Frontend tests (every push / PR) ────────────────────────────────────────
   frontend-test:
