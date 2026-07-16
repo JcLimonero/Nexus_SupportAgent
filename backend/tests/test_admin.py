@@ -168,6 +168,59 @@ async def test_upload_docx_rejects_wrong_magic_bytes(client):
     assert response.status_code == 400
 
 
+@pytest.mark.anyio
+async def test_upload_mp3_accepted(client):
+    """Audio uploads pass validation when magic bytes report an audio/* MIME."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.admin.save_file", return_value="/data/audios/clase.mp3"), \
+         patch("routers.admin._process_and_index"), \
+         patch("routers.admin.filetype.guess") as mock_guess:
+        mock_guess.return_value = MagicMock(mime="audio/mpeg")
+        response = await client.post(
+            "/api/admin/upload",
+            files={"file": ("clase.mp3", b"ID3\x04\x00" + b"\x00" * 600, "audio/mpeg")},
+            headers={"Authorization": f"Bearer {_admin()}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+
+
+@pytest.mark.anyio
+async def test_upload_m4a_accepted_with_mp4_container(client):
+    """.m4a shares the MP4 box, so a video/mp4 magic report is still accepted."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.admin.save_file", return_value="/data/audios/nota.m4a"), \
+         patch("routers.admin._process_and_index"), \
+         patch("routers.admin.filetype.guess") as mock_guess:
+        mock_guess.return_value = MagicMock(mime="video/mp4")
+        response = await client.post(
+            "/api/admin/upload",
+            files={"file": ("nota.m4a", b"\x00\x00\x00\x20ftypM4A " + b"\x00" * 600, "audio/mp4")},
+            headers={"Authorization": f"Bearer {_admin()}"},
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_upload_audio_rejects_wrong_magic_bytes(client):
+    """A non-audio file renamed to .mp3 must be rejected."""
+    from db.connection import get_db
+    from main import app
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.admin.filetype.guess") as mock_guess:
+        mock_guess.return_value = MagicMock(mime="application/zip")
+        response = await client.post(
+            "/api/admin/upload",
+            files={"file": ("fake.mp3", b"PK\x03\x04not audio", "audio/mpeg")},
+            headers={"Authorization": f"Bearer {_admin()}"},
+        )
+    assert response.status_code == 400
+
+
 # ── Documents list ─────────────────────────────────────────────────────────────
 
 @pytest.mark.anyio

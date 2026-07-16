@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/AuthProvider";
 import { localLogout } from "@/lib/auth";
 import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, renameSession, deleteSession, submitFeedback, shareSession } from "@/lib/api";
 import { useToast } from "@/components/Toast";
-import { MessageBubble, type Message, type PdfSource } from "@/components/MessageBubble";
+import { MessageBubble, type Message, type PdfSource, type MediaSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -99,8 +99,15 @@ export default function ChatPage() {
     setSidebarOpen(false);
   };
 
-  const handleOpenVideo = useCallback((video: { file_name: string; gcs_url: string }) => {
-    setActiveSource({ chunk_id: undefined, file_name: video.file_name, page_number: null, gcs_url: video.gcs_url });
+  const handleOpenVideo = useCallback((video: MediaSource) => {
+    setActiveSource({
+      chunk_id: video.chunk_id,
+      file_name: video.file_name,
+      page_number: null,
+      gcs_url: video.gcs_url,
+      source_type: video.source_type,
+      start_time: video.start_time,
+    });
   }, []);
 
   // Stable reference — identified by message ID, not index, so memo on MessageBubble
@@ -260,7 +267,7 @@ export default function ChatPage() {
                 content: typewriter || aborted ? last.content : event.answer,
                 sources: {
                   pdfs: event.pdf_sources as PdfSource[],
-                  videos: event.video_sources as Array<{ file_name: string; gcs_url: string }>,
+                  videos: event.video_sources as MediaSource[],
                 },
                 follow_ups: aborted ? last.follow_ups : event.follow_ups,
                 created_at: last.created_at ?? new Date().toISOString(),

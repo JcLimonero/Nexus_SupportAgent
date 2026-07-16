@@ -11,6 +11,19 @@ export interface PdfSource {
   file_name: string;
   page_number: number | null;
   gcs_url: string;
+  // Present for video/audio sources: which media kind, and where in the file
+  // the cited transcript begins (seconds) so the player can jump to it.
+  source_type?: string;
+  start_time?: number | null;
+}
+
+// A cited video or audio file, carrying the moment to jump to.
+export interface MediaSource {
+  file_name: string;
+  gcs_url: string;
+  chunk_id?: string;
+  source_type?: string;
+  start_time?: number | null;
 }
 
 // Short uppercase badge derived from the file extension (PDF, DOCX, PPTX, …).
@@ -19,13 +32,29 @@ export function docLabel(fileName: string): string {
   return ext && ext !== fileName.toUpperCase() ? ext : "DOC";
 }
 
+const _AUDIO_RE = /\.(mp3|m4a|wav|ogg)$/i;
+
+export function isAudioSource(s: { source_type?: string; file_name: string }): boolean {
+  return s.source_type === "audio" || _AUDIO_RE.test(s.file_name);
+}
+
+// Seconds → "m:ss" (or "h:mm:ss" past an hour) for the jump-to timestamp label.
+export function fmtTimestamp(sec?: number | null): string | null {
+  if (sec == null || sec < 0) return null;
+  const total = Math.floor(sec);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const ss = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
 export interface Message {
   id?: string;
   role: "user" | "assistant";
   content: string;
   sources?: {
     pdfs:   PdfSource[];
-    videos: Array<{ file_name: string; gcs_url: string }>;
+    videos: MediaSource[];
   };
   follow_ups?: string[];
   feedback?: "up" | "down";
@@ -176,7 +205,7 @@ export const MessageBubble = memo(function MessageBubble({
   streaming?: boolean;
   onFollowUp?: (text: string) => void;
   onOpenSource?: (pdf: PdfSource) => void;
-  onOpenVideo?: (video: { file_name: string; gcs_url: string }) => void;
+  onOpenVideo?: (video: MediaSource) => void;
   onFeedback?: (messageId: string, rating: "up" | "down") => void;
   onRetry?: () => void;
 }) {
@@ -313,9 +342,9 @@ export const MessageBubble = memo(function MessageBubble({
                   e.currentTarget.style.color = "var(--text-muted)";
                 }}
               >
-                <span style={{ fontSize: 9 }}>VID</span>
+                <span style={{ fontSize: 9 }}>{isAudioSource(video) ? "AUDIO" : "VID"}</span>
                 <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {video.file_name}
+                  {video.file_name}{fmtTimestamp(video.start_time) ? ` · ${fmtTimestamp(video.start_time)}` : ""}
                 </span>
               </button>
             ))}

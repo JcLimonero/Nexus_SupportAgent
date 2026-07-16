@@ -2,6 +2,29 @@
 import pytest
 
 from ingestion.document_processor import extract_document_chunks
+from ingestion.chunker import chunk_timed_segments
+
+
+# ── Timestamped transcript chunking (video/audio deep links) ────────────────────
+
+def test_chunk_timed_segments_tags_start_time():
+    segments = [(0.0, "uno dos tres"), (5.5, "cuatro cinco seis"), (10.0, "siete")]
+    chunks = chunk_timed_segments(segments, chunk_size=3, overlap=0)
+    assert [c["start_time"] for c in chunks] == [0.0, 5.5, 10.0]
+    assert chunks[0]["content"] == "uno dos tres"
+    assert chunks[1]["content"] == "cuatro cinco seis"
+
+
+def test_chunk_timed_segments_first_word_time_wins_with_overlap():
+    # words: a,b,c,d @0.0 then e,f,g,h @8.0; size 4 / overlap 2 → windows every 2 words
+    segments = [(0.0, "a b c d"), (8.0, "e f g h")]
+    chunks = chunk_timed_segments(segments, chunk_size=4, overlap=2)
+    assert [c["start_time"] for c in chunks] == [0.0, 0.0, 8.0, 8.0]
+    assert chunks[0]["content"] == "a b c d"
+
+
+def test_chunk_timed_segments_empty():
+    assert chunk_timed_segments([], chunk_size=3, overlap=0) == []
 
 
 def _write(tmp_path, name: str, data: bytes):

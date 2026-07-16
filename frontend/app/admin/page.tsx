@@ -249,7 +249,7 @@ export default function AdminPage() {
               transition: "border-color 0.15s, background-color 0.15s",
             }}
           >
-            <input id="file-input" type="file" accept=".pdf,.mp4,.docx,.pptx,.txt,.md,.csv" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+            <input id="file-input" type="file" accept=".pdf,.mp4,.mp3,.m4a,.wav,.ogg,.docx,.pptx,.txt,.md,.csv" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <label htmlFor="file-input" className="cursor-pointer block">
               <div style={{ fontSize: 28, marginBottom: 12, color: dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--text-faint)" }}>
                 {uploading ? "⏳" : "↑"}
@@ -262,7 +262,7 @@ export default function AdminPage() {
                   : "Arrastra archivos · o haz clic para seleccionar"}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
-                PDF · MP4 · DOCX · PPTX · TXT · MD · CSV · máx. 100 MB
+                PDF · MP4 · MP3 · M4A · WAV · OGG · DOCX · PPTX · TXT · MD · CSV · máx. 100 MB
               </p>
             </label>
           </div>

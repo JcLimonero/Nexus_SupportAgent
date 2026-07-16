@@ -23,12 +23,17 @@ def build_context(chunks: list[dict]) -> tuple[str, list[dict], list[dict]]:
             f"{_UNTRUSTED_HEADER}\n[Fragmento {i}]\n{chunk['content']}\n{_UNTRUSTED_FOOTER}"
         )
 
-        if chunk["source_type"] == "video":
+        if chunk["source_type"] in ("video", "audio"):
+            # Dedupe per file, keeping the first (most relevant) chunk — its
+            # chunk_id and start_time drive the transcript panel and the jump.
             if chunk["gcs_url"] not in seen_videos:
                 seen_videos.add(chunk["gcs_url"])
                 video_sources.append({
+                    "chunk_id": chunk.get("id", ""),
                     "file_name": chunk["file_name"],
                     "gcs_url": chunk["gcs_url"],
+                    "source_type": chunk["source_type"],
+                    "start_time": chunk.get("start_time"),
                 })
         else:
             # Every non-video document (pdf, docx, pptx, txt, md, csv) shares the
