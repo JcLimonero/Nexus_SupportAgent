@@ -236,13 +236,16 @@ export async function submitFeedback(messageId: string, rating: "up" | "down") {
   return res.json();
 }
 
-export async function getDocumentBlobUrl(gcsUrl: string): Promise<string> {
-  const path = gcsUrl.replace(/^\/data\//, "");
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  const res = await fetch(`${API_URL}/api/admin/documents/serve/${encodedPath}`, {
-    headers: await headers(false),
+// Short-lived signed URL the browser can use directly as <video>/<audio> src
+// or open in a tab — streams with Range requests instead of downloading the
+// whole file as a blob first.
+export async function getSignedMediaUrl(gcsUrl: string): Promise<string> {
+  const res = await fetch(`${API_URL}/api/media/sign`, {
+    method: "POST",
+    headers: await headers(),
+    body: JSON.stringify({ gcs_url: gcsUrl }),
   });
   if (!res.ok) throw new Error("Error al obtener el documento");
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  const { url } = await res.json();
+  return url.startsWith("http") ? url : `${API_URL}${url}`;
 }

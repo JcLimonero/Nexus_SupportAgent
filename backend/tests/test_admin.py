@@ -354,28 +354,6 @@ async def test_excerpt_returns_422_for_invalid_id(client):
     assert response.status_code == 422
 
 
-# ── Serve document ─────────────────────────────────────────────────────────────
-
-@pytest.mark.anyio
-async def test_serve_requires_auth(client):
-    response = await client.get("/api/admin/documents/serve/pdfs/test.pdf")
-    assert response.status_code == 401
-
-
-@pytest.mark.anyio
-async def test_serve_accessible_to_regular_user(client):
-    """Any authenticated user can fetch source documents (file not found → 404, not 403)."""
-    from db.connection import get_db
-    from main import app
-    app.dependency_overrides[get_db] = make_db_override()
-    response = await client.get(
-        "/api/admin/documents/serve/pdfs/test.pdf",
-        headers={"Authorization": f"Bearer {_user()}"},
-    )
-    app.dependency_overrides.clear()
-    assert response.status_code == 404
-
-
 # ── Conversation viewer (traceability / audit) ────────────────────────────────
 
 @pytest.mark.anyio

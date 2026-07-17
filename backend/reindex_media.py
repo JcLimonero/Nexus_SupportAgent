@@ -18,7 +18,7 @@ from sqlalchemy import select, delete
 from db.connection import AsyncSessionLocal, init_db
 from db.models import DocumentChunk, ResponseCache
 from ingestion.video_processor import extract_media_chunks
-from retrieval.vector_search import embed_document
+from retrieval.vector_search import embed_documents
 from config import get_settings
 
 settings = get_settings()
@@ -65,13 +65,14 @@ async def reindex() -> None:
                 continue
 
             chunks = extract_media_chunks(local, file_name, gcs_url, source_type)
+            embeddings = embed_documents([c["content"] for c in chunks])
             async with AsyncSessionLocal() as db:
                 # Replace only this file's chunks (keyed by its unique stored url).
                 await db.execute(delete(DocumentChunk).where(DocumentChunk.gcs_url == gcs_url))
-                for chunk in chunks:
+                for chunk, embedding in zip(chunks, embeddings):
                     db.add(DocumentChunk(
                         content=chunk["content"],
-                        embedding=embed_document(chunk["content"]),
+                        embedding=embedding,
                         source_type=chunk["source_type"],
                         file_name=chunk["file_name"],
                         gcs_url=chunk["gcs_url"],

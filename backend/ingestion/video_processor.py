@@ -46,7 +46,12 @@ def extract_media_chunks(
 
     try:
         _extract_audio(media_path, audio_path)
-        segments, _ = model.transcribe(audio_path, language="es")
+        # vad_filter skips silence (training videos pause a lot); beam_size=1
+        # (greedy) is ~2-3x faster than the default beam of 5 with negligible
+        # quality loss for RAG transcripts.
+        segments, _ = model.transcribe(
+            audio_path, language="es", vad_filter=True, beam_size=1
+        )
         timed_segments = [(float(seg.start), seg.text.strip()) for seg in segments]
     finally:
         Path(audio_path).unlink(missing_ok=True)

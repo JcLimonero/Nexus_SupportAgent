@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from config import get_settings
 from db.connection import init_db, AsyncSessionLocal
-from routers import health, chat, admin
+from routers import health, chat, admin, media
 
 settings = get_settings()
 
@@ -27,6 +27,7 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/shared":       (120, 60),  # public share view (unguessable token; light guard)
     "/api/chat":         (60, 60),
     "/api/admin/upload": (60, 60),   # 60 uploads / 60 s per IP (admin-only; bulk KB seeding)
+    "/api/media/stream": (240, 60),  # HMAC-signed streaming; seeking issues many Range requests
 }
 
 
@@ -34,6 +35,7 @@ class _RateLimitMiddleware:
     def __init__(self, app):
         self.app = app
         self._windows: dict[str, list[float]] = defaultdict(list)
+        self._hits = 0  # sweep counter for pruning stale IP keys
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not settings.rate_limit_enabled:
@@ -56,6 +58,17 @@ class _RateLimitMiddleware:
                     await response(scope, receive, send)
                     return
                 self._windows[key].append(now)
+                # Prune keys for IPs that stopped sending — otherwise the dict
+                # grows one entry per IP ever seen, forever.
+                self._hits += 1
+                if self._hits % 1000 == 0:
+                    max_window = max(w for _, w in _RATE_RULES.values())
+                    stale = [
+                        k for k, ts in self._windows.items()
+                        if not ts or now - ts[-1] >= max_window
+                    ]
+                    for k in stale:
+                        del self._windows[k]
                 break
         await self.app(scope, receive, send)
 
@@ -102,6 +115,20 @@ async def _migrate():
         await db.commit()
 
 
+async def _evict_stale_cache():
+    """Drop semantic-cache entries unused for 30 days — the table otherwise
+    only shrinks on manual/full flush. Startup-time is enough at this scale."""
+    from datetime import datetime, timedelta
+    from sqlalchemy import delete
+    from db.models import ResponseCache
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(ResponseCache).where(
+            ResponseCache.last_used_at < datetime.utcnow() - timedelta(days=30)
+        ))
+        await db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
@@ -110,6 +137,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _migrate()
     await _seed_admin()
+    await _evict_stale_cache()
     # Preload the embedding model so the first user doesn't pay the ~6s
     # cold-load. Run in a thread to avoid blocking the event loop.
     await asyncio.to_thread(warm_up)
@@ -133,15 +161,14 @@ app = FastAPI(
 # Rate limiting before any auth processing
 app.add_middleware(_RateLimitMiddleware)
 
-# CORS — never wildcard with credentials. In production we allow the exact
-# frontend origin when FRONTEND_URL is set, and otherwise fall back to a regex
-# matching any Cloud Run (*.run.app) host (a literal "https://*.run.app" string
-# is NOT glob-matched by Starlette and would block every request).
+# CORS — never wildcard with credentials. In production only the exact
+# FRONTEND_URL origin is allowed; unset means no cross-origin browser access
+# (same-origin deployments behind nginx/IIS don't need CORS at all). The old
+# *.run.app regex fallback let ANY Cloud Run app call the API from a victim's
+# browser — set FRONTEND_URL explicitly on split-origin deployments.
 _cors_kwargs: dict = {}
 if _is_prod:
     _cors_kwargs["allow_origins"] = [settings.frontend_url] if settings.frontend_url else []
-    if not settings.frontend_url:
-        _cors_kwargs["allow_origin_regex"] = r"https://[a-z0-9.-]+\.run\.app"
 else:
     _cors_kwargs["allow_origins"] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
@@ -156,6 +183,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
+app.include_router(media.router)
 
 from auth.local_auth import router as local_auth_router
 from routers.users import router as users_router

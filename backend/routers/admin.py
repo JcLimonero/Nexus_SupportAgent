@@ -1,4 +1,3 @@
-import os
 import uuid
 import asyncio
 import secrets
@@ -17,7 +16,7 @@ from auth.firebase_verify import get_current_user
 from ingestion.pdf_processor import extract_pdf_chunks
 from ingestion.video_processor import extract_media_chunks
 from ingestion.document_processor import extract_document_chunks
-from retrieval.vector_search import embed_document
+from retrieval.vector_search import embed_documents
 from config import get_settings
 
 settings = get_settings()
@@ -46,22 +45,6 @@ _SOURCE_TYPE = {
     ".pptx": "pptx", ".txt": "txt", ".md": "md", ".csv": "csv",
     ".mp3": "audio", ".m4a": "audio", ".wav": "audio", ".ogg": "audio",
 }
-
-# Content-type used when serving files back from local storage.
-_SERVE_MIME = {
-    ".pdf":  "application/pdf",
-    ".mp4":  "video/mp4",
-    ".mp3":  "audio/mpeg",
-    ".m4a":  "audio/mp4",
-    ".wav":  "audio/wav",
-    ".ogg":  "audio/ogg",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ".txt":  "text/plain; charset=utf-8",
-    ".md":   "text/markdown; charset=utf-8",
-    ".csv":  "text/csv; charset=utf-8",
-}
-
 
 def _looks_like_text(content: bytes) -> bool:
     """Heuristic for plain-text uploads: decodes as UTF-8 and has no NUL bytes."""
@@ -120,29 +103,38 @@ def save_file(tmp_path: str, file_name: str, source_type: str) -> str:
 
 # ── Background indexing ──────────────────────────────────────────────────────
 
+# ponytail: one indexing job at a time — ffmpeg + Whisper + embedding share the
+# API container's CPU and concurrent jobs starve chat latency. Move indexing to
+# a worker container if upload throughput ever matters.
+_INDEX_SEM = asyncio.Semaphore(1)
+
+
 async def _process_and_index(file_path: str, file_name: str, file_url: str, source_type: str, ext: str):
     try:
-        if source_type == "pdf":
-            chunks = await asyncio.to_thread(extract_pdf_chunks, file_path, file_name, file_url)
-        elif source_type in ("video", "audio"):
-            chunks = await asyncio.to_thread(extract_media_chunks, file_path, file_name, file_url, source_type)
-        else:
-            chunks = await asyncio.to_thread(extract_document_chunks, file_path, file_name, file_url, ext)
+        async with _INDEX_SEM:
+            if source_type == "pdf":
+                chunks = await asyncio.to_thread(extract_pdf_chunks, file_path, file_name, file_url)
+            elif source_type in ("video", "audio"):
+                chunks = await asyncio.to_thread(extract_media_chunks, file_path, file_name, file_url, source_type)
+            else:
+                chunks = await asyncio.to_thread(extract_document_chunks, file_path, file_name, file_url, ext)
 
-        async with AsyncSessionLocal() as db:
-            for chunk in chunks:
-                embedding = await asyncio.to_thread(embed_document, chunk["content"])
-                db.add(DocumentChunk(
-                    content=chunk["content"],
-                    embedding=embedding,
-                    source_type=chunk["source_type"],
-                    file_name=chunk["file_name"],
-                    gcs_url=chunk["gcs_url"],
-                    page_number=chunk["page_number"],
-                    chunk_index=chunk["chunk_index"],
-                    start_time=chunk.get("start_time"),
-                ))
-            await db.commit()
+            embeddings = await asyncio.to_thread(
+                embed_documents, [c["content"] for c in chunks]
+            )
+            async with AsyncSessionLocal() as db:
+                for chunk, embedding in zip(chunks, embeddings):
+                    db.add(DocumentChunk(
+                        content=chunk["content"],
+                        embedding=embedding,
+                        source_type=chunk["source_type"],
+                        file_name=chunk["file_name"],
+                        gcs_url=chunk["gcs_url"],
+                        page_number=chunk["page_number"],
+                        chunk_index=chunk["chunk_index"],
+                        start_time=chunk.get("start_time"),
+                    ))
+                await db.commit()
     finally:
         Path(file_path).unlink(missing_ok=True)
 
@@ -165,35 +157,48 @@ async def upload_file(
 
     source_type = _SOURCE_TYPE[ext]
 
-    # Read with hard size cap to prevent OOM uploads
-    content = await file.read(_MAX_UPLOAD_BYTES + 1)
-    if len(content) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="El archivo supera el límite de 100 MB")
+    # Stream to a temp file in 1 MB chunks — never hold a 100 MB upload in RAM.
+    # Keep the first 64 KB in memory for content validation below.
+    head = b""
+    total = 0
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp_path = tmp.name
+        while chunk := await file.read(1024 * 1024):
+            total += len(chunk)
+            if total > _MAX_UPLOAD_BYTES:
+                break
+            if len(head) < 65536:
+                head += chunk[: 65536 - len(head)]
+            tmp.write(chunk)
+
+    def _reject(status: int, detail: str):
+        Path(tmp_path).unlink(missing_ok=True)
+        raise HTTPException(status_code=status, detail=detail)
+
+    if total > _MAX_UPLOAD_BYTES:
+        _reject(413, "El archivo supera el límite de 100 MB")
 
     # Content validation — extension-spoofing prevention.
     if ext in _TEXT_EXTENSIONS:
         # No magic bytes for plain text; reject binary disguised as text.
-        if not _looks_like_text(content):
-            raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
+        # Validating the first 64 KB is enough to catch disguised binaries.
+        if not _looks_like_text(head):
+            _reject(400, "Tipo de contenido no permitido")
     elif ext in _AUDIO_EXTENSIONS:
         # Accept any audio/* container; .m4a shares the MP4 box so may report
         # video/mp4. ffmpeg sorts out the actual codec downstream.
-        kind = filetype.guess(content[:8192])
+        kind = filetype.guess(head[:8192])
         ok = kind is not None and (
             kind.mime.startswith("audio/") or (ext == ".m4a" and kind.mime == "video/mp4")
         )
         if not ok:
-            raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
+            _reject(400, "Tipo de contenido no permitido")
     else:
         # Magic bytes for binary formats. OOXML (docx/pptx) is zip-based and the
         # marker may sit past the first 512 bytes, so scan a larger prefix.
-        kind = filetype.guess(content[:8192])
+        kind = filetype.guess(head[:8192])
         if kind is None or kind.mime not in _BINARY_MIME[ext]:
-            raise HTTPException(status_code=400, detail="Tipo de contenido no permitido")
-
-    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+            _reject(400, "Tipo de contenido no permitido")
 
     try:
         file_url = await asyncio.to_thread(save_file, tmp_path, file.filename, source_type)
@@ -264,24 +269,6 @@ async def get_excerpt(
         "page_number": chunk.page_number,
         "content": chunk.content,
     }
-
-
-@router.get("/documents/serve/{file_path:path}")
-async def serve_document(
-    file_path: str,
-    _: dict = Depends(get_current_user),
-):
-    if settings.storage_provider != "local":
-        raise HTTPException(status_code=501, detail="Solo disponible en almacenamiento local")
-    base = Path(settings.local_storage_path).resolve()
-    target = (base / file_path).resolve()
-    if not str(target).startswith(str(base) + os.sep):
-        raise HTTPException(status_code=403, detail="Acceso denegado")
-    if not target.exists():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    from fastapi.responses import FileResponse
-    media = _SERVE_MIME.get(target.suffix.lower(), "application/octet-stream")
-    return FileResponse(str(target), media_type=media)
 
 
 @router.get("/cache/stats")

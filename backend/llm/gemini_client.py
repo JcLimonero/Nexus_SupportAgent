@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+# Shared clients — a fresh client per request pays a new TLS handshake
+# (~100-300 ms) on the TTFT-critical path. Both keep pooled connections alive.
+_http = httpx.Client(timeout=60)
+_ahttp = httpx.AsyncClient(timeout=120)
+
 # ── GCP token cache ───────────────────────────────────────────────────────────
 # OAuth2 tokens are valid for 3600s. Refreshing on every request wastes
 # 50–200ms per call. Cache and reuse until 60s before expiry.
@@ -106,11 +111,10 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
         },
     }
 
-    response = httpx.post(
+    response = _http.post(
         url,
         headers={"Authorization": f"Bearer {_get_token()}"},
         json=payload,
-        timeout=60,
     )
     response.raise_for_status()
 
@@ -202,7 +206,7 @@ def generate_suggestion_questions(samples: list[dict], count: int = 6) -> list[d
         },
     }
 
-    response = httpx.post(
+    response = _http.post(
         url,
         headers={"Authorization": f"Bearer {_get_token()}"},
         json=payload,
@@ -262,29 +266,28 @@ async def stream_gemini_response(history: list[dict], question: str, context: st
         },
     }
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        async with client.stream(
-            "POST", url,
-            headers={"Authorization": f"Bearer {token}"},
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data_str = line[5:].strip()
-                if not data_str:
-                    continue
-                try:
-                    data = json.loads(data_str)
-                    candidate = data.get("candidates", [{}])[0]
-                    content_obj = candidate.get("content", {})
-                    parts = content_obj.get("parts", [])
-                    for part in parts:
-                        if part.get("thought", False):
-                            continue
-                        text = part.get("text", "")
-                        if text:
-                            yield text
-                except (json.JSONDecodeError, KeyError, IndexError):
-                    continue
+    async with _ahttp.stream(
+        "POST", url,
+        headers={"Authorization": f"Bearer {token}"},
+        json=payload,
+    ) as resp:
+        resp.raise_for_status()
+        async for line in resp.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if not data_str:
+                continue
+            try:
+                data = json.loads(data_str)
+                candidate = data.get("candidates", [{}])[0]
+                content_obj = candidate.get("content", {})
+                parts = content_obj.get("parts", [])
+                for part in parts:
+                    if part.get("thought", False):
+                        continue
+                    text = part.get("text", "")
+                    if text:
+                        yield text
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue

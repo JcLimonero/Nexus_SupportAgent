@@ -9,7 +9,7 @@ RAG-based support chatbot for TotalDealer ERP. Users ask questions in Spanish an
 - **Semantic cache** — repeated or similar questions return cached answers instantly (pgvector cosine similarity)
 - **Markdown rendering** — answers render headings, lists, code blocks, tables via react-markdown + rehype-sanitize
 - **Follow-up suggestions** — each answer surfaces 3 related questions as one-click chips
-- **Source document viewer** — PDF chips open an in-app panel showing the exact excerpt used; VID chips stream the video via signed blob URL
+- **Source document viewer** — PDF chips open an in-app panel showing the exact excerpt used; VID chips stream the video via short-lived signed URLs with native Range seeking (no full download)
 - **Thumbs feedback** — users rate each answer up/down; admins view all feedback from the admin panel
 - **Admin dashboard** — system stats (users, sessions, messages, documents, cache hits, feedback ratio), document upload/delete, and user management
 - **User management** — create users, activate/deactivate, promote/demote admin role

@@ -16,6 +16,10 @@ settings = get_settings()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Verified when the email doesn't exist, so unknown-email and wrong-password
+# failures take the same time (prevents account enumeration by timing).
+_DUMMY_HASH = pwd_context.hash("timing-equalizer")
+
 
 # ── Password helpers ─────────────────────────────────────────────────────────
 
@@ -91,7 +95,11 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
-    if not user or not user.is_active or not verify_password(body.password, user.hashed_password):
+    if user is None:
+        verify_password(body.password, _DUMMY_HASH)  # equalize timing
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    # Verify before checking is_active so inactive accounts aren't enumerable either.
+    if not verify_password(body.password, user.hashed_password) or not user.is_active:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     return TokenResponse(

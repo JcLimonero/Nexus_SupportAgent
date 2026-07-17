@@ -51,12 +51,24 @@ def warm_up() -> None:
     embed_text("warm up")
 
 
-def embed_document(text: str) -> list[float]:
-    """Embed a document chunk."""
+def embed_documents(texts: list[str]) -> list[list[float]]:
+    """Embed many document chunks in batched model calls.
+
+    One call per chunk pays model/API overhead N times; batching turns a
+    100-chunk video into a handful of calls.
+    """
+    if not texts:
+        return []
     if settings.embedding_provider == "local":
-        return _get_local_model().encode(text, normalize_embeddings=True).tolist()
+        return _get_local_model().encode(texts, normalize_embeddings=True).tolist()
     from vertexai.language_models import TextEmbeddingInput
-    return _get_vertex_model().get_embeddings([TextEmbeddingInput(text, "RETRIEVAL_DOCUMENT")])[0].values
+    model = _get_vertex_model()
+    out: list[list[float]] = []
+    # 20 chunks of ~500 words stays well under Vertex's per-request token limit.
+    for i in range(0, len(texts), 20):
+        batch = [TextEmbeddingInput(t, "RETRIEVAL_DOCUMENT") for t in texts[i : i + 20]]
+        out.extend(e.values for e in model.get_embeddings(batch))
+    return out
 
 
 # ── Search ───────────────────────────────────────────────────────────────────
@@ -76,9 +88,13 @@ async def search_chunks(
 
     query_embedding = embedding if embedding is not None else await asyncio.to_thread(embed_text, query)
 
+    dist = DocumentChunk.embedding.cosine_distance(query_embedding)
     result = await db.execute(
         select(DocumentChunk)
-        .order_by(DocumentChunk.embedding.cosine_distance(query_embedding))
+        # Drop chunks that aren't even loosely related — off-topic questions
+        # otherwise ship the 4 nearest-but-irrelevant chunks to the LLM.
+        .where(dist <= settings.retrieval_max_distance)
+        .order_by(dist)
         .limit(k)
     )
     return [
