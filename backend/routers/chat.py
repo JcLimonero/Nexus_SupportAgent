@@ -429,16 +429,20 @@ async def get_suggestions(
         ]
 
         suggestions = _FALLBACK_SUGGESTIONS
+        # Fallback gets a short TTL so a transient failure (e.g. a Vertex 429)
+        # doesn't pin the generic set for the full 30 minutes.
+        ttl = 60
         if samples:
             try:
                 generated = await asyncio.to_thread(generate_suggestion_questions, samples, 6)
                 if generated:
                     suggestions = generated
+                    ttl = _SUGGESTION_TTL
             except Exception as exc:
                 logger.error("Suggestion generation failed, using fallback: %s", exc)
 
         _suggestion_cache["value"] = suggestions
-        _suggestion_cache["expiry"] = time.monotonic() + _SUGGESTION_TTL
+        _suggestion_cache["expiry"] = time.monotonic() + ttl
         return suggestions
 
 
