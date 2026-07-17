@@ -10,7 +10,7 @@ async function headers(json = true): Promise<Record<string, string>> {
 }
 
 export type StreamEvent =
-  | { token: string }
+  | { token: string; from_cache?: boolean }
   | { done: true; session_id: string; message_id: string; answer: string; pdf_sources: unknown[]; video_sources: unknown[]; follow_ups: string[] }
   | { error: string };
 
@@ -132,6 +132,9 @@ export async function getExcerpt(chunkId: string) {
   const res = await fetch(`${API_URL}/api/admin/documents/excerpt/${chunkId}`, {
     headers: await headers(),
   });
+  // 404 = the cited chunk no longer exists (document was re-indexed after the
+  // answer was given) — callers show a specific message for it.
+  if (res.status === 404) throw new Error("excerpt_not_found");
   if (!res.ok) throw new Error("Error al obtener el fragmento");
   return res.json() as Promise<{
     chunk_id: string;

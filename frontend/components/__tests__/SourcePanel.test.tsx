@@ -61,6 +61,12 @@ describe("SourcePanel", () => {
     expect(await screen.findByText("No se pudo cargar el fragmento.")).toBeInTheDocument();
   });
 
+  it("explains when the cited chunk was removed by a re-index", async () => {
+    mockGetExcerpt.mockRejectedValueOnce(new Error("excerpt_not_found"));
+    render(<SourcePanel source={source} onClose={jest.fn()} />);
+    expect(await screen.findByText(/el documento fue re-indexado/i)).toBeInTheDocument();
+  });
+
   it("shows missing chunk_id message when chunk_id is absent", () => {
     const noId: PdfSource = { file_name: "old.pdf", page_number: 1, gcs_url: "/data/pdfs/old.pdf" };
     render(<SourcePanel source={noId} onClose={jest.fn()} />);
