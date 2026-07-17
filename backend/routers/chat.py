@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, distinct
+from sqlalchemy import select, distinct, update as sql_update
 
 from db.connection import get_db, AsyncSessionLocal
 from db.models import ChatSession, ChatMessage, DocumentChunk, MessageFeedback, ResponseCache
@@ -54,6 +54,17 @@ async def _lookup_cache(db: AsyncSession, embedding: list[float]) -> ResponseCac
     )
     row = result.first()
     return row[0] if row else None
+
+
+async def _touch_session(save_db: AsyncSession, session_id: str) -> None:
+    """Bump updated_at so the sidebar (ordered by activity) stays fresh —
+    streaming saves messages in a separate DB session that never touches the
+    session row, so the ORM onupdate never fires."""
+    await save_db.execute(
+        sql_update(ChatSession)
+        .where(ChatSession.id == uuid.UUID(session_id))
+        .values(updated_at=datetime.utcnow())
+    )
 
 
 async def _save_to_cache(
@@ -151,6 +162,7 @@ async def chat(
         content=answer,
         sources={"pdfs": pdf_sources, "videos": video_sources},
     ))
+    session.updated_at = datetime.utcnow()
     await db.commit()
 
     return ChatResponse(
@@ -244,6 +256,7 @@ async def chat_stream(
                         content=cached.answer,
                         sources=cached.sources,
                     ))
+                    await _touch_session(save_db, session_id_str)
                     await save_db.commit()
             except Exception as exc:
                 logger.error("Cached message save error: %s", exc)
@@ -329,6 +342,7 @@ async def chat_stream(
                     content=answer,
                     sources={"pdfs": final_pdfs, "videos": final_videos},
                 ))
+                await _touch_session(save_db, session_id_str)
                 await save_db.commit()
         except Exception as exc:
             logger.error("DB save error after stream: %s", exc)
@@ -425,7 +439,9 @@ async def get_sessions(
         select(ChatSession)
         .where(ChatSession.user_id == user["uid"])
         .order_by(ChatSession.updated_at.desc())
-        .limit(20)
+        # ponytail: flat cap instead of pagination — add offset paging when
+        # users routinely exceed 100 sessions.
+        .limit(100)
     )
     return [
         {"id": str(s.id), "title": s.title, "created_at": s.created_at.isoformat()}

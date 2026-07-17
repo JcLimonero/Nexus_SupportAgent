@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { getExcerpt, getDocumentBlobUrl } from "@/lib/api";
+import { getExcerpt, getSignedMediaUrl } from "@/lib/api";
 import { isAudioSource, fmtTimestamp, type PdfSource } from "./MessageBubble";
 
 interface ExcerptData {
@@ -50,7 +50,6 @@ export function SourcePanel({
 
   // Reset video player when source file changes (gcs_url covers both PDFs and videos)
   useEffect(() => {
-    if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     setOpening(false);
     setError("");
@@ -91,7 +90,6 @@ export function SourcePanel({
 
   if (!source) return null;
 
-  const isLocal = source.gcs_url.startsWith("/data/");
   // Video and audio use the inline player; every other type (pdf, docx, pptx,
   // txt, md, csv) opens/downloads in a new tab.
   const isAudio = isAudioSource(source);
@@ -100,20 +98,18 @@ export function SourcePanel({
   const jumpLabel = fmtTimestamp(source.start_time);
 
   const openDocument = async () => {
-    if (!isLocal) {
-      window.open(source.gcs_url, "_blank");
-      return;
-    }
     const fetchFor = source.gcs_url;
     setOpening(true);
     setError("");
     try {
-      const blobUrl = await getDocumentBlobUrl(source.gcs_url);
-      if (currentGcsUrlRef.current !== fetchFor) { URL.revokeObjectURL(blobUrl); return; }
+      // Signed URL streams directly (Range requests) — playback and seeking
+      // start immediately instead of after a full download.
+      const url = await getSignedMediaUrl(source.gcs_url);
+      if (currentGcsUrlRef.current !== fetchFor) return;
       if (isMedia) {
-        setVideoUrl(blobUrl);
+        setVideoUrl(url);
       } else {
-        window.open(blobUrl, "_blank");
+        window.open(url, "_blank");
       }
     } catch {
       if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el archivo.");

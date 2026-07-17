@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     max_session_history: int = 6
     chunk_size: int = 500
     chunk_overlap: int = 50
+    # Max cosine distance for a chunk to count as relevant. 0.8 is permissive —
+    # it only drops clearly off-topic chunks. Tune down once measured on real
+    # queries (local MiniLM and Vertex embeddings have different distance ranges).
+    retrieval_max_distance: float = 0.8
 
     # ── Rate limiting ────────────────────────────────────────────────────────
     rate_limit_enabled: bool = True

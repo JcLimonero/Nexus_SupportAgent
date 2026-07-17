@@ -4,11 +4,12 @@ import type { PdfSource } from "../MessageBubble";
 
 jest.mock("@/lib/api", () => ({
   getExcerpt: jest.fn(),
-  getDocumentBlobUrl: jest.fn(),
+  getSignedMediaUrl: jest.fn(),
 }));
 
-import { getExcerpt } from "@/lib/api";
+import { getExcerpt, getSignedMediaUrl } from "@/lib/api";
 const mockGetExcerpt = getExcerpt as jest.Mock;
+const mockGetSignedMediaUrl = getSignedMediaUrl as jest.Mock;
 
 const source: PdfSource = {
   chunk_id: "abc-123",
@@ -86,5 +87,35 @@ describe("SourcePanel", () => {
     render(<SourcePanel source={source} onClose={onClose} />);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("opens a document via signed URL in a new tab", async () => {
+    mockGetSignedMediaUrl.mockResolvedValueOnce("http://api/api/media/stream/pdfs/manual.pdf?exp=1&sig=x");
+    const openSpy = jest.spyOn(window, "open").mockImplementation(() => null);
+    render(<SourcePanel source={source} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByText("Ver documento"));
+    await waitFor(() => expect(mockGetSignedMediaUrl).toHaveBeenCalledWith("/data/pdfs/manual.pdf"));
+    await waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith("http://api/api/media/stream/pdfs/manual.pdf?exp=1&sig=x", "_blank")
+    );
+    openSpy.mockRestore();
+  });
+
+  it("uses the signed URL directly as the video src", async () => {
+    mockGetSignedMediaUrl.mockResolvedValueOnce("http://api/api/media/stream/videos/demo.mp4?exp=1&sig=x");
+    const videoSource: PdfSource = {
+      chunk_id: "vid-1",
+      file_name: "demo.mp4",
+      page_number: null,
+      gcs_url: "/data/videos/demo.mp4",
+      source_type: "video",
+    };
+    const { container } = render(<SourcePanel source={videoSource} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByText("Ver video"));
+    await waitFor(() => {
+      const video = container.querySelector("video");
+      expect(video).not.toBeNull();
+      expect(video!.getAttribute("src")).toBe("http://api/api/media/stream/videos/demo.mp4?exp=1&sig=x");
+    });
   });
 });
