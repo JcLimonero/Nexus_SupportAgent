@@ -67,6 +67,8 @@ def extract_media_chunks(
             "start_time": chunk["start_time"],
         }
         for i, chunk in enumerate(
-            chunk_timed_segments(timed_segments, settings.chunk_size, settings.chunk_overlap)
+            chunk_timed_segments(
+                timed_segments, settings.media_chunk_size, settings.media_chunk_overlap
+            )
         )
     ]

@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     max_session_history: int = 6
     chunk_size: int = 500
     chunk_overlap: int = 50
+    # Media transcripts get finer chunks than documents: 500 words of speech is
+    # ~3 minutes, which made jump-to-moment timestamps useless mid-video (most
+    # answers matched chunk 0 → "0:00"). 150 words ≈ 1 minute of speech, so the
+    # cited start_time lands within a minute of the answer.
+    media_chunk_size: int = 150
+    media_chunk_overlap: int = 25
     # Max cosine distance for a chunk to count as relevant. 0.8 is permissive —
     # it only drops clearly off-topic chunks. Tune down once measured on real
     # queries (local MiniLM and Vertex embeddings have different distance ranges).
