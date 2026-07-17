@@ -46,7 +46,13 @@ export function SourcePanel({
     setError("");
     getExcerpt(source.chunk_id)
       .then(setData)
-      .catch(() => setError("No se pudo cargar el fragmento."))
+      .catch((e: unknown) =>
+        setError(
+          e instanceof Error && e.message === "excerpt_not_found"
+            ? "El fragmento citado ya no está disponible: el documento fue re-indexado después de esta respuesta. Vuelve a hacer la pregunta para obtener referencias actualizadas."
+            : "No se pudo cargar el fragmento.",
+        ),
+      )
       .finally(() => setLoading(false));
   }, [source?.chunk_id]);
 
