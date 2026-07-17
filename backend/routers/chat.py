@@ -36,6 +36,15 @@ def _is_no_info(answer: str) -> bool:
     return answer.strip().startswith(_NO_INFO_PREFIX)
 
 
+def _session_uuid(value: str) -> uuid.UUID:
+    """Parse a session id from the request path/body — 422 instead of a 500
+    when the value isn't a UUID."""
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de sesión inválido")
+
+
 def _session_identity(user: dict) -> tuple[bool, str]:
     """(is_anonymous, user_label) for a new session, from the token claims."""
     is_anon = bool(user.get("is_anon"))
@@ -62,7 +71,7 @@ async def _touch_session(save_db: AsyncSession, session_id: str) -> None:
     session row, so the ORM onupdate never fires."""
     await save_db.execute(
         sql_update(ChatSession)
-        .where(ChatSession.id == uuid.UUID(session_id))
+        .where(ChatSession.id == _session_uuid(session_id))
         .values(updated_at=datetime.utcnow())
     )
 
@@ -113,7 +122,7 @@ async def chat(
     if request.session_id:
         result = await db.execute(
             select(ChatSession).where(
-                ChatSession.id == uuid.UUID(request.session_id),
+                ChatSession.id == _session_uuid(request.session_id),
                 ChatSession.user_id == user_id,
             )
         )
@@ -195,7 +204,7 @@ async def chat_stream(
     if request.session_id:
         result = await db.execute(
             select(ChatSession).where(
-                ChatSession.id == uuid.UUID(request.session_id),
+                ChatSession.id == _session_uuid(request.session_id),
                 ChatSession.user_id == user_id,
             )
         )
@@ -261,7 +270,10 @@ async def chat_stream(
             except Exception as exc:
                 logger.error("Cached message save error: %s", exc)
 
-            yield f"data: {_json.dumps({'token': cached.answer})}\n\n"
+            # from_cache on the token lets the frontend switch to its
+            # typewriter reveal — a whole answer in one chunk would otherwise
+            # pop in instantly instead of reading like the assistant typing.
+            yield f"data: {_json.dumps({'token': cached.answer, 'from_cache': True})}\n\n"
             yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': cached.answer, 'pdf_sources': cached.sources.get('pdfs', []), 'video_sources': cached.sources.get('videos', []), 'follow_ups': cached.follow_ups, 'from_cache': True})}\n\n"
 
         return StreamingResponse(
@@ -417,16 +429,20 @@ async def get_suggestions(
         ]
 
         suggestions = _FALLBACK_SUGGESTIONS
+        # Fallback gets a short TTL so a transient failure (e.g. a Vertex 429)
+        # doesn't pin the generic set for the full 30 minutes.
+        ttl = 60
         if samples:
             try:
                 generated = await asyncio.to_thread(generate_suggestion_questions, samples, 6)
                 if generated:
                     suggestions = generated
+                    ttl = _SUGGESTION_TTL
             except Exception as exc:
                 logger.error("Suggestion generation failed, using fallback: %s", exc)
 
         _suggestion_cache["value"] = suggestions
-        _suggestion_cache["expiry"] = time.monotonic() + _SUGGESTION_TTL
+        _suggestion_cache["expiry"] = time.monotonic() + ttl
         return suggestions
 
 
@@ -462,7 +478,7 @@ async def rename_session(
 ):
     result = await db.execute(
         select(ChatSession).where(
-            ChatSession.id == uuid.UUID(session_id),
+            ChatSession.id == _session_uuid(session_id),
             ChatSession.user_id == user["uid"],
         )
     )
@@ -482,7 +498,7 @@ async def delete_session(
 ):
     result = await db.execute(
         select(ChatSession).where(
-            ChatSession.id == uuid.UUID(session_id),
+            ChatSession.id == _session_uuid(session_id),
             ChatSession.user_id == user["uid"],
         )
     )
@@ -509,7 +525,7 @@ async def get_session_messages(
         select(ChatMessage)
         .join(ChatSession)
         .where(
-            ChatSession.id == uuid.UUID(session_id),
+            ChatSession.id == _session_uuid(session_id),
             ChatSession.user_id == user["uid"],
         )
         .order_by(ChatMessage.created_at)

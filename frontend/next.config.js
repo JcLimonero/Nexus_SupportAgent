@@ -26,7 +26,9 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' blob: data:",
-              "media-src 'self' blob:",
+              // The API serves signed media-stream URLs cross-origin in dev;
+              // storage.googleapis.com covers GCS V4 signed URLs in cloud prod.
+              `media-src 'self' blob: ${apiUrl} https://storage.googleapis.com`,
               `connect-src 'self' ${apiUrl} https://*.googleapis.com`,
               "object-src 'none'",
               "frame-ancestors 'none'",

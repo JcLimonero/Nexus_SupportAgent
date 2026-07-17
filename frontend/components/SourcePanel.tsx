@@ -34,7 +34,9 @@ export function SourcePanel({
     const el = mediaRef.current;
     const t = source?.start_time;
     if (el && t != null && t > 0) {
-      try { el.currentTime = t; } catch { /* seek unavailable */ }
+      // Start a few seconds before the cited moment so the viewer gets the
+      // lead-in sentence instead of landing mid-word.
+      try { el.currentTime = Math.max(0, t - 3); } catch { /* seek unavailable */ }
     }
   };
 
@@ -44,7 +46,13 @@ export function SourcePanel({
     setError("");
     getExcerpt(source.chunk_id)
       .then(setData)
-      .catch(() => setError("No se pudo cargar el fragmento."))
+      .catch((e: unknown) =>
+        setError(
+          e instanceof Error && e.message === "excerpt_not_found"
+            ? "El fragmento citado ya no está disponible: el documento fue re-indexado después de esta respuesta. Vuelve a hacer la pregunta para obtener referencias actualizadas."
+            : "No se pudo cargar el fragmento.",
+        ),
+      )
       .finally(() => setLoading(false));
   }, [source?.chunk_id]);
 
