@@ -270,7 +270,10 @@ async def chat_stream(
             except Exception as exc:
                 logger.error("Cached message save error: %s", exc)
 
-            yield f"data: {_json.dumps({'token': cached.answer})}\n\n"
+            # from_cache on the token lets the frontend switch to its
+            # typewriter reveal — a whole answer in one chunk would otherwise
+            # pop in instantly instead of reading like the assistant typing.
+            yield f"data: {_json.dumps({'token': cached.answer, 'from_cache': True})}\n\n"
             yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': cached.answer, 'pdf_sources': cached.sources.get('pdfs', []), 'video_sources': cached.sources.get('videos', []), 'follow_ups': cached.follow_ups, 'from_cache': True})}\n\n"
 
         return StreamingResponse(

@@ -10,7 +10,7 @@ async function headers(json = true): Promise<Record<string, string>> {
 }
 
 export type StreamEvent =
-  | { token: string }
+  | { token: string; from_cache?: boolean }
   | { done: true; session_id: string; message_id: string; answer: string; pdf_sources: unknown[]; video_sources: unknown[]; follow_ups: string[] }
   | { error: string };
 

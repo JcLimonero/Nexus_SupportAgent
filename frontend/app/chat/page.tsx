@@ -153,7 +153,7 @@ export default function ChatPage() {
     opts?: { typewriter?: boolean; delayMs?: number },
   ) => {
     if (!text || sending) return;
-    const typewriter = opts?.typewriter ?? false;
+    let typewriter = opts?.typewriter ?? false;
     const controller = new AbortController();
     abortRef.current = controller;
     setSending(true);
@@ -229,6 +229,10 @@ export default function ChatPage() {
       for await (const event of sendMessageStream(text, currentSessionId, controller.signal)) {
         if ("token" in event) {
           setIsStreaming(true);
+          // Cached answers arrive whole in one chunk — switch to the
+          // typewriter reveal so they still read like the assistant typing
+          // instead of popping in instantly.
+          if (event.from_cache) typewriter = true;
           if (typewriter) {
             fullText += event.token;
             if (!revealPromise) startReveal();
