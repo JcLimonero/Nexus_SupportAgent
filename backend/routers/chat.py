@@ -36,6 +36,15 @@ def _is_no_info(answer: str) -> bool:
     return answer.strip().startswith(_NO_INFO_PREFIX)
 
 
+def _session_uuid(value: str) -> uuid.UUID:
+    """Parse a session id from the request path/body — 422 instead of a 500
+    when the value isn't a UUID."""
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ID de sesión inválido")
+
+
 def _session_identity(user: dict) -> tuple[bool, str]:
     """(is_anonymous, user_label) for a new session, from the token claims."""
     is_anon = bool(user.get("is_anon"))
@@ -62,7 +71,7 @@ async def _touch_session(save_db: AsyncSession, session_id: str) -> None:
     session row, so the ORM onupdate never fires."""
     await save_db.execute(
         sql_update(ChatSession)
-        .where(ChatSession.id == uuid.UUID(session_id))
+        .where(ChatSession.id == _session_uuid(session_id))
         .values(updated_at=datetime.utcnow())
     )
 
@@ -113,7 +122,7 @@ async def chat(
     if request.session_id:
         result = await db.execute(
             select(ChatSession).where(
-                ChatSession.id == uuid.UUID(request.session_id),
+                ChatSession.id == _session_uuid(request.session_id),
                 ChatSession.user_id == user_id,
             )
         )
@@ -195,7 +204,7 @@ async def chat_stream(
     if request.session_id:
         result = await db.execute(
             select(ChatSession).where(
-                ChatSession.id == uuid.UUID(request.session_id),
+                ChatSession.id == _session_uuid(request.session_id),
                 ChatSession.user_id == user_id,
             )
         )
@@ -462,7 +471,7 @@ async def rename_session(
 ):
     result = await db.execute(
         select(ChatSession).where(
-            ChatSession.id == uuid.UUID(session_id),
+            ChatSession.id == _session_uuid(session_id),
             ChatSession.user_id == user["uid"],
         )
     )
@@ -482,7 +491,7 @@ async def delete_session(
 ):
     result = await db.execute(
         select(ChatSession).where(
-            ChatSession.id == uuid.UUID(session_id),
+            ChatSession.id == _session_uuid(session_id),
             ChatSession.user_id == user["uid"],
         )
     )
@@ -509,7 +518,7 @@ async def get_session_messages(
         select(ChatMessage)
         .join(ChatSession)
         .where(
-            ChatSession.id == uuid.UUID(session_id),
+            ChatSession.id == _session_uuid(session_id),
             ChatSession.user_id == user["uid"],
         )
         .order_by(ChatMessage.created_at)
