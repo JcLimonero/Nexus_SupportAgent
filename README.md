@@ -20,24 +20,33 @@ RAG-based support chatbot for TotalDealer ERP. Users ask questions in Spanish an
 
 ## Architecture
 
+Production runs on-premises (Windows Server + IIS + Docker Compose). The only
+cloud dependency is Vertex AI for the LLM:
+
 ```
-┌─────────────────┐     ┌──────────────────────┐     ┌────────────────────┐
-│  Next.js 14     │────▶│  FastAPI backend      │────▶│  Cloud SQL         │
-│  (Cloud Run)    │     │  (Cloud Run)          │     │  PostgreSQL 16     │
-└─────────────────┘     └──────────────────────┘     │  + pgvector 0.8.2  │
-                                │                     └────────────────────┘
-                    ┌───────────┼───────────┐
-                    ▼           ▼           ▼
-              ┌──────────┐ ┌────────┐ ┌──────────────┐
-              │  Vertex  │ │  GCS   │ │  Gemini 3.5  │
-              │  AI      │ │  Docs  │ │  Flash       │
-              │  Embed.  │ │  Store │ │  (Vertex AI) │
-              └──────────┘ └────────┘ └──────────────┘
+                    ┌──────────────────────────────────────────────┐
+  Browser ──HTTPS──▶│ IIS (ARR, TLS)  →  nginx on 127.0.0.1        │
+                    │        ├──▶ frontend  Next.js 14 standalone  │
+                    │        └──▶ backend   FastAPI + uvicorn      │
+                    │                   │                          │
+                    │                   ├──▶ PostgreSQL 16         │
+                    │                   │    + pgvector 0.8.2      │
+                    │                   ├──▶ /data volume (docs)   │
+                    │                   └──▶ MiniLM embeddings     │
+                    └───────────────────┼──────────────────────────┘
+                                        ▼
+                              ┌──────────────────────┐
+                              │  Gemini 3.5 Flash    │
+                              │  (Vertex AI, cloud)  │
+                              └──────────────────────┘
 ```
 
-**Ingestion pipeline:** PDFs → PyMuPDF → chunks → Vertex AI embeddings → pgvector  
-**Video pipeline:** MP4 → ffmpeg → faster-whisper (transcription) → chunks → embeddings  
-**Query pipeline:** question → semantic cache check → embed → cosine search → Gemini 3.5 Flash → answer + sources
+Set `STORAGE_PROVIDER=gcs` / `EMBEDDING_PROVIDER=vertexai` to swap the storage
+and embedding boxes for GCS and Vertex AI embeddings instead.
+
+**Ingestion pipeline:** PDF/DOCX/PPTX/TXT/MD/CSV → text extraction → chunks → embeddings → pgvector  
+**Media pipeline:** MP4/MP3/M4A/WAV/OGG → ffmpeg → faster-whisper (transcription) → timed chunks → embeddings  
+**Query pipeline:** question → embed → semantic cache check → cosine search (HNSW) → Gemini 3.5 Flash → answer + sources
 
 ## Local development
 
@@ -64,12 +73,15 @@ Login with `admin@nexus.local` / `ChangeMe123!` in local mode.
 
 ### Provider switches (docker-compose.yml)
 
-| Variable               | Local (default) | Production  |
-|------------------------|-----------------|-------------|
-| `AUTH_PROVIDER`        | `local`         | `local`     |
-| `STORAGE_PROVIDER`     | `local`         | `gcs`       |
-| `EMBEDDING_PROVIDER`   | `local`         | `vertexai`  |
-| `EMBEDDING_DIMENSIONS` | `384`           | `768`       |
+| Variable               | Local (default) | Prod (on-prem, live) | Prod (GCP, legacy) |
+|------------------------|-----------------|----------------------|--------------------|
+| `AUTH_PROVIDER`        | `local`         | `local`              | `local`            |
+| `STORAGE_PROVIDER`     | `local`         | `local`              | `gcs`              |
+| `EMBEDDING_PROVIDER`   | `local`         | `local`              | `vertexai`         |
+| `EMBEDDING_DIMENSIONS` | `384`           | `384`                | `768`              |
+
+`EMBEDDING_DIMENSIONS` is baked into the `document_chunks.embedding` column —
+changing it requires re-indexing every document.
 
 ## Running tests
 
@@ -123,11 +135,12 @@ Tier 1 covers auth, users/documents/sessions/feedback/sharing CRUD with ownershi
 backend/
   auth/           JWT auth — local username/password + HS256 tokens
   db/             SQLAlchemy models + async engine + init_db
-  ingestion/      PDF (PyMuPDF) + video (faster-whisper) processors
+  ingestion/      PDF (PyMuPDF) + docs (docx/pptx/txt/md/csv) + media (faster-whisper)
   llm/            Gemini 3.5 Flash client (Vertex AI)
   retrieval/      pgvector cosine search + context builder + semantic cache
-  routers/        chat (SSE), admin (docs + stats + cache), users, sessions, feedback
-  tests/          63 pytest regression tests (auth, admin, chat, cache, feedback)
+  routers/        chat (SSE), admin (docs + stats + cache), users, media (signed streaming)
+  tests/          117 pytest regression tests (auth, admin, chat, cache, feedback, media)
+  tests_e2e/      52 API E2E tests against the live stack
 frontend/
   app/            Next.js pages: login, chat, admin (dashboard + upload), admin/users
   components/     MessageBubble · SourcePanel · ThemeToggle · Toast
@@ -137,63 +150,53 @@ frontend/
   workflows/      CI/CD: backend tests → pip-audit → frontend tests → Docker build → deploy
 ```
 
-## Production deployment (Cloud Run)
+## Production deployment (on-premises — Windows Server + IIS)
 
-Infrastructure is provisioned in GCP project `nexus-support-agent`:
+This is the live deployment. Full server-specific runbook: [`DEPLOY_CONTEXT.txt`](DEPLOY_CONTEXT.txt).
 
-| Resource              | Name / ID                                |
-|-----------------------|------------------------------------------|
-| Cloud Run (backend)   | `nexus-backend` — us-central1            |
-| Cloud Run (frontend)  | `nexus-frontend` — us-central1           |
-| Cloud SQL             | `nexus-db` — PostgreSQL 16 + pgvector    |
-| GCS bucket            | `nexus-agent-docs-988042937611`          |
-| Artifact Registry     | `nexus-repo` — us-central1               |
-| Service account       | `nexus-cloudrun@...`                     |
+| Piece            | Value                                                        |
+|------------------|--------------------------------------------------------------|
+| Server           | `74.208.78.55` — **shared** with other projects (e.g. VGD)    |
+| Public URL       | `https://app-nexusqtech.com`                                  |
+| Stack            | `docker-compose.prod.yml` — db · backend · frontend · nginx   |
+| Exposed port     | nginx on `127.0.0.1:${NGINX_HOST_PORT}` only — never public   |
+| TLS / edge       | IIS + ARR proxies to that localhost port                      |
+| Storage          | local `/data` volume (Docker named volume), not GCS           |
+| Embeddings       | local MiniLM, 384 dims — no Vertex embedding cost             |
+| LLM              | Gemini 3.5 Flash via Vertex AI (the only cloud dependency)     |
 
-### Manual deploy
-
-```bash
-docker build -t us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/backend:latest ./backend
-docker push us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/backend:latest
-
-gcloud run deploy nexus-backend \
-  --image=us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/backend:latest \
-  --region=us-central1 --project=nexus-support-agent \
-  --service-account=nexus-cloudrun@nexus-support-agent.iam.gserviceaccount.com \
-  --add-cloudsql-instances=nexus-support-agent:us-central1:nexus-db \
-  --set-secrets="DATABASE_URL=nexus-database-url:latest,LOCAL_JWT_SECRET=nexus-jwt-secret:latest" \
-  --set-env-vars="AUTH_PROVIDER=local,STORAGE_PROVIDER=gcs,EMBEDDING_PROVIDER=vertexai,EMBEDDING_DIMENSIONS=768,GCS_BUCKET_NAME=nexus-agent-docs-988042937611,VERTEX_AI_PROJECT=nexus-support-agent,VERTEX_AI_LOCATION=us-central1"
-```
-
-**Frontend** — `NEXT_PUBLIC_API_URL` is inlined into the browser bundle at **build time**, so it must be passed as a `--build-arg` (a Cloud Run runtime env var does *not* reach the client). First get the deployed backend URL, then build with it:
+> **Isolation rule:** the server is shared. Do not touch ports 80/443/8080, other
+> IIS sites or app pools, and never run `iisreset` — recycle only Nexus's own
+> application pool. See `DEPLOY_CONTEXT.txt` before any server work.
 
 ```bash
-BACKEND_URL=$(gcloud run services describe nexus-backend \
-  --region=us-central1 --project=nexus-support-agent --format='value(status.url)')
-
-docker build --build-arg NEXT_PUBLIC_API_URL="$BACKEND_URL" \
-  -t us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/frontend:latest ./frontend
-docker push us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/frontend:latest
-
-gcloud run deploy nexus-frontend \
-  --image=us-central1-docker.pkg.dev/nexus-support-agent/nexus-repo/frontend:latest \
-  --region=us-central1 --project=nexus-support-agent --allow-unauthenticated
+# on the server, from the repo root
+cp .env.prod.example .env    # fill in DB_PASSWORD, JWT_SECRET, ADMIN_*, NGINX_HOST_PORT
+docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+`NEXT_PUBLIC_API_URL` is inlined into the browser bundle at **build time**, so
+the public origin must be set before building the frontend image — a runtime env
+var does *not* reach the client.
+
+Cost model for this deployment: [`COSTOS.md`](COSTOS.md).
 
 ### CI/CD (GitHub Actions)
 
-Deploys are manual-trigger only (`workflow_dispatch`). Every push/PR runs: backend tests → pip-audit → frontend tests → Docker build check.
+Every push/PR runs: backend tests → pip-audit → frontend tests → Docker build check.
 
-**Required GitHub secrets:**
-
-| Secret                | Value                                                                                        |
-|-----------------------|----------------------------------------------------------------------------------------------|
-| `WIF_PROVIDER`        | `projects/988042937611/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
-| `GCP_SERVICE_ACCOUNT` | `nexus-cloudrun@nexus-support-agent.iam.gserviceaccount.com`                                 |
+The workflow also carries a **legacy Cloud Run deploy job** (`workflow_dispatch`
+with `deploy=true`) from the original GCP deployment. It is not the production
+path anymore and stays only as a fallback; it needs the `WIF_PROVIDER` and
+`GCP_SERVICE_ACCOUNT` secrets. Production deploys are done on the server with
+`docker compose -f docker-compose.prod.yml` as shown above.
 
 ## Adding documents
 
 1. Open the app → **Admin** panel
-2. Drag-and-drop a PDF or MP4 (max 100 MB)
-3. Indexing runs in the background (PDFs: ~5s/page, videos: ~1 min/10 min of audio)
+2. Drag-and-drop a PDF, DOCX, PPTX, TXT, MD, CSV, MP4, MP3, M4A, WAV or OGG (max 100 MB)
+3. Indexing runs in the background, one file at a time (PDFs: ~5 s/page, media: ~1 min per 10 min of audio)
 4. Ask questions in the chat — answers cite the source pages/videos
+
+Uploading or deleting a document flushes the semantic cache and the suggested
+questions, since new content can change what the correct answer is.

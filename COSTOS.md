@@ -5,8 +5,13 @@
 > El tipo de cambio real al día del análisis es ~\$17.80 (El Universal / Banxico),
 > por lo que los costos reales serían ~4% menores a lo aquí presupuestado.
 >
-> **Base de precios:** endpoint **regional us-central1** de Vertex AI, que es el que
-> este proyecto usa en su configuración real (10% más caro que el endpoint global).
+> **Base de precios:** endpoint **regional us-central1** de Vertex AI (10% más caro
+> que el endpoint global).
+>
+> ⚠️ **Corrección:** el código llama en realidad al endpoint **global**
+> (`llm/gemini_client.py` → `.../locations/global/...`), que es ~10% más barato.
+> Los montos de IA de este documento quedan por lo tanto **~10% por encima** del
+> costo real; se conservan como presupuesto conservador.
 >
 > **IVA:** los totales marcados "con IVA" incluyen el **16%** que Google, Amazon,
 > Microsoft y demás proveedores facturan en México. Para una empresa este IVA es
