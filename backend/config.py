@@ -76,9 +76,10 @@ class Settings(BaseSettings):
     # cited start_time lands within a minute of the answer.
     media_chunk_size: int = 150
     media_chunk_overlap: int = 25
-    # Max cosine distance for a chunk to count as relevant. 0.8 is permissive —
-    # it only drops clearly off-topic chunks. Tune down once measured on real
-    # queries (local MiniLM and Vertex embeddings have different distance ranges).
+    # ponytail: 0.8 is an untuned guess, not a measured threshold. It only drops
+    # clearly off-topic chunks, so borderline-irrelevant context still reaches
+    # the LLM. Tune against real user queries — and note local MiniLM and Vertex
+    # embeddings have different distance ranges, so the value is per-provider.
     retrieval_max_distance: float = 0.8
 
     # ── Rate limiting ────────────────────────────────────────────────────────

@@ -15,8 +15,10 @@ settings = get_settings()
 
 
 # ── In-memory rate limiter ────────────────────────────────────────────────────
-# NOTE: this resets on container restart; use Redis-backed storage for
-# multi-instance production deployments.
+# ponytail: per-process counters — they reset on container restart and each
+# replica limits independently, so N replicas allow N× the configured rate.
+# Fine for the single-container on-prem deployment; move to Redis-backed
+# storage if the backend is ever scaled out.
 # Pure ASGI (not BaseHTTPMiddleware) so streaming responses pass through
 # without buffering and CORS headers are still added by the outer middleware.
 
