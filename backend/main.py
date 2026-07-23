@@ -28,6 +28,7 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/shared":       (120, 60),  # public share view (unguessable token; light guard)
     "/api/chat":         (60, 60),
+    "/api/escalations/attachments": (20, 60),  # file uploads for a handoff request
     "/api/escalations":  (5, 60),    # 5 human-handoff requests / 60 s per IP (spam guard)
     "/api/admin/upload": (60, 60),   # 60 uploads / 60 s per IP (admin-only; bulk KB seeding)
     "/api/media/stream": (240, 60),  # HMAC-signed streaming; seeking issues many Range requests
@@ -114,6 +115,10 @@ async def _migrate():
         await db.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_chat_sessions_share_token "
             "ON chat_sessions (share_token)"
+        ))
+        await db.execute(text(
+            "ALTER TABLE escalation_requests ADD COLUMN IF NOT EXISTS "
+            "attachments JSONB NOT NULL DEFAULT '[]'::jsonb"
         ))
         await db.commit()
 

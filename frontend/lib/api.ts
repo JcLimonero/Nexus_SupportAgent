@@ -247,6 +247,13 @@ export const NO_INFO_PREFIX = "No tengo información sobre ese tema";
 
 export type EscalationStatus = "new" | "in_progress" | "resolved";
 
+export interface EscalationAttachment {
+  file_name: string;
+  url: string;
+  content_type: string | null;
+  size: number | null;
+}
+
 export interface Escalation {
   id: string;
   session_id: string | null;
@@ -254,8 +261,27 @@ export interface Escalation {
   contact: string;
   name: string | null;
   reason: string | null;
+  attachments: EscalationAttachment[];
   status: EscalationStatus;
   created_at: string;
+}
+
+// Accepted attachment types (kept in sync with backend _ATTACH_ALLOWED_EXT).
+export const ATTACHMENT_ACCEPT =
+  ".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.pdf,.docx,.xlsx,.txt,.csv";
+export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+export const ATTACHMENT_MAX_COUNT = 10;
+
+export async function uploadEscalationAttachment(file: File): Promise<EscalationAttachment> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${API_URL}/api/escalations/attachments`, {
+    method: "POST",
+    headers: await headers(false), // let the browser set multipart boundary
+    body,
+  });
+  if (!res.ok) throw new Error("Error al subir el archivo");
+  return res.json();
 }
 
 export async function createEscalation(body: {
@@ -263,6 +289,7 @@ export async function createEscalation(body: {
   name?: string;
   reason?: string;
   sessionId?: string | null;
+  attachments?: EscalationAttachment[];
 }) {
   const res = await fetch(`${API_URL}/api/escalations`, {
     method: "POST",
@@ -272,6 +299,7 @@ export async function createEscalation(body: {
       name: body.name || undefined,
       reason: body.reason || undefined,
       session_id: body.sessionId || undefined,
+      attachments: body.attachments && body.attachments.length ? body.attachments : undefined,
     }),
   });
   if (!res.ok) throw new Error("Error al enviar la solicitud");

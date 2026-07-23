@@ -40,6 +40,15 @@ _SERVE_MIME = {
     ".txt":  "text/plain; charset=utf-8",
     ".md":   "text/markdown; charset=utf-8",
     ".csv":  "text/csv; charset=utf-8",
+    # Escalation attachments — inline preview instead of forced download.
+    ".png":  "image/png",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif":  "image/gif",
+    ".webp": "image/webp",
+    ".mov":  "video/quicktime",
+    ".webm": "video/webm",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 

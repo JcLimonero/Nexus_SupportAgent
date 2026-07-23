@@ -346,16 +346,44 @@ def test_escalation_requires_auth_and_validates(api):
     ).status_code == 422
 
 
+def test_escalation_attachment_upload(api):
+    # Guest can upload an image; a disallowed type is rejected.
+    ok = api.post(
+        "/api/escalations/attachments", headers=bearer(S["guest_token"]),
+        files={"file": ("captura.png", PNG_BYTES, "image/png")},
+    )
+    assert ok.status_code == 201, ok.text
+    meta = ok.json()
+    assert meta["url"].startswith("/data/escalations/") and meta["content_type"] == "image/png"
+    S["attachment"] = meta
+
+    bad = api.post(
+        "/api/escalations/attachments", headers=bearer(S["guest_token"]),
+        files={"file": ("malware.exe", b"MZ....", "application/octet-stream")},
+    )
+    assert bad.status_code == 400
+
+
 def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     created = api.post(
         "/api/escalations", headers=bearer(user_a["token"]),
-        json={"contact": "ana@example.com", "name": "Ana", "reason": "Necesito ayuda con facturación", "session_id": S["session1"]},
+        json={
+            "contact": "ana@example.com", "name": "Ana",
+            "reason": "Necesito ayuda con facturación", "session_id": S["session1"],
+            "attachments": [S["attachment"]],
+        },
     )
     assert created.status_code == 201
     eid = created.json()["id"]
     S["escalation_id"] = eid
 
-    # Admin sees it; non-admin is forbidden.
+    # A create referencing a URL outside /data/escalations/ is rejected.
+    assert api.post(
+        "/api/escalations", headers=bearer(user_a["token"]),
+        json={"contact": "x@x.com", "attachments": [{"file_name": "kb.pdf", "url": "/data/pdfs/kb.pdf"}]},
+    ).status_code == 422
+
+    # Admin sees it with the attachment; non-admin is forbidden.
     listing = api.get("/api/admin/escalations", headers=bearer(admin_token))
     assert listing.status_code == 200
     body = listing.json()
@@ -363,7 +391,13 @@ def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     row = next(r for r in body["items"] if r["id"] == eid)
     assert row["contact"] == "ana@example.com" and row["status"] == "new"
     assert row["session_id"] == S["session1"]
+    assert row["attachments"] and row["attachments"][0]["url"] == S["attachment"]["url"]
     assert api.get("/api/admin/escalations", headers=bearer(user_a["token"])).status_code == 403
+
+    # The attachment is viewable via a signed stream URL.
+    signed = api.post("/api/media/sign", headers=bearer(admin_token), json={"gcs_url": S["attachment"]["url"]})
+    assert signed.status_code == 200
+    assert api.get(signed.json()["url"]).status_code == 200
 
     # Resolve it, then confirm it shows under the resolved filter.
     assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(admin_token), json={"status": "resolved"}).status_code == 200

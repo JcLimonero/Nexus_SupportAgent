@@ -1,11 +1,14 @@
 import asyncio
 import logging
 import smtplib
+import tempfile
 import uuid
 from datetime import datetime
 from email.message import EmailMessage
+from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import filetype
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from db.models import EscalationRequest
 from auth.firebase_verify import get_current_user
-from routers.admin import require_admin
+from routers.admin import require_admin, save_file, _safe_filename, _looks_like_text
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,21 @@ settings = get_settings()
 router = APIRouter(prefix="/api", tags=["escalations"])
 
 _STATUSES = ("new", "in_progress", "resolved")
+
+# ── Attachment limits (user/guest uploads — tighter than the admin KB upload) ──
+_ATTACH_MAX_BYTES = 25 * 1024 * 1024   # 25 MB per file
+_ATTACH_MAX_COUNT = 10
+_ATTACH_URL_PREFIX = "/data/escalations/"
+# Broader than the KB allowlist: images (to recreate the problem), video, docs.
+_ATTACH_TEXT_EXT = {".txt", ".csv"}
+_ATTACH_BINARY_EXT = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",   # images
+    ".mp4", ".webm", ".mov",                     # video
+    ".pdf", ".docx", ".xlsx",                    # docs
+}
+_ATTACH_ALLOWED_EXT = _ATTACH_TEXT_EXT | _ATTACH_BINARY_EXT
+# filetype's detected extension must land in this set (spoof guard). jpg==jpeg.
+_ATTACH_DETECTED = {"png", "jpg", "gif", "webp", "mp4", "mov", "webm", "pdf", "docx", "xlsx"}
 
 
 # ── Email notification (best-effort) ──────────────────────────────────────────
@@ -54,6 +72,9 @@ async def _notify(record: EscalationRequest) -> None:
         f"Contacto: {record.contact}",
         f"Motivo: {record.reason or '(sin especificar)'}",
     ]
+    if record.attachments:
+        names = ", ".join(a.get("file_name", "?") for a in record.attachments)
+        lines.append(f"Adjuntos ({len(record.attachments)}): {names}")
     if record.session_id and settings.public_origin:
         lines.append(
             f"Conversación: {settings.public_origin}/admin/conversations?id={record.session_id}"
@@ -65,11 +86,19 @@ async def _notify(record: EscalationRequest) -> None:
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+class Attachment(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    url: str = Field(min_length=1, max_length=500)
+    content_type: str | None = Field(default=None, max_length=120)
+    size: int | None = None
+
+
 class EscalationRequestBody(BaseModel):
     contact: str = Field(min_length=3, max_length=120)
     name: str | None = Field(default=None, max_length=80)
     reason: str | None = Field(default=None, max_length=1000)
     session_id: str | None = None
+    attachments: list[Attachment] = Field(default_factory=list, max_length=_ATTACH_MAX_COUNT)
 
 
 class StatusUpdate(BaseModel):
@@ -77,6 +106,69 @@ class StatusUpdate(BaseModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@router.post("/escalations/attachments", status_code=201)
+async def upload_attachment(
+    file: UploadFile = File(...),
+    _: dict = Depends(get_current_user),
+):
+    """Upload ONE file to attach to a human-escalation request. Available to any
+    authenticated user (incl. guests). The frontend calls this once per file, then
+    sends the returned metadata in the create-escalation body."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _ATTACH_ALLOWED_EXT:
+        raise HTTPException(
+            status_code=400,
+            detail="Tipo de archivo no permitido (imágenes, video, PDF, Word, Excel, TXT o CSV)",
+        )
+
+    # Stream to a temp file; keep the first 64 KB in memory for validation.
+    head = b""
+    total = 0
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp_path = tmp.name
+        while chunk := await file.read(1024 * 1024):
+            total += len(chunk)
+            if total > _ATTACH_MAX_BYTES:
+                break
+            if len(head) < 65536:
+                head += chunk[: 65536 - len(head)]
+            tmp.write(chunk)
+
+    def _reject(status: int, detail: str):
+        Path(tmp_path).unlink(missing_ok=True)
+        raise HTTPException(status_code=status, detail=detail)
+
+    if total > _ATTACH_MAX_BYTES:
+        _reject(413, "El archivo supera el límite de 25 MB")
+
+    # Content validation — extension-spoofing prevention.
+    content_type = "application/octet-stream"
+    if ext in _ATTACH_TEXT_EXT:
+        if not _looks_like_text(head):
+            _reject(400, "Tipo de contenido no permitido")
+        content_type = "text/csv" if ext == ".csv" else "text/plain"
+    else:
+        kind = filetype.guess(head[:8192])
+        detected = kind.extension if kind else None
+        if detected not in _ATTACH_DETECTED:
+            _reject(400, "Tipo de contenido no permitido")
+        content_type = kind.mime
+
+    try:
+        url = await asyncio.to_thread(save_file, tmp_path, file.filename, "escalation")
+    except Exception as exc:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Error al guardar el archivo: {exc}")
+    Path(tmp_path).unlink(missing_ok=True)
+
+    return {
+        "file_name": _safe_filename(file.filename or "archivo"),
+        "url": url,
+        "content_type": content_type,
+        "size": total,
+    }
+
 
 @router.post("/escalations", status_code=201)
 async def create_escalation(
@@ -93,6 +185,12 @@ async def create_escalation(
         except ValueError:
             raise HTTPException(status_code=422, detail="ID de sesión inválido")
 
+    # Only accept URLs our own upload endpoint produced — never an arbitrary
+    # /data path (which could point at an indexed KB document).
+    for a in body.attachments:
+        if not a.url.startswith(_ATTACH_URL_PREFIX):
+            raise HTTPException(status_code=422, detail="Adjunto inválido")
+
     record = EscalationRequest(
         session_id=session_uuid,
         user_id=user["uid"],
@@ -100,6 +198,7 @@ async def create_escalation(
         contact=body.contact.strip(),
         name=body.name.strip() if body.name else None,
         reason=body.reason.strip() if body.reason else None,
+        attachments=[a.model_dump() for a in body.attachments],
     )
     db.add(record)
     await db.commit()
@@ -135,6 +234,7 @@ async def list_escalations(
                 "contact": r.contact,
                 "name": r.name,
                 "reason": r.reason,
+                "attachments": r.attachments or [],
                 "status": r.status,
                 "created_at": r.created_at.isoformat(),
             }

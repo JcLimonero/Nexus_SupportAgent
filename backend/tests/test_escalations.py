@@ -67,6 +67,83 @@ async def test_create_rejects_invalid_session_uuid(client):
     assert response.status_code == 422
 
 
+@pytest.mark.anyio
+async def test_create_accepts_attachments(client):
+    response = await client.post(
+        "/api/escalations",
+        json={
+            "contact": "555-1234",
+            "attachments": [{"file_name": "captura.png", "url": "/data/escalations/abc_captura.png", "content_type": "image/png", "size": 1234}],
+        },
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.anyio
+async def test_create_rejects_foreign_attachment_url(client):
+    # A URL outside /data/escalations/ (e.g. pointing at an indexed KB doc) → 422.
+    response = await client.post(
+        "/api/escalations",
+        json={
+            "contact": "555-1234",
+            "attachments": [{"file_name": "secreto.pdf", "url": "/data/pdfs/secreto.pdf"}],
+        },
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 422
+
+
+# ── Attachment upload ─────────────────────────────────────────────────────────
+
+_PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+@pytest.mark.anyio
+async def test_attachment_upload_requires_auth(client):
+    response = await client.post(
+        "/api/escalations/attachments",
+        files={"file": ("x.png", _PNG_BYTES, "image/png")},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_attachment_upload_rejects_bad_extension(client):
+    response = await client.post(
+        "/api/escalations/attachments",
+        files={"file": ("malware.exe", b"MZ....", "application/octet-stream")},
+        headers={"Authorization": f"Bearer {_guest_jwt()}"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_attachment_upload_rejects_spoofed_image(client):
+    # .png extension but the bytes are plain text → magic-byte check fails.
+    response = await client.post(
+        "/api/escalations/attachments",
+        files={"file": ("fake.png", b"just plain text, not a png", "image/png")},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_guest_can_upload_image(client):
+    from routers import escalations
+    with patch.object(escalations, "save_file", return_value="/data/escalations/xyz_x.png"):
+        response = await client.post(
+            "/api/escalations/attachments",
+            files={"file": ("x.png", _PNG_BYTES, "image/png")},
+            headers={"Authorization": f"Bearer {_guest_jwt()}"},
+        )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["url"] == "/data/escalations/xyz_x.png"
+    assert body["content_type"] == "image/png"
+
+
 # ── Email helper (best-effort) ────────────────────────────────────────────────
 
 def test_send_email_skipped_when_unconfigured():
@@ -138,6 +215,7 @@ async def test_list_returns_items(client):
     stub.contact = "555-1234"
     stub.name = "Ana"
     stub.reason = "necesito ayuda"
+    stub.attachments = [{"file_name": "captura.png", "url": "/data/escalations/a_captura.png", "content_type": "image/png", "size": 10}]
     stub.status = "new"
     stub.created_at = datetime(2026, 1, 1, 12, 0, 0)
 
@@ -160,6 +238,7 @@ async def test_list_returns_items(client):
     assert data["new_count"] == 1
     assert data["items"][0]["contact"] == "555-1234"
     assert data["items"][0]["status"] == "new"
+    assert data["items"][0]["attachments"][0]["file_name"] == "captura.png"
 
 
 @pytest.mark.anyio

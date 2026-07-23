@@ -111,6 +111,8 @@ class EscalationRequest(Base):
     contact: Mapped[str] = mapped_column(Text, nullable=False)   # phone/email the user gave
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # User-uploaded files that recreate the problem: [{file_name, url, content_type, size}].
+    attachments: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="new")  # new | in_progress | resolved
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
-import { getEscalations, updateEscalation, type Escalation, type EscalationStatus } from "@/lib/api";
+import { getEscalations, updateEscalation, getSignedMediaUrl, type Escalation, type EscalationStatus, type EscalationAttachment } from "@/lib/api";
 
 type Filter = "new" | "in_progress" | "resolved" | "all";
 
@@ -31,6 +31,57 @@ function fmt(iso: string) {
   return new Date(iso).toLocaleDateString("es-MX", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
+}
+
+// Resolves the HMAC-signed stream URL for each attachment, then renders image
+// thumbnails inline and a download link for everything else.
+function Attachments({ items }: { items: EscalationAttachment[] }) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const resolved: Record<string, string> = {};
+      await Promise.all(items.map(async (a) => {
+        try { resolved[a.url] = await getSignedMediaUrl(a.url); } catch { /* skip */ }
+      }));
+      if (alive) setUrls(resolved);
+    })();
+    return () => { alive = false; };
+  }, [items]);
+
+  return (
+    <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
+      {items.map((a) => {
+        const src = urls[a.url];
+        const isImage = (a.content_type ?? "").startsWith("image/");
+        if (isImage && src) {
+          return (
+            <a key={a.url} href={src} target="_blank" rel="noopener noreferrer" title={a.file_name}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={a.file_name}
+                style={{ height: 72, width: 72, objectFit: "cover", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)" }} />
+            </a>
+          );
+        }
+        return (
+          <a key={a.url} href={src ?? "#"} target="_blank" rel="noopener noreferrer" title={a.file_name}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, fontSize: 11,
+              color: src ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)",
+              backgroundColor: "var(--bg-muted)", border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-sm)", padding: "6px 10px", maxWidth: 220,
+              pointerEvents: src ? "auto" : "none",
+            }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.file_name}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function EscalationsPage() {
@@ -167,6 +218,7 @@ export default function EscalationsPage() {
                       {e.reason}
                     </p>
                   )}
+                  {e.attachments && e.attachments.length > 0 && <Attachments items={e.attachments} />}
                   <p style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", marginTop: 4 }}>
                     {fmt(e.created_at)}
                     {e.session_id && (

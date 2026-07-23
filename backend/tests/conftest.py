@@ -67,6 +67,10 @@ async def client():
          patch("db.connection.init_db", new_callable=AsyncMock):
         from db.connection import get_db
         from main import app
+        # Rate limiting is exercised in the E2E suite; disable it here so its
+        # per-process window doesn't leak across unit tests (many share a path).
+        from config import get_settings
+        get_settings().rate_limit_enabled = False
         app.dependency_overrides[get_db] = make_db_override()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac
