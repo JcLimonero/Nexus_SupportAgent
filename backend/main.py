@@ -35,6 +35,24 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
 }
 
 
+def _client_ip(scope) -> str:
+    """Real client IP for rate limiting. Behind the reverse-proxy chain the
+    direct peer is the proxy, so its X-Forwarded-For carries the client; with
+    `trusted_proxy_hops` proxies prepending to it, the client sits `hops` from
+    the right (spoof-proof — a client-supplied XFF lands further left). hops=0
+    (local dev) uses the direct peer."""
+    hops = settings.trusted_proxy_hops
+    if hops > 0:
+        for k, v in scope.get("headers", []):
+            if k == b"x-forwarded-for":
+                parts = [p.strip().decode("latin-1") for p in v.split(b",") if p.strip()]
+                if parts:
+                    return parts[-hops] if len(parts) >= hops else parts[0]
+                break
+    client = scope.get("client")
+    return client[0] if client else "unknown"
+
+
 class _RateLimitMiddleware:
     def __init__(self, app):
         self.app = app
@@ -48,8 +66,7 @@ class _RateLimitMiddleware:
         path = scope.get("path", "")
         for prefix, (max_req, window) in _RATE_RULES.items():
             if path == prefix or path.startswith(prefix + "/"):
-                client = scope.get("client")
-                ip = client[0] if client else "unknown"
+                ip = _client_ip(scope)
                 key = f"{ip}:{prefix}"
                 now = time.monotonic()
                 self._windows[key] = [t for t in self._windows[key] if now - t < window]
@@ -142,10 +159,13 @@ async def lifespan(app: FastAPI):
     import asyncio
     from retrieval.vector_search import warm_up
 
+    from routers.escalations import evict_old_attachments
+
     await init_db()
     await _migrate()
     await _seed_admin()
     await _evict_stale_cache()
+    await evict_old_attachments()
     # Preload the embedding model so the first user doesn't pay the ~6s
     # cold-load. Run in a thread to avoid blocking the event loop.
     await asyncio.to_thread(warm_up)

@@ -84,6 +84,19 @@ class Settings(BaseSettings):
 
     # ── Rate limiting ────────────────────────────────────────────────────────
     rate_limit_enabled: bool = True
+    # Number of trusted reverse proxies that prepend to X-Forwarded-For, so the
+    # limiter keys on the real client IP instead of the proxy's. On-prem chain is
+    # IIS(ARR) → nginx → backend, so set 2 in prod. 0 = no proxy (local dev),
+    # use the direct peer IP. Assumes ARR forwards the client IP in XFF.
+    trusted_proxy_hops: int = 0
+
+    # ── Escalation abuse guards ──────────────────────────────────────────────
+    # Max open (new/in_progress) requests one guest may have at once.
+    guest_open_escalation_limit: int = 3
+    # Reject new attachment uploads when free disk drops below this (MB).
+    min_free_disk_mb: int = 500
+    # Startup sweep: delete attachment files of resolved requests older than this.
+    attachment_retention_days: int = 90
 
     # ── SMTP (human-escalation notifications) ────────────────────────────────
     # All empty by default → email disabled (the escalation still lands in the

@@ -1,19 +1,20 @@
 import asyncio
 import logging
+import shutil
 import smtplib
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
 import filetype
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update as sql_update
+from sqlalchemy import select, update as sql_update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db
+from db.connection import get_db, AsyncSessionLocal
 from db.models import EscalationRequest
 from auth.firebase_verify import get_current_user
 from routers.admin import require_admin, save_file, _safe_filename, _looks_like_text
@@ -122,6 +123,15 @@ async def upload_attachment(
             detail="Tipo de archivo no permitido (imágenes, video, PDF, Word, Excel, TXT o CSV)",
         )
 
+    # Storage guard — refuse uploads when the disk is nearly full, so attachment
+    # spam can't exhaust it (defense in depth with the rate limit + retention sweep).
+    try:
+        free_mb = shutil.disk_usage(settings.local_storage_path).free / (1024 * 1024)
+        if free_mb < settings.min_free_disk_mb:
+            raise HTTPException(status_code=507, detail="Almacenamiento no disponible temporalmente. Intenta más tarde.")
+    except FileNotFoundError:
+        pass  # storage dir not created yet — the save below will create it
+
     # Stream to a temp file; keep the first 64 KB in memory for validation.
     head = b""
     total = 0
@@ -191,6 +201,22 @@ async def create_escalation(
         if not a.url.startswith(_ATTACH_URL_PREFIX):
             raise HTTPException(status_code=422, detail="Adjunto inválido")
 
+    # Per-guest quota: cap how many requests one anonymous user can leave open,
+    # so a single guest session can't flood the inbox (registered users are
+    # admin-created and trusted, so they're exempt).
+    if user.get("is_anon"):
+        open_count = (await db.execute(
+            select(func.count()).select_from(EscalationRequest).where(
+                EscalationRequest.user_id == user["uid"],
+                EscalationRequest.status.in_(("new", "in_progress")),
+            )
+        )).scalar_one()
+        if open_count >= settings.guest_open_escalation_limit:
+            raise HTTPException(
+                status_code=429,
+                detail="Ya tienes varias solicitudes abiertas. Espera a que el equipo te contacte.",
+            )
+
     record = EscalationRequest(
         session_id=session_uuid,
         user_id=user["uid"],
@@ -219,7 +245,6 @@ async def list_escalations(
         stmt = stmt.where(EscalationRequest.status == status)
     rows = (await db.execute(stmt)).scalars().all()
 
-    from sqlalchemy import func
     new_count = (await db.execute(
         select(func.count()).select_from(EscalationRequest).where(EscalationRequest.status == "new")
     )).scalar_one()
@@ -264,3 +289,35 @@ async def update_escalation(
         raise HTTPException(status_code=404, detail="Escalación no encontrada")
     await db.commit()
     return {"id": escalation_id, "status": body.status}
+
+
+# ── Retention sweep (called at startup) ───────────────────────────────────────
+
+async def evict_old_attachments() -> None:
+    """Delete attachment files of resolved requests older than the retention
+    window and clear their metadata. Safe: only touches resolved+aged requests,
+    never open ones. Keeps /data/escalations from growing without bound."""
+    cutoff = datetime.utcnow() - timedelta(days=settings.attachment_retention_days)
+    base = Path(settings.local_storage_path)
+    try:
+        async with AsyncSessionLocal() as db:
+            rows = (await db.execute(
+                select(EscalationRequest).where(
+                    EscalationRequest.status == "resolved",
+                    EscalationRequest.updated_at < cutoff,
+                )
+            )).scalars().all()
+            changed = False
+            for r in rows:
+                if not r.attachments:
+                    continue
+                for a in r.attachments:
+                    url = a.get("url", "")
+                    if url.startswith(_ATTACH_URL_PREFIX):
+                        (base / url[len("/data/"):]).unlink(missing_ok=True)
+                r.attachments = []
+                changed = True
+            if changed:
+                await db.commit()
+    except Exception as exc:
+        logger.error("Attachment retention sweep failed: %s", exc)

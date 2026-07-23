@@ -144,6 +144,79 @@ async def test_guest_can_upload_image(client):
     assert body["content_type"] == "image/png"
 
 
+@pytest.mark.anyio
+async def test_upload_rejected_when_disk_low(client):
+    import types
+    from routers import escalations
+    fake = types.SimpleNamespace(total=0, used=0, free=1 * 1024 * 1024)  # 1 MB free
+    with patch.object(escalations.shutil, "disk_usage", return_value=fake):
+        response = await client.post(
+            "/api/escalations/attachments",
+            files={"file": ("x.png", _PNG_BYTES, "image/png")},
+            headers={"Authorization": f"Bearer {make_jwt()}"},
+        )
+    assert response.status_code == 507
+
+
+# ── Guest abuse guards ────────────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_guest_over_quota_rejected(client):
+    from db.connection import get_db
+    from main import app
+
+    async def _override():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one.return_value = 3  # already at the open-request limit
+        session.execute = AsyncMock(return_value=result)
+        session.add = MagicMock()
+        session.commit = AsyncMock()
+        yield session
+
+    app.dependency_overrides[get_db] = _override
+    response = await client.post(
+        "/api/escalations",
+        json={"contact": "555-1234"},
+        headers={"Authorization": f"Bearer {_guest_jwt()}"},
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 429
+
+
+@pytest.mark.anyio
+async def test_registered_user_exempt_from_quota(client):
+    # Registered users are trusted; the quota check is skipped even if count is high.
+    response = await client.post(
+        "/api/escalations",
+        json={"contact": "555-1234"},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 201
+
+
+def test_client_ip_extraction():
+    from main import _client_ip, settings
+
+    scope = {"client": ("10.0.0.9", 5000), "headers": [
+        (b"x-forwarded-for", b"1.1.1.1, 2.2.2.2, 3.3.3.3"),
+    ]}
+    orig = settings.trusted_proxy_hops
+    try:
+        settings.trusted_proxy_hops = 0
+        assert _client_ip(scope) == "10.0.0.9"          # no proxy → direct peer
+        settings.trusted_proxy_hops = 2
+        assert _client_ip(scope) == "2.2.2.2"           # client sits 2 from the right
+        # Fewer entries than hops → first entry (best effort).
+        scope["headers"] = [(b"x-forwarded-for", b"9.9.9.9")]
+        assert _client_ip(scope) == "9.9.9.9"
+        # No XFF header → direct peer.
+        scope["headers"] = []
+        assert _client_ip(scope) == "10.0.0.9"
+    finally:
+        settings.trusted_proxy_hops = orig
+
+
 # ── Email helper (best-effort) ────────────────────────────────────────────────
 
 def test_send_email_skipped_when_unconfigured():

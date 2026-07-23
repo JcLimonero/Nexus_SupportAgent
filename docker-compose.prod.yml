@@ -63,6 +63,14 @@ services:
       GEMINI_MODEL: gemini-3.5-flash
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
       RATE_LIMIT_ENABLED: "true"
+      # Chain is IIS(ARR) → nginx → backend, so the real client sits 2 hops deep
+      # in X-Forwarded-For. Makes per-IP rate limits key on the real client
+      # (requires ARR to forward the client IP in XFF, which it does by default).
+      TRUSTED_PROXY_HOPS: "2"
+      # Escalation abuse guards (tunable; sensible defaults if unset).
+      GUEST_OPEN_ESCALATION_LIMIT: ${GUEST_OPEN_ESCALATION_LIMIT:-3}
+      MIN_FREE_DISK_MB: ${MIN_FREE_DISK_MB:-500}
+      ATTACHMENT_RETENTION_DAYS: ${ATTACHMENT_RETENTION_DAYS:-90}
       # Human-escalation email (optional). Empty SMTP_HOST/ESCALATION_NOTIFY_EMAIL
       # disables email — requests still land in the admin panel.
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}

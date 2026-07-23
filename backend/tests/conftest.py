@@ -42,6 +42,7 @@ def make_db_override(user=None):
         session = AsyncMock()
         result = MagicMock()
         result.scalar_one_or_none.return_value = user
+        result.scalar_one.return_value = 0  # count() queries → 0 by default
         result.first.return_value = None  # cache lookup → miss by default
         result.scalars.return_value.first.return_value = user
         result.scalars.return_value.all.return_value = [user] if user else []
