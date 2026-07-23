@@ -63,6 +63,15 @@ services:
       GEMINI_MODEL: gemini-3.5-flash
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
       RATE_LIMIT_ENABLED: "true"
+      # Human-escalation email (optional). Empty SMTP_HOST/ESCALATION_NOTIFY_EMAIL
+      # disables email — requests still land in the admin panel.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
     volumes:
       - nexus_data:/data                                   # uploaded PDFs/MP4s (local storage)
       - ./gcp-credentials.json:/app/gcp-credentials.json:ro  # Gemini service account (never committed)

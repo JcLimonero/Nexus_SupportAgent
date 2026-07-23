@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from config import get_settings
 from db.connection import init_db, AsyncSessionLocal
-from routers import health, chat, admin, media
+from routers import health, chat, admin, media, escalations
 
 settings = get_settings()
 
@@ -28,6 +28,7 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/shared":       (120, 60),  # public share view (unguessable token; light guard)
     "/api/chat":         (60, 60),
+    "/api/escalations":  (5, 60),    # 5 human-handoff requests / 60 s per IP (spam guard)
     "/api/admin/upload": (60, 60),   # 60 uploads / 60 s per IP (admin-only; bulk KB seeding)
     "/api/media/stream": (240, 60),  # HMAC-signed streaming; seeking issues many Range requests
 }
@@ -186,6 +187,7 @@ app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(media.router)
+app.include_router(escalations.router)
 
 from auth.local_auth import router as local_auth_router
 from routers.users import router as users_router

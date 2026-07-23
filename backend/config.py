@@ -85,6 +85,18 @@ class Settings(BaseSettings):
     # ── Rate limiting ────────────────────────────────────────────────────────
     rate_limit_enabled: bool = True
 
+    # ── SMTP (human-escalation notifications) ────────────────────────────────
+    # All empty by default → email disabled (the escalation still lands in the
+    # admin panel, which is the source of truth). Fill these to notify support.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""                 # From address; falls back to smtp_user
+    escalation_notify_email: str = ""   # where "talk to a human" requests are sent
+    # Public origin, used to build the "open conversation" link inside the email.
+    public_origin: str = ""
+
     @model_validator(mode="after")
     def _check_insecure_secret(self) -> "Settings":
         if (

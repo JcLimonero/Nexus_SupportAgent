@@ -239,6 +239,64 @@ export async function submitFeedback(messageId: string, rating: "up" | "down") {
   return res.json();
 }
 
+// ── Human escalation ─────────────────────────────────────────────────────────
+
+// The exact prefix the LLM emits when it can't answer (mirrors
+// backend/routers/chat.py::_NO_INFO_PREFIX). Used to auto-offer human contact.
+export const NO_INFO_PREFIX = "No tengo información sobre ese tema";
+
+export type EscalationStatus = "new" | "in_progress" | "resolved";
+
+export interface Escalation {
+  id: string;
+  session_id: string | null;
+  user_label: string | null;
+  contact: string;
+  name: string | null;
+  reason: string | null;
+  status: EscalationStatus;
+  created_at: string;
+}
+
+export async function createEscalation(body: {
+  contact: string;
+  name?: string;
+  reason?: string;
+  sessionId?: string | null;
+}) {
+  const res = await fetch(`${API_URL}/api/escalations`, {
+    method: "POST",
+    headers: await headers(),
+    body: JSON.stringify({
+      contact: body.contact,
+      name: body.name || undefined,
+      reason: body.reason || undefined,
+      session_id: body.sessionId || undefined,
+    }),
+  });
+  if (!res.ok) throw new Error("Error al enviar la solicitud");
+  return res.json();
+}
+
+export async function getEscalations(
+  status?: EscalationStatus,
+): Promise<{ new_count: number; items: Escalation[] }> {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_URL}/api/admin/escalations${qs}`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al cargar las escalaciones");
+  return res.json();
+}
+
+export async function updateEscalation(id: string, status: EscalationStatus) {
+  const res = await fetch(`${API_URL}/api/admin/escalations/${id}`, {
+    method: "PATCH",
+    headers: await headers(),
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Error al actualizar la escalación");
+  return res.json();
+}
+
 // Short-lived signed URL the browser can use directly as <video>/<audio> src
 // or open in a tab — streams with Range requests instead of downloading the
 // whole file as a blob first.

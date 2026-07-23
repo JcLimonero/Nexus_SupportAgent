@@ -335,6 +335,48 @@ def test_feedback_admin_list(api, admin_token, user_a):
     assert api.get("/api/admin/feedback", headers=bearer(user_a["token"])).status_code == 403
 
 
+# ── 6b. Human escalation ──────────────────────────────────────────────────────
+# Keep POSTs to /api/escalations ≤5 per 60s — the endpoint is rate-limited.
+
+def test_escalation_requires_auth_and_validates(api):
+    assert api.post("/api/escalations", json={"contact": "555-1234"}).status_code in (401, 403)
+    # contact too short → 422 (still an authenticated request)
+    assert api.post(
+        "/api/escalations", headers=bearer(S["guest_token"]), json={"contact": "ab"}
+    ).status_code == 422
+
+
+def test_escalation_create_and_admin_flow(api, user_a, admin_token):
+    created = api.post(
+        "/api/escalations", headers=bearer(user_a["token"]),
+        json={"contact": "ana@example.com", "name": "Ana", "reason": "Necesito ayuda con facturación", "session_id": S["session1"]},
+    )
+    assert created.status_code == 201
+    eid = created.json()["id"]
+    S["escalation_id"] = eid
+
+    # Admin sees it; non-admin is forbidden.
+    listing = api.get("/api/admin/escalations", headers=bearer(admin_token))
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["new_count"] >= 1
+    row = next(r for r in body["items"] if r["id"] == eid)
+    assert row["contact"] == "ana@example.com" and row["status"] == "new"
+    assert row["session_id"] == S["session1"]
+    assert api.get("/api/admin/escalations", headers=bearer(user_a["token"])).status_code == 403
+
+    # Resolve it, then confirm it shows under the resolved filter.
+    assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(admin_token), json={"status": "resolved"}).status_code == 200
+    resolved = api.get("/api/admin/escalations", params={"status": "resolved"}, headers=bearer(admin_token)).json()
+    assert any(r["id"] == eid for r in resolved["items"])
+
+    # Update validation + not-found + admin-only patch.
+    assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(admin_token), json={"status": "banana"}).status_code == 422
+    import uuid as _uuid
+    assert api.patch(f"/api/admin/escalations/{_uuid.uuid4()}", headers=bearer(admin_token), json={"status": "resolved"}).status_code == 404
+    assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(user_a["token"]), json={"status": "new"}).status_code == 403
+
+
 # ── 7. Sharing ────────────────────────────────────────────────────────────────
 
 def test_share_and_public_view(api, user_a):
