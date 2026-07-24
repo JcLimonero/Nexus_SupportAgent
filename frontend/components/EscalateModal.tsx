@@ -17,10 +17,13 @@ interface Props {
   open: boolean;
   onClose: () => void;
   sessionId: string | null;
-  /** Prefills — registered user's email as name, last question as reason. */
-  defaultName?: string;
+  /** Prefills — the account's email, the last question as reason. */
+  defaultEmail?: string;
   defaultReason?: string;
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const digitsOf = (s: string) => s.replace(/\D/g, "");
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -45,10 +48,24 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 4,
 };
 
-export function EscalateModal({ open, onClose, sessionId, defaultName, defaultReason }: Props) {
+const ERROR_COLOR = "#ef4444";
+
+const errorHintStyle: React.CSSProperties = {
+  display: "block", fontSize: 11, fontWeight: 300, color: ERROR_COLOR, marginTop: 4,
+};
+
+const noteStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 300, color: "var(--text-muted)", marginBottom: 12,
+};
+
+const errorable = (base: React.CSSProperties, bad: boolean): React.CSSProperties =>
+  bad ? { ...base, borderColor: ERROR_COLOR } : base;
+
+export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultReason }: Props) {
   const { toast } = useToast();
   const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [reason, setReason] = useState("");
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<EscalationAttachment[]>([]);
@@ -58,13 +75,14 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
   // Reset/prefill each time the modal opens.
   useEffect(() => {
     if (open) {
-      setName(defaultName ?? "");
-      setContact("");
+      setName("");
+      setEmail(defaultEmail ?? "");
+      setPhone("");
       setReason(defaultReason ?? "");
       setAttachments([]);
       setUploading(0);
     }
-  }, [open, defaultName, defaultReason]);
+  }, [open, defaultEmail, defaultReason]);
 
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
@@ -94,14 +112,24 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
   const removeAttachment = (url: string) =>
     setAttachments((prev) => prev.filter((a) => a.url !== url));
 
-  // Mirrors the backend: contact ≥3, a real description ≥10 chars.
-  const incomplete = contact.trim().length < 3 || reason.trim().length < 10;
+  // Mirrors the backend: a valid email OR a 10-digit phone, plus a real
+  // description. A filled-but-malformed field blocks instead of being dropped.
+  const emailOk = EMAIL_RE.test(email.trim());
+  const phoneOk = digitsOf(phone).length === 10;
+  const emailBad = email.trim().length > 0 && !emailOk;
+  const phoneBad = phone.trim().length > 0 && !phoneOk;
+  const incomplete =
+    !(emailOk || phoneOk) || emailBad || phoneBad || reason.trim().length < 10;
 
   const submit = async () => {
     if (incomplete || sending || uploading > 0) return;
     setSending(true);
     try {
-      await createEscalation({ contact: contact.trim(), name, reason: reason.trim(), sessionId, attachments });
+      await createEscalation({
+        email: emailOk ? email.trim() : undefined,
+        phone: phoneOk ? digitsOf(phone) : undefined,
+        name, reason: reason.trim(), sessionId, attachments,
+      });
       toast("Solicitud enviada. Una persona del equipo te contactará.", "success");
       onClose();
     } catch {
@@ -137,12 +165,24 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
       </div>
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle} htmlFor="esc-contact">Correo o teléfono *</label>
-        <input id="esc-contact" style={inputStyle} value={contact} onChange={(e) => setContact(e.target.value)}
-          placeholder="tucorreo@ejemplo.com o 55 1234 5678" maxLength={120}
+        <label style={labelStyle} htmlFor="esc-email">Correo electrónico</label>
+        <input id="esc-email" type="email" style={errorable(inputStyle, emailBad)} value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="tucorreo@ejemplo.com" maxLength={120}
           onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
-          onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
+          onBlur={(e) => (e.target.style.borderColor = emailBad ? ERROR_COLOR : "var(--input-border)")} />
+        {emailBad && <span style={errorHintStyle}>Correo inválido</span>}
       </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle} htmlFor="esc-phone">Teléfono (10 dígitos)</label>
+        <input id="esc-phone" type="tel" inputMode="numeric" style={errorable(inputStyle, phoneBad)} value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="55 1234 5678" maxLength={25}
+          onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
+          onBlur={(e) => (e.target.style.borderColor = phoneBad ? ERROR_COLOR : "var(--input-border)")} />
+        {phoneBad && <span style={errorHintStyle}>El teléfono debe tener 10 dígitos</span>}
+      </div>
+      <p style={noteStyle}>* Indica al menos un correo o un teléfono.</p>
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle} htmlFor="esc-reason">¿En qué necesitas ayuda? *</label>
         <textarea id="esc-reason" style={{ ...inputStyle, resize: "none", lineHeight: 1.5 }} rows={3}

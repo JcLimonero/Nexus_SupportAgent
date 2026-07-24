@@ -23,9 +23,15 @@ def _guest_jwt():
 
 _REASON = "no puedo facturar un pedido de mostrador"
 
+def _body(**overrides):
+    body = {"email": "ana@example.com", "reason": _REASON}
+    body.update(overrides)
+    return body
+
+
 @pytest.mark.anyio
 async def test_create_requires_auth(client):
-    response = await client.post("/api/escalations", json={"contact": "555-1234"})
+    response = await client.post("/api/escalations", json=_body())
     assert response.status_code == 401
 
 
@@ -33,27 +39,60 @@ async def test_create_requires_auth(client):
 async def test_guest_cannot_create(client):
     response = await client.post(
         "/api/escalations",
-        json={"contact": "555-1234", "reason": "necesito ayuda"},
+        json=_body(),
         headers={"Authorization": f"Bearer {_guest_jwt()}"},
     )
     assert response.status_code == 403
 
 
 @pytest.mark.anyio
-async def test_user_can_create(client):
+async def test_user_can_create_with_email(client):
     response = await client.post(
         "/api/escalations",
-        json={"contact": "555-1234", "reason": "necesito ayuda"},
+        json=_body(),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 201
 
 
 @pytest.mark.anyio
-async def test_create_rejects_short_contact(client):
+async def test_user_can_create_with_phone_only(client):
+    # Formatting is stripped down to the 10 digits.
     response = await client.post(
         "/api/escalations",
-        json={"contact": "ab", "reason": _REASON},
+        json={"phone": "55 1234 5678", "reason": _REASON},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.anyio
+async def test_create_rejects_no_way_to_contact(client):
+    response = await client.post(
+        "/api/escalations",
+        json={"reason": _REASON},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("email", ["ana", "ana@example", "ana @example.com", "@example.com"])
+async def test_create_rejects_invalid_email(client, email):
+    response = await client.post(
+        "/api/escalations",
+        json=_body(email=email),
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("phone", ["551234567", "5512345678901", "abcdefghij"])
+async def test_create_rejects_phone_without_ten_digits(client, phone):
+    response = await client.post(
+        "/api/escalations",
+        json={"phone": phone, "reason": _REASON},
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -63,7 +102,7 @@ async def test_create_rejects_short_contact(client):
 async def test_create_rejects_missing_reason(client):
     response = await client.post(
         "/api/escalations",
-        json={"contact": "555-1234"},
+        json={"email": "ana@example.com"},
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -74,17 +113,7 @@ async def test_create_rejects_whitespace_reason(client):
     # Stripped before the length check, so spaces can't pass for a description.
     response = await client.post(
         "/api/escalations",
-        json={"contact": "555-1234", "reason": "          "},
-        headers={"Authorization": f"Bearer {make_jwt()}"},
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.anyio
-async def test_create_rejects_missing_contact(client):
-    response = await client.post(
-        "/api/escalations",
-        json={"reason": "sin contacto"},
+        json=_body(reason="          "),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -94,21 +123,25 @@ async def test_create_rejects_missing_contact(client):
 async def test_create_rejects_invalid_session_uuid(client):
     response = await client.post(
         "/api/escalations",
-        json={"contact": "555-1234", "reason": _REASON, "session_id": "not-a-uuid"},
+        json=_body(session_id="not-a-uuid"),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
+
+
+def test_contact_string_joins_email_and_phone():
+    from routers.escalations import EscalationRequestBody
+    body = EscalationRequestBody(email="Ana@Example.com ", phone="(55) 1234-5678", reason=_REASON)
+    assert body.email == "ana@example.com" and body.phone == "5512345678"
 
 
 @pytest.mark.anyio
 async def test_create_accepts_attachments(client):
     response = await client.post(
         "/api/escalations",
-        json={
-            "contact": "555-1234",
-            "reason": _REASON,
-            "attachments": [{"file_name": "captura.png", "url": "/data/escalations/abc_captura.png", "content_type": "image/png", "size": 1234}],
-        },
+        json=_body(
+            attachments=[{"file_name": "captura.png", "url": "/data/escalations/abc_captura.png", "content_type": "image/png", "size": 1234}],
+        ),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 201
@@ -119,11 +152,7 @@ async def test_create_rejects_foreign_attachment_url(client):
     # A URL outside /data/escalations/ (e.g. pointing at an indexed KB doc) → 422.
     response = await client.post(
         "/api/escalations",
-        json={
-            "contact": "555-1234",
-            "reason": _REASON,
-            "attachments": [{"file_name": "secreto.pdf", "url": "/data/pdfs/secreto.pdf"}],
-        },
+        json=_body(attachments=[{"file_name": "secreto.pdf", "url": "/data/pdfs/secreto.pdf"}]),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422

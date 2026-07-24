@@ -339,7 +339,7 @@ def test_feedback_admin_list(api, admin_token, user_a):
 # Keep POSTs to /api/escalations ≤5 per 60s — the endpoint is rate-limited.
 
 def test_escalation_requires_an_account(api):
-    body = {"contact": "555-1234", "reason": "no puedo facturar un pedido"}
+    body = {"phone": "5512345678", "reason": "no puedo facturar un pedido"}
     assert api.post("/api/escalations", json=body).status_code in (401, 403)
     # Guests are barred from the whole feature — request and uploads alike.
     assert api.post(
@@ -372,7 +372,7 @@ def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     created = api.post(
         "/api/escalations", headers=bearer(user_a["token"]),
         json={
-            "contact": "ana@example.com", "name": "Ana",
+            "email": "ana@example.com", "phone": "(55) 1234-5678", "name": "Ana",
             "reason": "Necesito ayuda con facturación", "session_id": S["session1"],
             "attachments": [S["attachment"]],
         },
@@ -384,7 +384,7 @@ def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     # A create referencing a URL outside /data/escalations/ is rejected.
     assert api.post(
         "/api/escalations", headers=bearer(user_a["token"]),
-        json={"contact": "x@x.com", "reason": "adjunto que no subí yo",
+        json={"email": "x@x.com", "reason": "adjunto que no subí yo",
               "attachments": [{"file_name": "kb.pdf", "url": "/data/pdfs/kb.pdf"}]},
     ).status_code == 422
 
@@ -394,7 +394,8 @@ def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     body = listing.json()
     assert body["new_count"] >= 1
     row = next(r for r in body["items"] if r["id"] == eid)
-    assert row["contact"] == "ana@example.com" and row["status"] == "new"
+    # Both ways back are stored, phone normalised to its 10 digits.
+    assert row["contact"] == "ana@example.com · 5512345678" and row["status"] == "new"
     assert row["session_id"] == S["session1"]
     assert row["attachments"] and row["attachments"][0]["url"] == S["attachment"]["url"]
     assert api.get("/api/admin/escalations", headers=bearer(user_a["token"])).status_code == 403

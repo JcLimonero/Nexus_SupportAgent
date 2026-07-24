@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import shutil
 import tempfile
 import urllib.request
@@ -12,7 +13,7 @@ import filetype
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 from sqlalchemy import select, update as sql_update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +29,7 @@ settings = get_settings()
 router = APIRouter(prefix="/api", tags=["escalations"])
 
 _STATUSES = ("new", "in_progress", "resolved")
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 async def require_account(user: dict = Depends(get_current_user)) -> dict:
@@ -114,13 +116,43 @@ class Attachment(BaseModel):
 
 
 class EscalationRequestBody(BaseModel):
-    contact: str = Field(min_length=3, max_length=120)
+    # Either one is enough to reach the user back, but we need at least one.
+    email: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=25)
     name: str | None = Field(default=None, max_length=80)
     # Required: a ticket with no description is one support has to chase down.
     # Stripped first so whitespace can't pass for a description.
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10, max_length=1000)]
     session_id: str | None = None
     attachments: list[Attachment] = Field(default_factory=list, max_length=_ATTACH_MAX_COUNT)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str | None) -> str | None:
+        v = (v or "").strip().lower()
+        if not v:
+            return None
+        # Shape check only — no dependency just to parse an address. Same
+        # pattern the modal uses, so both sides agree on what's valid.
+        if not _EMAIL_RE.match(v):
+            raise ValueError("Correo inválido")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def _valid_phone(cls, v: str | None) -> str | None:
+        digits = "".join(c for c in (v or "") if c.isdigit())
+        if not digits:
+            return None
+        if len(digits) != 10:
+            raise ValueError("El teléfono debe tener 10 dígitos")
+        return digits
+
+    @model_validator(mode="after")
+    def _needs_a_way_back(self):
+        if not (self.email or self.phone):
+            raise ValueError("Proporciona un correo o un teléfono")
+        return self
 
 
 class StatusUpdate(BaseModel):
@@ -226,7 +258,10 @@ async def create_escalation(
         session_id=session_uuid,
         user_id=user["uid"],
         user_label=user.get("email") or user["uid"],
-        contact=body.contact.strip(),
+        # One display string keeps the column (and the admin inbox) as-is; the
+        # validated pieces are what matter. ponytail: split into two columns if
+        # anything ever needs to act on the address or number on its own.
+        contact=" · ".join(p for p in (body.email, body.phone) if p),
         name=body.name.strip() if body.name else None,
         reason=body.reason,
         attachments=[a.model_dump() for a in body.attachments],

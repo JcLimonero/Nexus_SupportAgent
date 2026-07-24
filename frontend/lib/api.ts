@@ -285,7 +285,8 @@ export async function uploadEscalationAttachment(file: File): Promise<Escalation
 }
 
 export async function createEscalation(body: {
-  contact: string;
+  email?: string;
+  phone?: string;
   name?: string;
   reason: string;
   sessionId?: string | null;
@@ -295,7 +296,8 @@ export async function createEscalation(body: {
     method: "POST",
     headers: await headers(),
     body: JSON.stringify({
-      contact: body.contact,
+      email: body.email || undefined,
+      phone: body.phone || undefined,
       name: body.name || undefined,
       reason: body.reason,
       session_id: body.sessionId || undefined,

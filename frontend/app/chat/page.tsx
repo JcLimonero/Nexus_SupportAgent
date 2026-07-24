@@ -351,7 +351,7 @@ export default function ChatPage() {
   const showEscalateOffer =
     canEscalate && !sending && lastMsg?.role === "assistant" && lastMsg.content.startsWith(NO_INFO_PREFIX);
   const lastUserQuestion = [...messages].reverse().find((m) => m.role === "user")?.content;
-  const defaultName = user && !user.is_anon ? user.email : undefined;
+  const defaultEmail = canEscalate ? user?.email : undefined;
 
   const sidebar = (
     <SessionSidebar
@@ -374,7 +374,7 @@ export default function ChatPage() {
         open={escalateOpen}
         onClose={() => setEscalateOpen(false)}
         sessionId={currentSessionId}
-        defaultName={defaultName}
+        defaultEmail={defaultEmail}
         defaultReason={lastUserQuestion}
       />
       {/* Sidebar — desktop (hidden for guests, or when collapsed) */}
