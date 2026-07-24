@@ -1,7 +1,9 @@
 import asyncio
+import base64
 import json
 import logging
 import re
+import secrets
 import shutil
 import tempfile
 import urllib.request
@@ -18,10 +20,11 @@ from sqlalchemy import select, update as sql_update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db, AsyncSessionLocal
-from db.models import EscalationRequest
+from db.models import ChatMessage, ChatSession, EscalationRequest
 from auth.firebase_verify import get_current_user
 from routers.admin import require_admin, save_file, _safe_filename, _looks_like_text
 from config import get_settings
+from transcript import format_transcript, render_pdf
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -55,17 +58,58 @@ _ATTACH_ALLOWED_EXT = _ATTACH_TEXT_EXT | _ATTACH_BINARY_EXT
 _ATTACH_DETECTED = {"png", "jpg", "gif", "webp", "mp4", "mov", "webm", "pdf", "docx", "xlsx"}
 
 
+# ── Conversation snapshot (PDF + text for the email) ──────────────────────────
+_TRANSCRIPT_NAME = "conversacion.pdf"
+_MAIL_TRANSCRIPT_CHARS = 8000   # EmailJS caps request size; the PDF has it all
+
+
+async def _snapshot_conversation(db: AsyncSession, session_uuid: uuid.UUID, uid: str):
+    """The user's chat as (text, share link, path to a rendered PDF) — what
+    support needs to see what was tried and what happened. Returns empties if
+    the session isn't the requester's: a chat that started as a guest shouldn't
+    block the ticket. The caller owns (and deletes) the temp file."""
+    session = (await db.execute(
+        select(ChatSession).where(ChatSession.id == session_uuid, ChatSession.user_id == uid)
+    )).scalar_one_or_none()
+    if session is None:
+        return "", "", None
+    messages = (await db.execute(
+        select(ChatMessage).where(ChatMessage.session_id == session_uuid).order_by(ChatMessage.created_at)
+    )).scalars().all()
+    if not messages:
+        return "", "", None
+
+    # Same public read-only link the "Compartir" button mints (chat.py), so
+    # support can open the conversation without an account.
+    if not session.share_token:
+        session.share_token = secrets.token_urlsafe(16)
+    share_link = f"{settings.public_origin}/shared/{session.share_token}" if settings.public_origin else ""
+
+    def _render() -> str:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            path = tmp.name
+        try:
+            render_pdf(path, session.title, messages)
+        except Exception:
+            Path(path).unlink(missing_ok=True)   # the caller never sees the path
+            raise
+        return path
+
+    return format_transcript(messages, _MAIL_TRANSCRIPT_CHARS), share_link, await asyncio.to_thread(_render)
+
+
 # ── Email notification via EmailJS (best-effort) ──────────────────────────────
 
 _EMAILJS_URL = "https://api.emailjs.com/api/v1.0/email/send"
 
 
-def _send_via_emailjs(template_params: dict) -> None:
+def _send_via_emailjs(template_params: dict) -> bool:
     """Blocking server-side POST to EmailJS. No-op if not configured. Never
-    raises — the escalation is already saved; email is a bonus, not a guarantee."""
+    raises — the escalation is already saved; email is a bonus, not a guarantee.
+    Returns False only when a real send attempt failed."""
     if not (settings.emailjs_service_id and settings.emailjs_template_id and settings.emailjs_public_key):
         logger.info("EmailJS not configured — escalation email skipped")
-        return
+        return True
     payload = {
         "service_id": settings.emailjs_service_id,
         "template_id": settings.emailjs_template_id,
@@ -83,11 +127,18 @@ def _send_via_emailjs(template_params: dict) -> None:
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             resp.read()
+        return True
     except Exception as exc:
         logger.error("EmailJS send failed: %s", exc)
+        return False
 
 
-async def _notify(record: EscalationRequest) -> None:
+async def _notify(
+    record: EscalationRequest,
+    conversation: str = "",
+    share_link: str = "",
+    pdf: bytes | None = None,
+) -> None:
     who = record.name or record.user_label or record.user_id
     attach_names = ", ".join(a.get("file_name", "?") for a in (record.attachments or [])) or "—"
     link = ""
@@ -100,10 +151,27 @@ async def _notify(record: EscalationRequest) -> None:
         "contact": record.contact,
         "reason": record.reason or "(sin especificar)",
         "attachments": attach_names,
+        "conversation": conversation or "(sin conversación)",
+        "share_link": share_link,
         "conversation_link": link,
         "to_email": settings.escalation_notify_email,
     }
-    await asyncio.to_thread(_send_via_emailjs, params)
+
+    encoded = base64.b64encode(pdf).decode() if pdf else ""
+    if len(encoded) > settings.emailjs_max_attach_kb * 1024:
+        logger.warning("Chat PDF too big for EmailJS (%d KB) — emailing without it", len(encoded) // 1024)
+        encoded = ""
+    if encoded:
+        params["chat_pdf"] = f"data:application/pdf;base64,{encoded}"
+        params["chat_pdf_name"] = _TRANSCRIPT_NAME
+
+    if not await asyncio.to_thread(_send_via_emailjs, params) and encoded:
+        # An email without the PDF beats no email — the send may have failed
+        # because the template has no attachment variable or the plan's size
+        # limit is lower than ours. The conversation text and link still go.
+        params.pop("chat_pdf")
+        params.pop("chat_pdf_name")
+        await asyncio.to_thread(_send_via_emailjs, params)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -254,6 +322,29 @@ async def create_escalation(
         if not a.url.startswith(_ATTACH_URL_PREFIX):
             raise HTTPException(status_code=422, detail="Adjunto inválido")
 
+    # The conversation itself: a PDF filed with the request plus the text and
+    # public link the email carries. Best-effort — a ticket must never be lost
+    # because the snapshot failed.
+    attachments = [a.model_dump() for a in body.attachments]
+    conversation, share_link, pdf, pdf_path = "", "", None, None
+    if session_uuid:
+        try:
+            conversation, share_link, pdf_path = await _snapshot_conversation(db, session_uuid, user["uid"])
+            if pdf_path:
+                url = await asyncio.to_thread(save_file, pdf_path, _TRANSCRIPT_NAME, "escalation")
+                pdf = Path(pdf_path).read_bytes()
+                attachments.insert(0, {
+                    "file_name": _TRANSCRIPT_NAME,
+                    "url": url,
+                    "content_type": "application/pdf",
+                    "size": len(pdf),
+                })
+        except Exception as exc:
+            logger.error("Conversation snapshot failed: %s", exc)
+        finally:
+            if pdf_path:
+                Path(pdf_path).unlink(missing_ok=True)
+
     record = EscalationRequest(
         session_id=session_uuid,
         user_id=user["uid"],
@@ -264,13 +355,13 @@ async def create_escalation(
         contact=" · ".join(p for p in (body.email, body.phone) if p),
         name=body.name,
         reason=body.reason,
-        attachments=[a.model_dump() for a in body.attachments],
+        attachments=attachments,
     )
     db.add(record)
-    await db.commit()
+    await db.commit()   # also persists the share token minted above
     await db.refresh(record)
 
-    background_tasks.add_task(_notify, record)
+    background_tasks.add_task(_notify, record, conversation, share_link, pdf)
     return {"id": str(record.id), "status": record.status}
 
 

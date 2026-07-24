@@ -78,6 +78,7 @@ services:
       EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY:-}
       EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY:-}
       ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
+      EMAILJS_MAX_ATTACH_KB: ${EMAILJS_MAX_ATTACH_KB:-350}
     volumes:
       - nexus_data:/data                                   # uploaded PDFs/MP4s (local storage)
       - ./gcp-credentials.json:/app/gcp-credentials.json:ro  # Gemini service account (never committed)

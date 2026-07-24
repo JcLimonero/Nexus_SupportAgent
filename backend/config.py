@@ -105,7 +105,11 @@ class Settings(BaseSettings):
     emailjs_public_key: str = ""
     emailjs_private_key: str = ""       # accessToken for strict/server-side mode
     escalation_notify_email: str = ""   # passed to the template as {{to_email}}
-    # Public origin, used to build the "open conversation" link inside the email.
+    # Cap for the base64 chat PDF attached to the email. EmailJS limits
+    # attachments by plan (Personal 500 Kb, Professional 2 Mb); past this the
+    # email goes without the PDF instead of being rejected whole.
+    emailjs_max_attach_kb: int = 350
+    # Public origin, used to build the conversation links inside the email.
     public_origin: str = ""
 
     @model_validator(mode="after")

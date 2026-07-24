@@ -397,13 +397,21 @@ def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     # Both ways back are stored, phone normalised to its 10 digits.
     assert row["contact"] == "ana@example.com · 5512345678" and row["status"] == "new"
     assert row["session_id"] == S["session1"]
-    assert row["attachments"] and row["attachments"][0]["url"] == S["attachment"]["url"]
+    # The conversation is snapshotted as a PDF and filed first, ahead of the
+    # user's own upload, so support sees what was tried before the screenshots.
+    assert len(row["attachments"]) == 2
+    transcript, uploaded = row["attachments"]
+    assert transcript["file_name"] == "conversacion.pdf"
+    assert transcript["url"].startswith("/data/escalations/") and transcript["size"] > 0
+    assert uploaded["url"] == S["attachment"]["url"]
     assert api.get("/api/admin/escalations", headers=bearer(user_a["token"])).status_code == 403
 
-    # The attachment is viewable via a signed stream URL.
-    signed = api.post("/api/media/sign", headers=bearer(admin_token), json={"gcs_url": S["attachment"]["url"]})
-    assert signed.status_code == 200
-    assert api.get(signed.json()["url"]).status_code == 200
+    # Both attachments are viewable via a signed stream URL.
+    for att, head in ((S["attachment"], b"\x89PNG"), (transcript, b"%PDF")):
+        signed = api.post("/api/media/sign", headers=bearer(admin_token), json={"gcs_url": att["url"]})
+        assert signed.status_code == 200
+        streamed = api.get(signed.json()["url"])
+        assert streamed.status_code == 200 and streamed.content.startswith(head)
 
     # Resolve it, then confirm it shows under the resolved filter.
     assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(admin_token), json={"status": "resolved"}).status_code == 200

@@ -228,6 +228,10 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
           value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000}
           onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
+        {sessionId && (
+          // Also a privacy notice: the chat is emailed to support, not just filed.
+          <p style={noteStyle}>Se adjuntará una copia de esta conversación para dar contexto al equipo.</p>
+        )}
       </div>
 
       {/* Attachments — let the user recreate the problem with screenshots/video/files */}

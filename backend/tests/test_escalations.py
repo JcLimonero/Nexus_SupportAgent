@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as PyJWT
@@ -172,6 +173,109 @@ async def test_create_rejects_foreign_attachment_url(client):
     assert response.status_code == 422
 
 
+# ── Conversation snapshot (PDF + email text) ──────────────────────────────────
+
+def _chat_db(session_obj, messages):
+    """get_db override for the create path: first query → the chat session,
+    second → its messages."""
+    async def _override():
+        db = AsyncMock()
+        found = MagicMock()
+        found.scalar_one_or_none.return_value = session_obj
+        msgs = MagicMock()
+        msgs.scalars.return_value.all.return_value = messages
+        db.execute = AsyncMock(side_effect=[found, msgs])
+        db.commit = AsyncMock()
+        db.add = MagicMock()
+        db.refresh = AsyncMock()
+        yield db
+    return _override
+
+
+def _fake_messages():
+    return [
+        SimpleNamespace(role="user", content="¿Cómo facturo?", created_at=datetime(2026, 7, 24, 20, 0)),
+        SimpleNamespace(role="assistant", content="Entra a Ventas.", created_at=datetime(2026, 7, 24, 20, 1)),
+    ]
+
+
+@pytest.mark.anyio
+async def test_create_attaches_the_conversation(client):
+    from db.connection import get_db
+    from main import app
+    from routers import escalations
+
+    sid = uuid.uuid4()
+    chat = SimpleNamespace(id=sid, title="Facturación", share_token=None)
+    app.dependency_overrides[get_db] = _chat_db(chat, _fake_messages())
+
+    notify = AsyncMock()
+    with patch.object(escalations, "save_file", return_value="/data/escalations/abc_conversacion.pdf"), \
+         patch.object(escalations, "_notify", notify), \
+         patch.object(escalations.settings, "public_origin", "https://soporte.example"):
+        response = await client.post(
+            "/api/escalations",
+            json=_body(session_id=str(sid)),
+            headers={"Authorization": f"Bearer {make_jwt()}"},
+        )
+    app.dependency_overrides.clear()
+    assert response.status_code == 201
+
+    # The PDF is filed as the first attachment of the request…
+    args = notify.await_args.args
+    saved = args[0]
+    assert saved.attachments[0]["file_name"] == "conversacion.pdf"
+    assert saved.attachments[0]["url"].startswith("/data/escalations/")
+    assert saved.attachments[0]["size"] > 0
+    # …and the email gets the text, the public share link and the PDF bytes.
+    conversation, share_link, pdf = args[1], args[2], args[3]
+    assert "¿Cómo facturo?" in conversation and "Usuario · 24/07/2026 14:00" in conversation
+    assert chat.share_token and share_link == f"https://soporte.example/shared/{chat.share_token}"
+    assert pdf.startswith(b"%PDF")
+
+
+@pytest.mark.anyio
+async def test_create_skips_snapshot_for_someone_elses_session(client):
+    """The session query is scoped to the requester, so a foreign id finds
+    nothing: the ticket is still created, just without the conversation."""
+    from db.connection import get_db
+    from main import app
+    from routers import escalations
+
+    app.dependency_overrides[get_db] = _chat_db(None, [])
+    notify = AsyncMock()
+    with patch.object(escalations, "_notify", notify):
+        response = await client.post(
+            "/api/escalations",
+            json=_body(session_id=str(uuid.uuid4())),
+            headers={"Authorization": f"Bearer {make_jwt()}"},
+        )
+    app.dependency_overrides.clear()
+    assert response.status_code == 201
+    saved, conversation, _share, pdf = notify.await_args.args
+    assert saved.attachments == [] and conversation == "" and pdf is None
+
+
+@pytest.mark.anyio
+async def test_create_survives_a_broken_snapshot(client):
+    """A ticket is never lost because the PDF failed."""
+    from db.connection import get_db
+    from main import app
+    from routers import escalations
+
+    chat = SimpleNamespace(id=uuid.uuid4(), title=None, share_token=None)
+    app.dependency_overrides[get_db] = _chat_db(chat, _fake_messages())
+    with patch.object(escalations, "render_pdf", side_effect=OSError("disk on fire")), \
+         patch.object(escalations, "_notify", AsyncMock()):
+        response = await client.post(
+            "/api/escalations",
+            json=_body(session_id=str(uuid.uuid4())),
+            headers={"Authorization": f"Bearer {make_jwt()}"},
+        )
+    app.dependency_overrides.clear()
+    assert response.status_code == 201
+
+
 # ── Attachment upload ─────────────────────────────────────────────────────────
 
 _PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
@@ -327,6 +431,53 @@ def test_emailjs_payload_shape():
     assert body["service_id"] == "svc" and body["template_id"] == "tpl"
     assert body["user_id"] == "pub" and body["accessToken"] == "priv"
     assert body["template_params"]["contact"] == "ana@example.com"
+
+
+def _record_stub():
+    return SimpleNamespace(
+        name="Ana", user_label="ana@example.com", user_id="uid", contact="ana@example.com",
+        reason=_REASON, attachments=[], session_id=None,
+    )
+
+
+@pytest.mark.anyio
+async def test_notify_sends_conversation_link_and_pdf():
+    from routers import escalations
+    sent = []
+    with patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+        await escalations._notify(_record_stub(), "Usuario · hola", "https://x.mx/shared/tok", b"%PDF-1.7 fake")
+    assert len(sent) == 1
+    assert sent[0]["conversation"] == "Usuario · hola"
+    assert sent[0]["share_link"] == "https://x.mx/shared/tok"
+    assert sent[0]["chat_pdf"].startswith("data:application/pdf;base64,")
+    assert sent[0]["chat_pdf_name"] == "conversacion.pdf"
+
+
+@pytest.mark.anyio
+async def test_notify_drops_a_pdf_over_the_plan_limit():
+    # EmailJS rejects oversized requests outright — better to email without it.
+    from routers import escalations
+    sent = []
+    with patch.object(escalations.settings, "emailjs_max_attach_kb", 1), \
+         patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+        await escalations._notify(_record_stub(), "hola", "", b"%PDF" + b"\x00" * 4096)
+    assert "chat_pdf" not in sent[0] and sent[0]["conversation"] == "hola"
+
+
+@pytest.mark.anyio
+async def test_notify_retries_without_the_pdf_when_the_send_fails():
+    from routers import escalations
+    sent = []
+
+    def _fail_first(params):
+        sent.append(dict(params))
+        return len(sent) > 1      # first attempt (with PDF) fails
+
+    with patch.object(escalations, "_send_via_emailjs", _fail_first):
+        await escalations._notify(_record_stub(), "hola", "", b"%PDF-1.7 fake")
+    assert len(sent) == 2
+    assert "chat_pdf" in sent[0] and "chat_pdf" not in sent[1]
+    assert sent[1]["conversation"] == "hola"
 
 
 # ── Admin list / update ───────────────────────────────────────────────────────
