@@ -119,7 +119,7 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
   const emailBad = email.trim().length > 0 && !emailOk;
   const phoneBad = phone.trim().length > 0 && !phoneOk;
   const incomplete =
-    !(emailOk || phoneOk) || emailBad || phoneBad || reason.trim().length < 10;
+    name.trim().length < 2 || !(emailOk || phoneOk) || emailBad || phoneBad || reason.trim().length < 10;
 
   const submit = async () => {
     if (incomplete || sending || uploading > 0) return;
@@ -128,7 +128,7 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
       await createEscalation({
         email: emailOk ? email.trim() : undefined,
         phone: phoneOk ? digitsOf(phone) : undefined,
-        name, reason: reason.trim(), sessionId, attachments,
+        name: name.trim(), reason: reason.trim(), sessionId, attachments,
       });
       toast("Solicitud enviada. Una persona del equipo te contactará.", "success");
       onClose();
@@ -159,8 +159,9 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
         Cuéntanos qué pasó y cómo contactarte; una persona del equipo de soporte te responderá.
       </p>
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle} htmlFor="esc-name">Nombre (opcional)</label>
-        <input id="esc-name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} maxLength={80}
+        <label style={labelStyle} htmlFor="esc-name">Nombre *</label>
+        <input id="esc-name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="¿Con quién hablamos?" maxLength={80} required
           onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
       </div>

@@ -119,7 +119,7 @@ class EscalationRequestBody(BaseModel):
     # Either one is enough to reach the user back, but we need at least one.
     email: str | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=25)
-    name: str | None = Field(default=None, max_length=80)
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80)]
     # Required: a ticket with no description is one support has to chase down.
     # Stripped first so whitespace can't pass for a description.
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10, max_length=1000)]
@@ -262,7 +262,7 @@ async def create_escalation(
         # validated pieces are what matter. ponytail: split into two columns if
         # anything ever needs to act on the address or number on its own.
         contact=" · ".join(p for p in (body.email, body.phone) if p),
-        name=body.name.strip() if body.name else None,
+        name=body.name,
         reason=body.reason,
         attachments=[a.model_dump() for a in body.attachments],
     )

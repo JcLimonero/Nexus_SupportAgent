@@ -24,7 +24,7 @@ def _guest_jwt():
 _REASON = "no puedo facturar un pedido de mostrador"
 
 def _body(**overrides):
-    body = {"email": "ana@example.com", "reason": _REASON}
+    body = {"name": "Ana", "email": "ana@example.com", "reason": _REASON}
     body.update(overrides)
     return body
 
@@ -60,7 +60,7 @@ async def test_user_can_create_with_phone_only(client):
     # Formatting is stripped down to the 10 digits.
     response = await client.post(
         "/api/escalations",
-        json={"phone": "55 1234 5678", "reason": _REASON},
+        json=_body(email=None, phone="55 1234 5678"),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 201
@@ -70,8 +70,22 @@ async def test_user_can_create_with_phone_only(client):
 async def test_create_rejects_no_way_to_contact(client):
     response = await client.post(
         "/api/escalations",
-        json={"reason": _REASON},
+        json={"name": "Ana", "reason": _REASON},
         headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", [None, "", " "])
+async def test_create_rejects_missing_name(client, name):
+    body = _body()
+    if name is None:
+        del body["name"]
+    else:
+        body["name"] = name
+    response = await client.post(
+        "/api/escalations", json=body, headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
 
@@ -92,7 +106,7 @@ async def test_create_rejects_invalid_email(client, email):
 async def test_create_rejects_phone_without_ten_digits(client, phone):
     response = await client.post(
         "/api/escalations",
-        json={"phone": phone, "reason": _REASON},
+        json=_body(email=None, phone=phone),
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -102,7 +116,7 @@ async def test_create_rejects_phone_without_ten_digits(client, phone):
 async def test_create_rejects_missing_reason(client):
     response = await client.post(
         "/api/escalations",
-        json={"email": "ana@example.com"},
+        json={"name": "Ana", "email": "ana@example.com"},
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -131,7 +145,7 @@ async def test_create_rejects_invalid_session_uuid(client):
 
 def test_contact_string_joins_email_and_phone():
     from routers.escalations import EscalationRequestBody
-    body = EscalationRequestBody(email="Ana@Example.com ", phone="(55) 1234-5678", reason=_REASON)
+    body = EscalationRequestBody(name="Ana", email="Ana@Example.com ", phone="(55) 1234-5678", reason=_REASON)
     assert body.email == "ana@example.com" and body.phone == "5512345678"
 
 
