@@ -61,6 +61,39 @@ const noteStyle: React.CSSProperties = {
 const errorable = (base: React.CSSProperties, bad: boolean): React.CSSProperties =>
   bad ? { ...base, borderColor: ERROR_COLOR } : base;
 
+/** What the user typed last time, so they don't retype it every request. The
+ *  account only stores an email, so this is the only source for the phone.
+ *  ponytail: per-browser; move it to the user record if it needs to follow
+ *  people across devices. */
+export const SAVED_KEY = "nexus.support-contact";
+
+type SavedContact = { name?: string; email?: string; phone?: string };
+
+export const readSaved = (): SavedContact => {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_KEY) || "{}");
+  } catch {
+    return {};
+  }
+};
+
+export const saveContact = (c: SavedContact) => {
+  try {
+    localStorage.setItem(SAVED_KEY, JSON.stringify(c));
+  } catch {
+    /* private mode / storage full — prefilling is a convenience, not a feature */
+  }
+};
+
+/** "ana.lopez@empresa.com" → "Ana Lopez". A guess, and the field is editable. */
+export const nameFromEmail = (email?: string) =>
+  (email || "")
+    .split("@")[0]
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
 export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultReason }: Props) {
   const { toast } = useToast();
   const [name, setName] = useState("");
@@ -72,12 +105,14 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
   const [uploading, setUploading] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Reset/prefill each time the modal opens.
+  // Prefill each time the modal opens: last request's details first, then what
+  // the account knows. Everything stays editable — it's a head start, not a lock.
   useEffect(() => {
     if (open) {
-      setName("");
-      setEmail(defaultEmail ?? "");
-      setPhone("");
+      const saved = readSaved();
+      setName(saved.name || nameFromEmail(defaultEmail));
+      setEmail(saved.email || defaultEmail || "");
+      setPhone(saved.phone || "");
       setReason(defaultReason ?? "");
       setAttachments([]);
       setUploading(0);
@@ -124,12 +159,14 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
   const submit = async () => {
     if (incomplete || sending || uploading > 0) return;
     setSending(true);
+    const contact = {
+      name: name.trim(),
+      email: emailOk ? email.trim() : undefined,
+      phone: phoneOk ? digitsOf(phone) : undefined,
+    };
     try {
-      await createEscalation({
-        email: emailOk ? email.trim() : undefined,
-        phone: phoneOk ? digitsOf(phone) : undefined,
-        name: name.trim(), reason: reason.trim(), sessionId, attachments,
-      });
+      await createEscalation({ ...contact, reason: reason.trim(), sessionId, attachments });
+      saveContact(contact);  // prefill the next request
       toast("Solicitud enviada. Una persona del equipo te contactará.", "success");
       onClose();
     } catch {
