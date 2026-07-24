@@ -19,7 +19,7 @@ def _guest_jwt():
     return PyJWT.encode(payload, _jwt_secret(), algorithm="HS256")
 
 
-# ── Create (any authenticated user) ───────────────────────────────────────────
+# ── Create (signed-in users only) ─────────────────────────────────────────────
 
 @pytest.mark.anyio
 async def test_create_requires_auth(client):
@@ -28,11 +28,21 @@ async def test_create_requires_auth(client):
 
 
 @pytest.mark.anyio
-async def test_guest_can_create(client):
+async def test_guest_cannot_create(client):
     response = await client.post(
         "/api/escalations",
         json={"contact": "555-1234", "reason": "necesito ayuda"},
         headers={"Authorization": f"Bearer {_guest_jwt()}"},
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_user_can_create(client):
+    response = await client.post(
+        "/api/escalations",
+        json={"contact": "555-1234", "reason": "necesito ayuda"},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 201
 
@@ -113,7 +123,7 @@ async def test_attachment_upload_rejects_bad_extension(client):
     response = await client.post(
         "/api/escalations/attachments",
         files={"file": ("malware.exe", b"MZ....", "application/octet-stream")},
-        headers={"Authorization": f"Bearer {_guest_jwt()}"},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 400
 
@@ -130,13 +140,23 @@ async def test_attachment_upload_rejects_spoofed_image(client):
 
 
 @pytest.mark.anyio
-async def test_guest_can_upload_image(client):
+async def test_guest_cannot_upload(client):
+    response = await client.post(
+        "/api/escalations/attachments",
+        files={"file": ("x.png", _PNG_BYTES, "image/png")},
+        headers={"Authorization": f"Bearer {_guest_jwt()}"},
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_user_can_upload_image(client):
     from routers import escalations
     with patch.object(escalations, "save_file", return_value="/data/escalations/xyz_x.png"):
         response = await client.post(
             "/api/escalations/attachments",
             files={"file": ("x.png", _PNG_BYTES, "image/png")},
-            headers={"Authorization": f"Bearer {_guest_jwt()}"},
+            headers={"Authorization": f"Bearer {make_jwt()}"},
         )
     assert response.status_code == 201
     body = response.json()
@@ -158,42 +178,7 @@ async def test_upload_rejected_when_disk_low(client):
     assert response.status_code == 507
 
 
-# ── Guest abuse guards ────────────────────────────────────────────────────────
-
-@pytest.mark.anyio
-async def test_guest_over_quota_rejected(client):
-    from db.connection import get_db
-    from main import app
-
-    async def _override():
-        session = AsyncMock()
-        result = MagicMock()
-        result.scalar_one.return_value = 3  # already at the open-request limit
-        session.execute = AsyncMock(return_value=result)
-        session.add = MagicMock()
-        session.commit = AsyncMock()
-        yield session
-
-    app.dependency_overrides[get_db] = _override
-    response = await client.post(
-        "/api/escalations",
-        json={"contact": "555-1234"},
-        headers={"Authorization": f"Bearer {_guest_jwt()}"},
-    )
-    app.dependency_overrides.clear()
-    assert response.status_code == 429
-
-
-@pytest.mark.anyio
-async def test_registered_user_exempt_from_quota(client):
-    # Registered users are trusted; the quota check is skipped even if count is high.
-    response = await client.post(
-        "/api/escalations",
-        json={"contact": "555-1234"},
-        headers={"Authorization": f"Bearer {make_jwt()}"},
-    )
-    assert response.status_code == 201
-
+# ── Abuse guards ──────────────────────────────────────────────────────────────
 
 def test_client_ip_extraction():
     from main import _client_ip, settings

@@ -343,10 +343,13 @@ export default function ChatPage() {
     );
   }
 
+  // Support requests need a real account — there's no way to follow up with a
+  // guest beyond what they type, and the backend rejects them anyway.
+  const canEscalate = !!user && !user.is_anon;
   // Auto-offer human contact when the assistant just said it has no info.
   const lastMsg = messages[messages.length - 1];
   const showEscalateOffer =
-    !sending && lastMsg?.role === "assistant" && lastMsg.content.startsWith(NO_INFO_PREFIX);
+    canEscalate && !sending && lastMsg?.role === "assistant" && lastMsg.content.startsWith(NO_INFO_PREFIX);
   const lastUserQuestion = [...messages].reverse().find((m) => m.role === "user")?.content;
   const defaultName = user && !user.is_anon ? user.email : undefined;
 
@@ -473,11 +476,13 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Actions toolbar — escalate is always available; share appears with a saved session */}
+        {/* Actions toolbar — help requests need an account; share needs a saved session */}
+        {(canEscalate || (currentSessionId && messages.length > 0)) && (
         <div
-          className="flex items-center justify-between px-4 md:px-8 py-2"
+          className={`flex items-center px-4 md:px-8 py-2 ${canEscalate ? "justify-between" : "justify-end"}`}
           style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
         >
+          {canEscalate && (
           <button
             onClick={() => setEscalateOpen(true)}
             title="Solicitar ayuda de una persona del equipo de soporte"
@@ -498,6 +503,7 @@ export default function ChatPage() {
             </svg>
             Solicitar ayuda
           </button>
+          )}
           {currentSessionId && messages.length > 0 && (
             <button
               onClick={handleShare}
@@ -522,6 +528,7 @@ export default function ChatPage() {
             </button>
           )}
         </div>
+        )}
 
         {/* Messages — live region so screen readers announce streamed replies
             (polite + non-atomic so only new content is read, not the whole log) */}

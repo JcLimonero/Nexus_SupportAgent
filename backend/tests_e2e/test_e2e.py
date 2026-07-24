@@ -335,21 +335,24 @@ def test_feedback_admin_list(api, admin_token, user_a):
     assert api.get("/api/admin/feedback", headers=bearer(user_a["token"])).status_code == 403
 
 
-# ── 6b. Human escalation ──────────────────────────────────────────────────────
+# ── 6b. Support requests (human escalation) ───────────────────────────────────
 # Keep POSTs to /api/escalations ≤5 per 60s — the endpoint is rate-limited.
 
-def test_escalation_requires_auth_and_validates(api):
+def test_escalation_requires_an_account(api):
     assert api.post("/api/escalations", json={"contact": "555-1234"}).status_code in (401, 403)
-    # contact too short → 422 (still an authenticated request)
+    # Guests are barred from the whole feature — request and uploads alike.
     assert api.post(
-        "/api/escalations", headers=bearer(S["guest_token"]), json={"contact": "ab"}
-    ).status_code == 422
-
-
-def test_escalation_attachment_upload(api):
-    # Guest can upload an image; a disallowed type is rejected.
-    ok = api.post(
+        "/api/escalations", headers=bearer(S["guest_token"]), json={"contact": "555-1234"}
+    ).status_code == 403
+    assert api.post(
         "/api/escalations/attachments", headers=bearer(S["guest_token"]),
+        files={"file": ("captura.png", PNG_BYTES, "image/png")},
+    ).status_code == 403
+
+
+def test_escalation_attachment_upload(api, user_a):
+    ok = api.post(
+        "/api/escalations/attachments", headers=bearer(user_a["token"]),
         files={"file": ("captura.png", PNG_BYTES, "image/png")},
     )
     assert ok.status_code == 201, ok.text
@@ -358,7 +361,7 @@ def test_escalation_attachment_upload(api):
     S["attachment"] = meta
 
     bad = api.post(
-        "/api/escalations/attachments", headers=bearer(S["guest_token"]),
+        "/api/escalations/attachments", headers=bearer(user_a["token"]),
         files={"file": ("malware.exe", b"MZ....", "application/octet-stream")},
     )
     assert bad.status_code == 400

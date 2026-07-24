@@ -27,6 +27,14 @@ router = APIRouter(prefix="/api", tags=["escalations"])
 
 _STATUSES = ("new", "in_progress", "resolved")
 
+
+async def require_account(user: dict = Depends(get_current_user)) -> dict:
+    """Support requests are for real accounts only. A guest leaves no reliable
+    way to follow up and is trivially re-created, so the inbox stays signed-in."""
+    if user.get("is_anon"):
+        raise HTTPException(status_code=403, detail="Inicia sesión para solicitar ayuda")
+    return user
+
 # ── Attachment limits (user/guest uploads — tighter than the admin KB upload) ──
 _ATTACH_MAX_BYTES = 25 * 1024 * 1024   # 25 MB per file
 _ATTACH_MAX_COUNT = 10
@@ -120,11 +128,11 @@ class StatusUpdate(BaseModel):
 @router.post("/escalations/attachments", status_code=201)
 async def upload_attachment(
     file: UploadFile = File(...),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_account),
 ):
-    """Upload ONE file to attach to a human-escalation request. Available to any
-    authenticated user (incl. guests). The frontend calls this once per file, then
-    sends the returned metadata in the create-escalation body."""
+    """Upload ONE file to attach to a support request. Signed-in users only. The
+    frontend calls this once per file, then sends the returned metadata in the
+    create-escalation body."""
     ext = Path(file.filename or "").suffix.lower()
     if ext not in _ATTACH_ALLOWED_EXT:
         raise HTTPException(
@@ -194,9 +202,9 @@ async def create_escalation(
     body: EscalationRequestBody,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_account),
 ):
-    """Any authenticated user (including guests) can request a human."""
+    """Signed-in users only — see require_account."""
     session_uuid: uuid.UUID | None = None
     if body.session_id:
         try:
@@ -209,22 +217,6 @@ async def create_escalation(
     for a in body.attachments:
         if not a.url.startswith(_ATTACH_URL_PREFIX):
             raise HTTPException(status_code=422, detail="Adjunto inválido")
-
-    # Per-guest quota: cap how many requests one anonymous user can leave open,
-    # so a single guest session can't flood the inbox (registered users are
-    # admin-created and trusted, so they're exempt).
-    if user.get("is_anon"):
-        open_count = (await db.execute(
-            select(func.count()).select_from(EscalationRequest).where(
-                EscalationRequest.user_id == user["uid"],
-                EscalationRequest.status.in_(("new", "in_progress")),
-            )
-        )).scalar_one()
-        if open_count >= settings.guest_open_escalation_limit:
-            raise HTTPException(
-                status_code=429,
-                detail="Ya tienes varias solicitudes abiertas. Espera a que el equipo te contacte.",
-            )
 
     record = EscalationRequest(
         session_id=session_uuid,

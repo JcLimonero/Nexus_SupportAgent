@@ -68,7 +68,6 @@ services:
       # (requires ARR to forward the client IP in XFF, which it does by default).
       TRUSTED_PROXY_HOPS: "2"
       # Escalation abuse guards (tunable; sensible defaults if unset).
-      GUEST_OPEN_ESCALATION_LIMIT: ${GUEST_OPEN_ESCALATION_LIMIT:-3}
       MIN_FREE_DISK_MB: ${MIN_FREE_DISK_MB:-500}
       ATTACHMENT_RETENTION_DAYS: ${ATTACHMENT_RETENTION_DAYS:-90}
       # Human-escalation email via EmailJS (optional). Empty ids disable email —
