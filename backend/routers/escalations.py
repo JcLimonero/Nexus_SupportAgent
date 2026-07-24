@@ -36,7 +36,7 @@ async def require_account(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 # ── Attachment limits (user/guest uploads — tighter than the admin KB upload) ──
-_ATTACH_MAX_BYTES = 25 * 1024 * 1024   # 25 MB per file
+_ATTACH_MAX_BYTES = 5 * 1024 * 1024    # 5 MB per file
 _ATTACH_MAX_COUNT = 10
 _ATTACH_URL_PREFIX = "/data/escalations/"
 # Broader than the KB allowlist: images (to recreate the problem), video, docs.
@@ -167,7 +167,7 @@ async def upload_attachment(
         raise HTTPException(status_code=status, detail=detail)
 
     if total > _ATTACH_MAX_BYTES:
-        _reject(413, "El archivo supera el límite de 25 MB")
+        _reject(413, f"El archivo supera el límite de {_ATTACH_MAX_BYTES // (1024 * 1024)} MB")
 
     # Content validation — extension-spoofing prevention.
     content_type = "application/octet-stream"

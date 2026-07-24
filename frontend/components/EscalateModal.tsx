@@ -11,6 +11,8 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
+const ATTACHMENT_MAX_MB = ATTACHMENT_MAX_BYTES / (1024 * 1024);
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -74,7 +76,7 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
         break;
       }
       if (file.size > ATTACHMENT_MAX_BYTES) {
-        toast(`"${file.name}" supera el límite de 25 MB.`, "error");
+        toast(`"${file.name}" supera el límite de ${ATTACHMENT_MAX_MB} MB.`, "error");
         continue;
       }
       setUploading((n) => n + 1);
@@ -180,7 +182,7 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
           {uploading > 0 ? "Subiendo..." : "Adjuntar imágenes, video o archivos"}
         </button>
         <p style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 4 }}>
-          Imágenes, video, PDF, Word, Excel, TXT o CSV · máx. 25 MB c/u
+          Imágenes, video, PDF, Word, Excel, TXT o CSV · máx. {ATTACHMENT_MAX_MB} MB c/u, {ATTACHMENT_MAX_COUNT} archivos
         </p>
 
         {attachments.length > 0 && (

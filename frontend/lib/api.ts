@@ -269,7 +269,7 @@ export interface Escalation {
 // Accepted attachment types (kept in sync with backend _ATTACH_ALLOWED_EXT).
 export const ATTACHMENT_ACCEPT =
   ".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.pdf,.docx,.xlsx,.txt,.csv";
-export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 export const ATTACHMENT_MAX_COUNT = 10;
 
 export async function uploadEscalationAttachment(file: File): Promise<EscalationAttachment> {

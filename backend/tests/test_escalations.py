@@ -165,6 +165,18 @@ async def test_user_can_upload_image(client):
 
 
 @pytest.mark.anyio
+async def test_attachment_upload_rejects_oversized_file(client):
+    from routers.escalations import _ATTACH_MAX_BYTES
+    big = _PNG_BYTES + b"\x00" * (_ATTACH_MAX_BYTES + 1 - len(_PNG_BYTES))
+    response = await client.post(
+        "/api/escalations/attachments",
+        files={"file": ("grande.png", big, "image/png")},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 413
+
+
+@pytest.mark.anyio
 async def test_upload_rejected_when_disk_low(client):
     import types
     from routers import escalations
