@@ -170,6 +170,7 @@ async def _notify(
         logger.warning("Chat PDF too big for EmailJS (%d KB) — emailing without it", len(encoded) // 1024)
         encoded = ""
     if encoded:
+        # Full data URI — the format EmailJS's own docs use (canvas.toDataURL()).
         params["chat_pdf"] = f"data:application/pdf;base64,{encoded}"
         params["chat_pdf_name"] = _TRANSCRIPT_NAME
 

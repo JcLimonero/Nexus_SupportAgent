@@ -452,7 +452,10 @@ async def test_notify_sends_conversation_link_and_pdf():
     assert len(sent) == 1
     assert sent[0]["conversation"] == "Usuario · hola"
     assert sent[0]["share_link"] == "https://x.mx/shared/tok"
+    # Full data URI — the format EmailJS's docs use (canvas.toDataURL()).
+    import base64 as _b64
     assert sent[0]["chat_pdf"].startswith("data:application/pdf;base64,")
+    assert _b64.b64decode(sent[0]["chat_pdf"].split(",", 1)[1]).startswith(b"%PDF")
     assert sent[0]["chat_pdf_name"] == "conversacion.pdf"
 
 
