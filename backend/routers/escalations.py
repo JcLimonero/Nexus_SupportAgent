@@ -10,7 +10,9 @@ from pathlib import Path
 
 import filetype
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import select, update as sql_update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -114,7 +116,9 @@ class Attachment(BaseModel):
 class EscalationRequestBody(BaseModel):
     contact: str = Field(min_length=3, max_length=120)
     name: str | None = Field(default=None, max_length=80)
-    reason: str | None = Field(default=None, max_length=1000)
+    # Required: a ticket with no description is one support has to chase down.
+    # Stripped first so whitespace can't pass for a description.
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10, max_length=1000)]
     session_id: str | None = None
     attachments: list[Attachment] = Field(default_factory=list, max_length=_ATTACH_MAX_COUNT)
 
@@ -224,7 +228,7 @@ async def create_escalation(
         user_label=user.get("email") or user["uid"],
         contact=body.contact.strip(),
         name=body.name.strip() if body.name else None,
-        reason=body.reason.strip() if body.reason else None,
+        reason=body.reason,
         attachments=[a.model_dump() for a in body.attachments],
     )
     db.add(record)

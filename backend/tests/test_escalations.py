@@ -21,6 +21,8 @@ def _guest_jwt():
 
 # ── Create (signed-in users only) ─────────────────────────────────────────────
 
+_REASON = "no puedo facturar un pedido de mostrador"
+
 @pytest.mark.anyio
 async def test_create_requires_auth(client):
     response = await client.post("/api/escalations", json={"contact": "555-1234"})
@@ -51,7 +53,28 @@ async def test_user_can_create(client):
 async def test_create_rejects_short_contact(client):
     response = await client.post(
         "/api/escalations",
-        json={"contact": "ab"},
+        json={"contact": "ab", "reason": _REASON},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_create_rejects_missing_reason(client):
+    response = await client.post(
+        "/api/escalations",
+        json={"contact": "555-1234"},
+        headers={"Authorization": f"Bearer {make_jwt()}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_create_rejects_whitespace_reason(client):
+    # Stripped before the length check, so spaces can't pass for a description.
+    response = await client.post(
+        "/api/escalations",
+        json={"contact": "555-1234", "reason": "          "},
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -71,7 +94,7 @@ async def test_create_rejects_missing_contact(client):
 async def test_create_rejects_invalid_session_uuid(client):
     response = await client.post(
         "/api/escalations",
-        json={"contact": "555-1234", "session_id": "not-a-uuid"},
+        json={"contact": "555-1234", "reason": _REASON, "session_id": "not-a-uuid"},
         headers={"Authorization": f"Bearer {make_jwt()}"},
     )
     assert response.status_code == 422
@@ -83,6 +106,7 @@ async def test_create_accepts_attachments(client):
         "/api/escalations",
         json={
             "contact": "555-1234",
+            "reason": _REASON,
             "attachments": [{"file_name": "captura.png", "url": "/data/escalations/abc_captura.png", "content_type": "image/png", "size": 1234}],
         },
         headers={"Authorization": f"Bearer {make_jwt()}"},
@@ -97,6 +121,7 @@ async def test_create_rejects_foreign_attachment_url(client):
         "/api/escalations",
         json={
             "contact": "555-1234",
+            "reason": _REASON,
             "attachments": [{"file_name": "secreto.pdf", "url": "/data/pdfs/secreto.pdf"}],
         },
         headers={"Authorization": f"Bearer {make_jwt()}"},

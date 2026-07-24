@@ -339,10 +339,11 @@ def test_feedback_admin_list(api, admin_token, user_a):
 # Keep POSTs to /api/escalations ≤5 per 60s — the endpoint is rate-limited.
 
 def test_escalation_requires_an_account(api):
-    assert api.post("/api/escalations", json={"contact": "555-1234"}).status_code in (401, 403)
+    body = {"contact": "555-1234", "reason": "no puedo facturar un pedido"}
+    assert api.post("/api/escalations", json=body).status_code in (401, 403)
     # Guests are barred from the whole feature — request and uploads alike.
     assert api.post(
-        "/api/escalations", headers=bearer(S["guest_token"]), json={"contact": "555-1234"}
+        "/api/escalations", headers=bearer(S["guest_token"]), json=body
     ).status_code == 403
     assert api.post(
         "/api/escalations/attachments", headers=bearer(S["guest_token"]),
@@ -383,7 +384,8 @@ def test_escalation_create_and_admin_flow(api, user_a, admin_token):
     # A create referencing a URL outside /data/escalations/ is rejected.
     assert api.post(
         "/api/escalations", headers=bearer(user_a["token"]),
-        json={"contact": "x@x.com", "attachments": [{"file_name": "kb.pdf", "url": "/data/pdfs/kb.pdf"}]},
+        json={"contact": "x@x.com", "reason": "adjunto que no subí yo",
+              "attachments": [{"file_name": "kb.pdf", "url": "/data/pdfs/kb.pdf"}]},
     ).status_code == 422
 
     # Admin sees it with the attachment; non-admin is forbidden.

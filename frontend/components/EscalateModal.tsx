@@ -94,11 +94,14 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
   const removeAttachment = (url: string) =>
     setAttachments((prev) => prev.filter((a) => a.url !== url));
 
+  // Mirrors the backend: contact ≥3, a real description ≥10 chars.
+  const incomplete = contact.trim().length < 3 || reason.trim().length < 10;
+
   const submit = async () => {
-    if (contact.trim().length < 3 || sending || uploading > 0) return;
+    if (incomplete || sending || uploading > 0) return;
     setSending(true);
     try {
-      await createEscalation({ contact: contact.trim(), name, reason, sessionId, attachments });
+      await createEscalation({ contact: contact.trim(), name, reason: reason.trim(), sessionId, attachments });
       toast("Solicitud enviada. Una persona del equipo te contactará.", "success");
       onClose();
     } catch {
@@ -118,14 +121,14 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
           <Button variant="ghost" size="sm" onClick={onClose} disabled={sending}>
             Cancelar
           </Button>
-          <Button variant="primary" size="sm" onClick={submit} disabled={sending || uploading > 0 || contact.trim().length < 3}>
+          <Button variant="primary" size="sm" onClick={submit} disabled={sending || uploading > 0 || incomplete}>
             {sending ? "Enviando..." : uploading > 0 ? "Subiendo..." : "Enviar solicitud"}
           </Button>
         </>
       }
     >
       <p style={{ marginBottom: 16 }}>
-        Déjanos cómo contactarte y una persona del equipo de soporte te responderá.
+        Cuéntanos qué pasó y cómo contactarte; una persona del equipo de soporte te responderá.
       </p>
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle} htmlFor="esc-name">Nombre (opcional)</label>
@@ -141,8 +144,9 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
       </div>
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle} htmlFor="esc-reason">¿En qué necesitas ayuda? (opcional)</label>
+        <label style={labelStyle} htmlFor="esc-reason">¿En qué necesitas ayuda? *</label>
         <textarea id="esc-reason" style={{ ...inputStyle, resize: "none", lineHeight: 1.5 }} rows={3}
+          placeholder="Describe qué intentabas hacer y qué pasó" required
           value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000}
           onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
