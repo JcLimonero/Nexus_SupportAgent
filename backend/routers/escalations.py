@@ -1,11 +1,11 @@
 import asyncio
+import json
 import logging
 import shutil
-import smtplib
 import tempfile
+import urllib.request
 import uuid
 from datetime import datetime, timedelta
-from email.message import EmailMessage
 from pathlib import Path
 
 import filetype
@@ -43,46 +43,55 @@ _ATTACH_ALLOWED_EXT = _ATTACH_TEXT_EXT | _ATTACH_BINARY_EXT
 _ATTACH_DETECTED = {"png", "jpg", "gif", "webp", "mp4", "mov", "webm", "pdf", "docx", "xlsx"}
 
 
-# ── Email notification (best-effort) ──────────────────────────────────────────
+# ── Email notification via EmailJS (best-effort) ──────────────────────────────
 
-def _send_email(subject: str, body: str) -> None:
-    """Blocking SMTP send. No-op if SMTP isn't configured. Never raises — the
-    escalation is already saved; email is a bonus, not a guarantee."""
-    if not settings.smtp_host or not settings.escalation_notify_email:
-        logger.info("SMTP not configured — escalation email skipped")
+_EMAILJS_URL = "https://api.emailjs.com/api/v1.0/email/send"
+
+
+def _send_via_emailjs(template_params: dict) -> None:
+    """Blocking server-side POST to EmailJS. No-op if not configured. Never
+    raises — the escalation is already saved; email is a bonus, not a guarantee."""
+    if not (settings.emailjs_service_id and settings.emailjs_template_id and settings.emailjs_public_key):
+        logger.info("EmailJS not configured — escalation email skipped")
         return
+    payload = {
+        "service_id": settings.emailjs_service_id,
+        "template_id": settings.emailjs_template_id,
+        "user_id": settings.emailjs_public_key,
+        "template_params": template_params,
+    }
+    if settings.emailjs_private_key:
+        payload["accessToken"] = settings.emailjs_private_key  # strict / server-side mode
     try:
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = settings.smtp_from or settings.smtp_user
-        msg["To"] = settings.escalation_notify_email
-        msg.set_content(body)
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-            smtp.starttls()
-            if settings.smtp_user:
-                smtp.login(settings.smtp_user, settings.smtp_password)
-            smtp.send_message(msg)
+        req = urllib.request.Request(
+            _EMAILJS_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
     except Exception as exc:
-        logger.error("Escalation email failed: %s", exc)
+        logger.error("EmailJS send failed: %s", exc)
 
 
 async def _notify(record: EscalationRequest) -> None:
     who = record.name or record.user_label or record.user_id
-    lines = [
-        f"Nueva solicitud de contacto humano de: {who}",
-        f"Contacto: {record.contact}",
-        f"Motivo: {record.reason or '(sin especificar)'}",
-    ]
-    if record.attachments:
-        names = ", ".join(a.get("file_name", "?") for a in record.attachments)
-        lines.append(f"Adjuntos ({len(record.attachments)}): {names}")
+    attach_names = ", ".join(a.get("file_name", "?") for a in (record.attachments or [])) or "—"
+    link = ""
     if record.session_id and settings.public_origin:
-        lines.append(
-            f"Conversación: {settings.public_origin}/admin/conversations?id={record.session_id}"
-        )
-    await asyncio.to_thread(
-        _send_email, f"Nueva solicitud de soporte — {who}", "\n".join(lines)
-    )
+        link = f"{settings.public_origin}/admin/conversations?id={record.session_id}"
+    # Keys map to variables in the EmailJS template the user creates.
+    params = {
+        "subject": f"Nueva solicitud de soporte — {who}",
+        "from_name": who,
+        "contact": record.contact,
+        "reason": record.reason or "(sin especificar)",
+        "attachments": attach_names,
+        "conversation_link": link,
+        "to_email": settings.escalation_notify_email,
+    }
+    await asyncio.to_thread(_send_via_emailjs, params)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────

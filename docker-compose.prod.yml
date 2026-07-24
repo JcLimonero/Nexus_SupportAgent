@@ -71,14 +71,13 @@ services:
       GUEST_OPEN_ESCALATION_LIMIT: ${GUEST_OPEN_ESCALATION_LIMIT:-3}
       MIN_FREE_DISK_MB: ${MIN_FREE_DISK_MB:-500}
       ATTACHMENT_RETENTION_DAYS: ${ATTACHMENT_RETENTION_DAYS:-90}
-      # Human-escalation email (optional). Empty SMTP_HOST/ESCALATION_NOTIFY_EMAIL
-      # disables email — requests still land in the admin panel.
+      # Human-escalation email via EmailJS (optional). Empty ids disable email —
+      # requests still land in the admin panel.
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-}
+      EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID:-}
+      EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID:-}
+      EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY:-}
+      EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY:-}
       ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
     volumes:
       - nexus_data:/data                                   # uploaded PDFs/MP4s (local storage)

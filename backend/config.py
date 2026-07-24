@@ -98,15 +98,15 @@ class Settings(BaseSettings):
     # Startup sweep: delete attachment files of resolved requests older than this.
     attachment_retention_days: int = 90
 
-    # ── SMTP (human-escalation notifications) ────────────────────────────────
-    # All empty by default → email disabled (the escalation still lands in the
-    # admin panel, which is the source of truth). Fill these to notify support.
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    smtp_from: str = ""                 # From address; falls back to smtp_user
-    escalation_notify_email: str = ""   # where "talk to a human" requests are sent
+    # ── EmailJS (human-escalation notifications) ─────────────────────────────
+    # Server-side REST send. All empty → email disabled (the escalation still
+    # lands in the admin panel, which is the source of truth). In EmailJS, enable
+    # "Allow EmailJS API for non-browser applications" and use the private key.
+    emailjs_service_id: str = ""
+    emailjs_template_id: str = ""
+    emailjs_public_key: str = ""
+    emailjs_private_key: str = ""       # accessToken for strict/server-side mode
+    escalation_notify_email: str = ""   # passed to the template as {{to_email}}
     # Public origin, used to build the "open conversation" link inside the email.
     public_origin: str = ""
 

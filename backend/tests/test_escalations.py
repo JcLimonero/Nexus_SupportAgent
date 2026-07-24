@@ -217,22 +217,51 @@ def test_client_ip_extraction():
         settings.trusted_proxy_hops = orig
 
 
-# ── Email helper (best-effort) ────────────────────────────────────────────────
+# ── Email helper (EmailJS, best-effort) ───────────────────────────────────────
 
-def test_send_email_skipped_when_unconfigured():
+def test_emailjs_skipped_when_unconfigured():
     from routers import escalations
-    with patch("smtplib.SMTP") as smtp:
-        escalations._send_email("subj", "body")  # settings.smtp_host is "" in tests
-    smtp.assert_not_called()
+    with patch("urllib.request.urlopen") as urlopen:
+        escalations._send_via_emailjs({})  # EmailJS ids are "" in tests
+    urlopen.assert_not_called()
 
 
-def test_send_email_swallows_errors():
+def test_emailjs_swallows_errors():
     from routers import escalations
-    with patch.object(escalations.settings, "smtp_host", "smtp.test"), \
-         patch.object(escalations.settings, "escalation_notify_email", "s@test.com"), \
-         patch("smtplib.SMTP", side_effect=OSError("connection refused")):
+    with patch.object(escalations.settings, "emailjs_service_id", "svc"), \
+         patch.object(escalations.settings, "emailjs_template_id", "tpl"), \
+         patch.object(escalations.settings, "emailjs_public_key", "pub"), \
+         patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
         # Must not raise — the escalation is already saved; email is a bonus.
-        escalations._send_email("subj", "body")
+        escalations._send_via_emailjs({"contact": "x"})
+
+
+def test_emailjs_payload_shape():
+    import json as _json
+    from routers import escalations
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b"OK"
+
+    def _fake_urlopen(req, timeout=None):
+        captured["body"] = _json.loads(req.data.decode())
+        return _Resp()
+
+    with patch.object(escalations.settings, "emailjs_service_id", "svc"), \
+         patch.object(escalations.settings, "emailjs_template_id", "tpl"), \
+         patch.object(escalations.settings, "emailjs_public_key", "pub"), \
+         patch.object(escalations.settings, "emailjs_private_key", "priv"), \
+         patch("urllib.request.urlopen", _fake_urlopen):
+        escalations._send_via_emailjs({"contact": "ana@example.com"})
+
+    body = captured["body"]
+    assert body["service_id"] == "svc" and body["template_id"] == "tpl"
+    assert body["user_id"] == "pub" and body["accessToken"] == "priv"
+    assert body["template_params"]["contact"] == "ana@example.com"
 
 
 # ── Admin list / update ───────────────────────────────────────────────────────
