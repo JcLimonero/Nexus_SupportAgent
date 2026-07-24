@@ -480,7 +480,7 @@ export default function ChatPage() {
         >
           <button
             onClick={() => setEscalateOpen(true)}
-            title="Solicitar contacto de una persona del equipo de soporte"
+            title="Solicitar ayuda de una persona del equipo de soporte"
             style={{
               display: "flex", alignItems: "center", gap: 6,
               fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
@@ -496,7 +496,7 @@ export default function ChatPage() {
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            Hablar con una persona
+            Solicitar ayuda
           </button>
           {currentSessionId && messages.length > 0 && (
             <button
@@ -670,7 +670,7 @@ export default function ChatPage() {
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)")}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
                 >
-                  Hablar con una persona
+                  Solicitar ayuda
                 </button>
               </div>
             </div>

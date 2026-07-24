@@ -110,7 +110,7 @@ export function EscalateModal({ open, onClose, sessionId, defaultName, defaultRe
     <Modal
       open={open}
       onClose={onClose}
-      title="Hablar con una persona"
+      title="Solicitar ayuda"
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose} disabled={sending}>

@@ -154,7 +154,7 @@ export default function EscalationsPage() {
               )}
             </div>
             <p style={{ fontSize: 12, color: "#64748b", marginTop: 2, fontWeight: 300, paddingLeft: 11 }}>
-              Usuarios que pidieron hablar con una persona del equipo.
+              Usuarios que solicitaron ayuda del equipo de soporte.
             </p>
           </div>
           <div className="flex items-center gap-3 mt-1">
