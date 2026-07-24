@@ -20,10 +20,13 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator, model
 from sqlalchemy import select, update as sql_update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from html import escape as _html_escape
+
 from db.connection import get_db, AsyncSessionLocal
 from db.models import ChatMessage, ChatSession, EscalationRequest
 from auth.firebase_verify import get_current_user
 from routers.admin import require_admin, save_file, _safe_filename, _looks_like_text
+from routers.media import sign_url
 from config import get_settings
 from transcript import format_transcript, render_pdf
 
@@ -62,6 +65,38 @@ _ATTACH_DETECTED = {"png", "jpg", "gif", "webp", "mp4", "mov", "webm", "pdf", "d
 # ── Conversation snapshot (PDF + text for the email) ──────────────────────────
 _TRANSCRIPT_NAME = "conversacion.pdf"
 _MAIL_TRANSCRIPT_CHARS = 8000   # EmailJS caps request size; the PDF has it all
+# The email is read days after it's sent, so its links must outlive the 1 h the
+# in-app player uses. Unguessable HMAC links to a single file — safe to email.
+_EMAIL_LINK_TTL = 30 * 24 * 3600   # 30 days
+
+
+def _email_media_html(attachments: list[dict]) -> str:
+    """The user's uploads as HTML for the email body: images inline (remote
+    <img> — data URIs are blocked by Gmail et al.), everything else as a link.
+    Absolute, long-lived signed URLs so support can open them from the inbox."""
+    origin = settings.public_origin.rstrip("/")
+    rows: list[str] = []
+    for a in attachments:
+        try:
+            href = sign_url(a["url"], _EMAIL_LINK_TTL)
+        except ValueError:
+            continue
+        if href.startswith("/"):        # local storage → relative; make absolute
+            href = origin + href
+        name = _html_escape(a.get("file_name", "archivo"))
+        if (a.get("content_type") or "").startswith("image/"):
+            rows.append(
+                f'<div style="margin:8px 0"><a href="{href}" target="_blank">'
+                f'<img src="{href}" alt="{name}" style="max-width:320px;max-height:240px;'
+                f'border:1px solid #ddd;border-radius:4px;display:block"></a>'
+                f'<div style="font-size:11px;color:#777;margin-top:2px">{name}</div></div>'
+            )
+        else:
+            rows.append(
+                f'<div style="margin:6px 0">&#128206; '
+                f'<a href="{href}" target="_blank">{name}</a></div>'
+            )
+    return "".join(rows)
 
 
 async def _snapshot_conversation(db: AsyncSession, session_uuid: uuid.UUID, uid: str):
@@ -146,6 +181,7 @@ async def _notify(
     conversation: str = "",
     share_link: str = "",
     pdf: bytes | None = None,
+    attachments_html: str = "",
 ) -> None:
     who = record.name or record.user_label or record.user_id
     attach_names = ", ".join(a.get("file_name", "?") for a in (record.attachments or [])) or "—"
@@ -159,6 +195,8 @@ async def _notify(
         "contact": record.contact,
         "reason": record.reason or "(sin especificar)",
         "attachments": attach_names,
+        # Rendered as HTML in the template: images inline, other files as links.
+        "attachments_html": attachments_html or "(sin archivos)",
         "conversation": conversation or "(sin conversación)",
         "share_link": share_link,
         "conversation_link": link,
@@ -335,6 +373,9 @@ async def create_escalation(
     # public link the email carries. Best-effort — a ticket must never be lost
     # because the snapshot failed.
     attachments = [a.model_dump() for a in body.attachments]
+    # Built before the PDF is prepended — the transcript rides as the email's
+    # own attachment, not as a link in the body.
+    attachments_html = _email_media_html(attachments)
     conversation, share_link, pdf, pdf_path = "", "", None, None
     if session_uuid:
         try:
@@ -370,7 +411,7 @@ async def create_escalation(
     await db.commit()   # also persists the share token minted above
     await db.refresh(record)
 
-    background_tasks.add_task(_notify, record, conversation, share_link, pdf)
+    background_tasks.add_task(_notify, record, conversation, share_link, pdf, attachments_html)
     return {"id": str(record.id), "status": record.status}
 
 
