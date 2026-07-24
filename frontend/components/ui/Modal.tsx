@@ -87,12 +87,18 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
           borderRadius: "var(--radius-lg)",
           boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
           overflow: "hidden",
+          // Cap at the viewport and lay out as a column so the body scrolls
+          // while header/footer stay put — tall content (e.g. many attachments)
+          // no longer pushes the panel off-screen.
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
           animation: "nqt-modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both",
           outline: "none",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 pt-6 pb-4">
+        <div className="px-6 pt-6 pb-4" style={{ overflowY: "auto", minHeight: 0 }}>
           {title && (
             <p
               style={{
@@ -115,7 +121,7 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
         {footer && (
           <div
             className="px-6 py-4 flex items-center justify-end gap-3"
-            style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}
+            style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)", flexShrink: 0 }}
           >
             {footer}
           </div>
