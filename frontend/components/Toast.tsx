@@ -42,12 +42,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), EXIT_MS);
   };
 
-  const borderColor = (k: ToastKind) =>
+  const accent = (k: ToastKind) =>
     k === "success" ? "#22c55e" : k === "error" ? "#f87171" : "var(--nqt-blue, #0ea5e9)";
-  const bgColor = (k: ToastKind) =>
-    k === "success" ? "rgba(34,197,94,0.08)" : k === "error" ? "rgba(248,113,113,0.08)" : "var(--bg-surface)";
-  const textColor = (k: ToastKind) =>
-    k === "success" ? "#22c55e" : k === "error" ? "#f87171" : "var(--text-primary)";
   const icon = (k: ToastKind) =>
     k === "success" ? "✓" : k === "error" ? "✕" : "·";
 
@@ -62,13 +58,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               display: "flex",
               alignItems: "flex-start",
               gap: 10,
-              borderLeft: `3px solid ${borderColor(t.kind)}`,
-              backgroundColor: bgColor(t.kind),
-              color: textColor(t.kind),
+              border: "1px solid var(--border-default)",
+              borderLeftWidth: 3,
+              borderLeftColor: accent(t.kind),
+              // Opaque surface so the message is readable over any page content
+              // (the old translucent tint let 90% of the background bleed through).
+              backgroundColor: "var(--bg-surface)",
+              color: "var(--text-primary)",
               padding: "10px 12px 10px 14px",
               fontSize: 13,
-              fontWeight: 300,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+              fontWeight: 400,
+              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
               borderRadius: `0 var(--radius) var(--radius) 0`,
               animation: t.exiting
                 ? `nqt-toastOut ${EXIT_MS}ms ease forwards`
@@ -76,7 +76,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               cursor: "default",
             }}
           >
-            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 1 }}>
+            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 1, color: accent(t.kind) }}>
               {icon(t.kind)}
             </span>
             <span style={{ flex: 1, lineHeight: 1.5 }}>{t.text}</span>

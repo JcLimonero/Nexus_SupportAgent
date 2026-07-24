@@ -123,20 +123,30 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
     if (!fileList || fileList.length === 0) return;
     const picked = Array.from(fileList);
     if (fileRef.current) fileRef.current.value = ""; // allow re-picking the same file
+    // Track remaining slots locally: setAttachments is async, so attachments.length
+    // wouldn't update within this loop and a single multi-file pick could blow past
+    // the cap.
+    let slots = ATTACHMENT_MAX_COUNT - attachments.length;
+    if (slots <= 0) {
+      toast(`Ya tienes el máximo de ${ATTACHMENT_MAX_COUNT} archivos. Quita alguno para adjuntar otro.`, "error");
+      return;
+    }
     for (const file of picked) {
-      if (attachments.length >= ATTACHMENT_MAX_COUNT) {
-        toast(`Máximo ${ATTACHMENT_MAX_COUNT} archivos.`, "error");
+      if (slots <= 0) {
+        toast(`Solo puedes adjuntar ${ATTACHMENT_MAX_COUNT} archivos; el resto no se agregó.`, "error");
         break;
       }
       if (file.size > ATTACHMENT_MAX_BYTES) {
         toast(`"${file.name}" supera el límite de ${ATTACHMENT_MAX_MB} MB.`, "error");
         continue;
       }
+      slots -= 1;
       setUploading((n) => n + 1);
       try {
         const meta = await uploadEscalationAttachment(file);
         setAttachments((prev) => [...prev, meta]);
       } catch {
+        slots += 1; // upload failed — free the slot back up
         toast(`No se pudo subir "${file.name}".`, "error");
       } finally {
         setUploading((n) => n - 1);
@@ -146,6 +156,8 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
 
   const removeAttachment = (url: string) =>
     setAttachments((prev) => prev.filter((a) => a.url !== url));
+
+  const atMax = attachments.length >= ATTACHMENT_MAX_COUNT;
 
   // Mirrors the backend: a valid email OR a 10-digit phone, plus a real
   // description. A filled-but-malformed field blocks instead of being dropped.
@@ -236,7 +248,9 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
 
       {/* Attachments — let the user recreate the problem with screenshots/video/files */}
       <div>
-        <label style={labelStyle}>Adjuntos (opcional)</label>
+        <label style={labelStyle}>
+          Adjuntos (opcional) · {attachments.length}/{ATTACHMENT_MAX_COUNT}
+        </label>
         <input
           ref={fileRef}
           type="file"
@@ -249,27 +263,33 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          disabled={attachments.length >= ATTACHMENT_MAX_COUNT}
+          disabled={atMax}
           style={{
             display: "flex", alignItems: "center", gap: 6,
             fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
             letterSpacing: "1.5px", textTransform: "uppercase",
             color: "var(--text-muted)", background: "none",
             border: "1px dashed var(--border-strong)", borderRadius: "var(--radius-sm)",
-            padding: "7px 12px", cursor: attachments.length >= ATTACHMENT_MAX_COUNT ? "not-allowed" : "pointer",
-            width: "100%", justifyContent: "center",
+            padding: "7px 12px", cursor: atMax ? "not-allowed" : "pointer",
+            width: "100%", justifyContent: "center", opacity: atMax ? 0.5 : 1,
           }}
-          onMouseEnter={(e) => { if (attachments.length < ATTACHMENT_MAX_COUNT) e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; }}
+          onMouseEnter={(e) => { if (!atMax) e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; }}
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-strong)")}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
-          {uploading > 0 ? "Subiendo..." : "Adjuntar imágenes, video o archivos"}
+          {uploading > 0 ? "Subiendo..." : atMax ? `Máximo de ${ATTACHMENT_MAX_COUNT} archivos` : "Adjuntar imágenes, video o archivos"}
         </button>
-        <p style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 4 }}>
-          Imágenes, video, PDF, Word, Excel, TXT o CSV · máx. {ATTACHMENT_MAX_MB} MB c/u, {ATTACHMENT_MAX_COUNT} archivos
-        </p>
+        {atMax ? (
+          <p style={{ fontSize: 10, color: ERROR_COLOR, marginTop: 4 }}>
+            Alcanzaste el máximo de {ATTACHMENT_MAX_COUNT} archivos. Quita alguno para adjuntar otro.
+          </p>
+        ) : (
+          <p style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 4 }}>
+            Imágenes, video, PDF, Word, Excel, TXT o CSV · máx. {ATTACHMENT_MAX_MB} MB c/u, {ATTACHMENT_MAX_COUNT} archivos
+          </p>
+        )}
 
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
