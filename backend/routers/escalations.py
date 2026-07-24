@@ -6,6 +6,7 @@ import re
 import secrets
 import shutil
 import tempfile
+import urllib.error
 import urllib.request
 import uuid
 from datetime import datetime, timedelta
@@ -122,12 +123,19 @@ def _send_via_emailjs(template_params: dict) -> bool:
         req = urllib.request.Request(
             _EMAILJS_URL,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            # EmailJS sits behind Cloudflare, which answers 403 "error code:
+            # 1010" to urllib's default User-Agent. Any real name gets through.
+            headers={"Content-Type": "application/json", "User-Agent": "NexusSupportAgent/1.0"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             resp.read()
         return True
+    except urllib.error.HTTPError as exc:
+        # EmailJS explains itself in the body ("template ID not found", "The
+        # attachment size exceeds…"); the status code alone is useless.
+        logger.error("EmailJS rejected the send (%s): %s", exc.code, exc.read().decode(errors="replace")[:300])
+        return False
     except Exception as exc:
         logger.error("EmailJS send failed: %s", exc)
         return False

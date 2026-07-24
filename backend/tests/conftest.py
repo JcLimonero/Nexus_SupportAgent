@@ -60,6 +60,14 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _never_send_real_email():
+    """A filled local .env would otherwise make the escalation tests hit the
+    real EmailJS account. Tests that exercise the send patch this back."""
+    from config import get_settings
+    get_settings().emailjs_service_id = ""
+
+
 @pytest_asyncio.fixture
 async def client():
     """ASGI test client with DB patched out."""

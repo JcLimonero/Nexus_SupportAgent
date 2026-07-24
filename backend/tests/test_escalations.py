@@ -418,6 +418,7 @@ def test_emailjs_payload_shape():
 
     def _fake_urlopen(req, timeout=None):
         captured["body"] = _json.loads(req.data.decode())
+        captured["ua"] = req.get_header("User-agent")
         return _Resp()
 
     with patch.object(escalations.settings, "emailjs_service_id", "svc"), \
@@ -431,6 +432,8 @@ def test_emailjs_payload_shape():
     assert body["service_id"] == "svc" and body["template_id"] == "tpl"
     assert body["user_id"] == "pub" and body["accessToken"] == "priv"
     assert body["template_params"]["contact"] == "ana@example.com"
+    # Cloudflare 403s urllib's default UA ("error code: 1010") — keep our own.
+    assert captured["ua"] and "urllib" not in captured["ua"].lower()
 
 
 def _record_stub():
