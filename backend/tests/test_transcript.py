@@ -56,3 +56,22 @@ def test_render_pdf_escapes_html(tmp_path):
     out = str(tmp_path / "html.pdf")
     render_pdf(out, None, [_msg("user", "<b>no soy negritas</b>")])
     assert "<b>no soy negritas</b>" in pymupdf.open(out).load_page(0).get_text()
+
+
+_MARKDOWN = "El código es **NEXUS-E2E** y usa `activar()`:\n\n* Paso uno\n* Paso dos"
+
+
+def test_format_transcript_strips_markdown_markers():
+    text = format_transcript([_msg("assistant", _MARKDOWN)])
+    assert "**" not in text and "`" not in text
+    assert "NEXUS-E2E" in text and "activar()" in text
+    assert "• Paso uno" in text          # bullets become readable
+
+
+def test_render_pdf_renders_markdown_not_raw_markers(tmp_path):
+    out = str(tmp_path / "md.pdf")
+    render_pdf(out, "Activación", [_msg("assistant", _MARKDOWN)])
+    text = pymupdf.open(out).load_page(0).get_text()
+    assert "**" not in text and "`" not in text   # markers rendered, not literal
+    assert "NEXUS-E2E" in text and "activar()" in text
+    assert "Paso uno" in text and "Paso dos" in text
