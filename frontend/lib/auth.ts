@@ -1,17 +1,21 @@
 const TOKEN_KEY = "nexus_token";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// localStorage, not sessionStorage: sessionStorage is per-tab, so a deep link
+// opened from an email (admin conversation, escalation) lands in a fresh tab
+// with no token and bounces to login even while the user is signed in elsewhere.
+// localStorage is shared across the origin's tabs; the JWT's own exp still ends it.
 export function getLocalToken(): string | null {
   if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setLocalToken(token: string) {
-  sessionStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearLocalToken() {
-  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 export async function localLogin(email: string, password: string): Promise<void> {

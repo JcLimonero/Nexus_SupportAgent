@@ -35,11 +35,11 @@ export function readState(): E2EState {
   return JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
 }
 
-/** Put the JWT in sessionStorage before any page script runs — the app's
+/** Put the JWT in localStorage before any page script runs — the app's
  * AuthProvider reads it from there on load. */
 export async function injectToken(page: Page, token: string) {
   await page.addInitScript((t: string) => {
-    window.sessionStorage.setItem("nexus_token", t);
+    window.localStorage.setItem("nexus_token", t);
   }, token);
 }
 
