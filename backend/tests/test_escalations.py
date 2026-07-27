@@ -252,7 +252,7 @@ async def test_create_skips_snapshot_for_someone_elses_session(client):
         )
     app.dependency_overrides.clear()
     assert response.status_code == 201
-    saved, conversation, _share, pdf, _html = notify.await_args.args
+    saved, conversation, _share, pdf, _html, _zip = notify.await_args.args
     assert saved.attachments == [] and conversation == "" and pdf is None
 
 
@@ -485,7 +485,9 @@ async def test_notify_passes_attachments_html():
     sent = []
     with patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
         await escalations._notify(_record_stub(), "hola", "", None, "<img src='x'>")
-    assert sent[0]["attachments_html"] == "<img src='x'>"
+    # The media HTML rides in the `attachments` param — the template renders it
+    # raw via {{{attachments}}}.
+    assert sent[0]["attachments"] == "<img src='x'>"
 
 
 @pytest.mark.anyio
@@ -513,6 +515,74 @@ async def test_notify_retries_without_the_pdf_when_the_send_fails():
     assert len(sent) == 2
     assert "chat_pdf" in sent[0] and "chat_pdf" not in sent[1]
     assert sent[1]["conversation"] == "hola"
+
+
+# ── Attachment zip (the user's uploads bundled for the email) ──────────────────
+
+def test_build_attachments_zip_bundles_what_fits():
+    import io as _io
+    import zipfile as _zip
+    from routers import escalations
+    media = [
+        {"file_name": "a.png", "url": "/data/escalations/x_a.png", "size": 4},
+        {"file_name": "b.csv", "url": "/data/escalations/y_b.csv", "size": 4},
+    ]
+    blobs = {"/data/escalations/x_a.png": b"AAAA", "/data/escalations/y_b.csv": b"BBBB"}
+    with patch.object(escalations, "_read_local_bytes", lambda u: blobs.get(u)):
+        zip_bytes, leftover = escalations._build_attachments_zip(media, 10_000)
+    assert leftover == []
+    assert set(_zip.ZipFile(_io.BytesIO(zip_bytes)).namelist()) == {"a.png", "b.csv"}
+
+
+def test_build_attachments_zip_leaves_oversized_as_leftover():
+    from routers import escalations
+    small = {"file_name": "s.png", "url": "/data/escalations/s.png", "size": 5}
+    big = {"file_name": "clip.mp4", "url": "/data/escalations/clip.mp4", "size": 5_000_000}
+    # A large `size` skips the read entirely — we never pull the video into memory.
+    with patch.object(escalations, "_read_local_bytes", lambda u: b"xxxxx"):
+        zip_bytes, leftover = escalations._build_attachments_zip([big, small], 400)
+    assert zip_bytes is not None and leftover == [big]
+
+
+def test_build_attachments_zip_dedupes_colliding_names():
+    import io as _io
+    import zipfile as _zip
+    from routers import escalations
+    media = [
+        {"file_name": "captura.png", "url": "/data/escalations/x_captura.png", "size": 4},
+        {"file_name": "captura.png", "url": "/data/escalations/y_captura.png", "size": 4},
+    ]
+    with patch.object(escalations, "_read_local_bytes", lambda u: b"AAAA"):
+        zip_bytes, leftover = escalations._build_attachments_zip(media, 10_000)
+    names = _zip.ZipFile(_io.BytesIO(zip_bytes)).namelist()
+    assert leftover == [] and len(names) == 2 and len(set(names)) == 2
+
+
+@pytest.mark.anyio
+async def test_notify_attaches_the_zip():
+    import base64 as _b64
+    from routers import escalations
+    sent = []
+    with patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+        await escalations._notify(_record_stub(), "hola", "", None, "", b"PK\x03\x04zip")
+    assert sent[0]["attachments_zip"].startswith("data:application/zip;base64,")
+    assert _b64.b64decode(sent[0]["attachments_zip"].split(",", 1)[1]) == b"PK\x03\x04zip"
+    assert sent[0]["attachments_zip_name"] == "adjuntos.zip"
+
+
+@pytest.mark.anyio
+async def test_notify_retries_without_the_zip_when_the_send_fails():
+    from routers import escalations
+    sent = []
+
+    def _fail_first(params):
+        sent.append(dict(params))
+        return len(sent) > 1
+
+    with patch.object(escalations, "_send_via_emailjs", _fail_first):
+        await escalations._notify(_record_stub(), "hola", "", None, "", b"PKzip")
+    assert len(sent) == 2
+    assert "attachments_zip" in sent[0] and "attachments_zip" not in sent[1]
 
 
 # ── Admin list / update ───────────────────────────────────────────────────────

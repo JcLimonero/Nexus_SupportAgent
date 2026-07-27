@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import io
 import json
 import logging
 import re
@@ -9,6 +10,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
+import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -99,6 +101,60 @@ def _email_media_html(attachments: list[dict]) -> str:
     return "".join(rows)
 
 
+_ZIP_NAME = "adjuntos.zip"
+
+
+def _read_local_bytes(url: str) -> bytes | None:
+    """Bytes of a stored escalation upload (local storage only). None if it's on
+    GCS or unreadable — those stay as links in the email body instead of the zip."""
+    if settings.storage_provider != "local" or not url.startswith(_ATTACH_URL_PREFIX):
+        return None
+    try:
+        return (Path(settings.local_storage_path) / url[len("/data/"):]).read_bytes()
+    except OSError:
+        return None
+
+
+def _build_attachments_zip(media: list[dict], budget_b64: int) -> tuple[bytes | None, list[dict]]:
+    """Zip the uploads that fit within budget_b64 (the base64 length the zip may
+    reach, once the conversation PDF is reserved). Greedy smallest-first, so as
+    many screenshots as possible ride along. Returns (zip_bytes|None, leftover) —
+    leftover (too big, e.g. videos, or non-local) is linked in the body instead.
+    ponytail: O(n²) re-zip per file, fine for the ≤10-attachment cap."""
+    if budget_b64 <= 0:
+        return None, list(media)
+    raw_cap = budget_b64 * 3 // 4   # base64 is ~4/3 of raw; skip reading files past it
+    readable, leftover = [], []
+    for a in media:
+        size = a.get("size") or 0
+        data = None if size > raw_cap else _read_local_bytes(a.get("url", ""))
+        (readable.append((a, data)) if data is not None else leftover.append(a))
+    readable.sort(key=lambda t: len(t[1]))
+
+    included: list[tuple[str, bytes]] = []   # (unique entry name, bytes)
+    seen: set[str] = set()
+    zip_bytes = b""
+    for i, (a, data) in enumerate(readable):
+        base = a.get("file_name", "archivo")
+        name, n = base, 1
+        while name in seen:            # zip entries must be unique
+            stem, dot, ext = base.rpartition(".")
+            name = f"{stem} ({n}).{ext}" if dot else f"{base} ({n})"
+            n += 1
+        trial = io.BytesIO()
+        with zipfile.ZipFile(trial, "w", zipfile.ZIP_DEFLATED) as z:
+            for ename, edata in included:
+                z.writestr(ename, edata)
+            z.writestr(name, data)
+        if len(base64.b64encode(trial.getvalue())) > budget_b64:
+            leftover.extend(a for a, _ in readable[i:])   # rest are >= this one
+            break
+        included.append((name, data))
+        seen.add(name)
+        zip_bytes = trial.getvalue()
+    return (zip_bytes or None), leftover
+
+
 async def _snapshot_conversation(db: AsyncSession, session_uuid: uuid.UUID, uid: str):
     """The user's chat as (text, share link, path to a rendered PDF) — what
     support needs to see what was tried and what happened. Returns empties if
@@ -182,9 +238,9 @@ async def _notify(
     share_link: str = "",
     pdf: bytes | None = None,
     attachments_html: str = "",
+    zip_bytes: bytes | None = None,
 ) -> None:
     who = record.name or record.user_label or record.user_id
-    attach_names = ", ".join(a.get("file_name", "?") for a in (record.attachments or [])) or "—"
     link = ""
     if record.session_id and settings.public_origin:
         link = f"{settings.public_origin}/admin/conversations?id={record.session_id}"
@@ -194,9 +250,10 @@ async def _notify(
         "from_name": who,
         "contact": record.contact,
         "reason": record.reason or "(sin especificar)",
-        "attachments": attach_names,
-        # Rendered as HTML in the template: images inline, other files as links.
-        "attachments_html": attachments_html or "(sin archivos)",
+        # The template renders this with triple braces ({{{attachments}}}), so it
+        # carries rich HTML — the user's images inline and other files as links.
+        # The HTML already labels every file, so no separate plain-name list.
+        "attachments": attachments_html or "(sin archivos)",
         "conversation": conversation or "(sin conversación)",
         "share_link": share_link,
         "conversation_link": link,
@@ -212,12 +269,18 @@ async def _notify(
         params["chat_pdf"] = f"data:application/pdf;base64,{encoded}"
         params["chat_pdf_name"] = _TRANSCRIPT_NAME
 
-    if not await asyncio.to_thread(_send_via_emailjs, params) and encoded:
-        # An email without the PDF beats no email — the send may have failed
+    # The user's uploads that fit the budget, bundled into one attachment slot.
+    zip_encoded = base64.b64encode(zip_bytes).decode() if zip_bytes else ""
+    if zip_encoded:
+        params["attachments_zip"] = f"data:application/zip;base64,{zip_encoded}"
+        params["attachments_zip_name"] = _ZIP_NAME
+
+    if not await asyncio.to_thread(_send_via_emailjs, params) and (encoded or zip_encoded):
+        # An email without the files beats no email — the send may have failed
         # because the template has no attachment variable or the plan's size
-        # limit is lower than ours. The conversation text and link still go.
-        params.pop("chat_pdf")
-        params.pop("chat_pdf_name")
+        # limit is lower than ours. The conversation text and links still go.
+        for k in ("chat_pdf", "chat_pdf_name", "attachments_zip", "attachments_zip_name"):
+            params.pop(k, None)
         await asyncio.to_thread(_send_via_emailjs, params)
 
 
@@ -373,9 +436,7 @@ async def create_escalation(
     # public link the email carries. Best-effort — a ticket must never be lost
     # because the snapshot failed.
     attachments = [a.model_dump() for a in body.attachments]
-    # Built before the PDF is prepended — the transcript rides as the email's
-    # own attachment, not as a link in the body.
-    attachments_html = _email_media_html(attachments)
+    user_attachments = list(attachments)   # the uploads, before the PDF is prepended
     conversation, share_link, pdf, pdf_path = "", "", None, None
     if session_uuid:
         try:
@@ -395,6 +456,18 @@ async def create_escalation(
             if pdf_path:
                 Path(pdf_path).unlink(missing_ok=True)
 
+    # Email delivery: bundle the uploads that fit (after reserving room for the
+    # PDF) into one zip attachment; the rest — videos, oversized, GCS-stored —
+    # stay as links in the body. The record itself keeps every file for the panel.
+    zip_budget = settings.emailjs_max_attach_kb * 1024 - (len(base64.b64encode(pdf)) if pdf else 0)
+    zip_bytes, leftover = await asyncio.to_thread(_build_attachments_zip, user_attachments, zip_budget)
+    attachments_html = _email_media_html(leftover)
+    if zip_bytes:
+        attachments_html = (
+            f'<div style="margin:6px 0;color:#555">&#128230; Archivos adjuntos en '
+            f'<b>{_ZIP_NAME}</b>.</div>' + attachments_html
+        )
+
     record = EscalationRequest(
         session_id=session_uuid,
         user_id=user["uid"],
@@ -411,7 +484,7 @@ async def create_escalation(
     await db.commit()   # also persists the share token minted above
     await db.refresh(record)
 
-    background_tasks.add_task(_notify, record, conversation, share_link, pdf, attachments_html)
+    background_tasks.add_task(_notify, record, conversation, share_link, pdf, attachments_html, zip_bytes)
     return {"id": str(record.id), "status": record.status}
 
 
