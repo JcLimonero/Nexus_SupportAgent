@@ -207,9 +207,6 @@ async def _notify(
     zip_bytes: bytes | None = None,
 ) -> None:
     who = record.name or record.user_label or record.user_id
-    link = ""
-    if record.session_id and settings.public_origin:
-        link = f"{settings.public_origin}/admin/conversations?id={record.session_id}"
     # Keys map to variables in the EmailJS template the user creates.
     params = {
         "subject": f"Nueva solicitud de soporte — {who}",
@@ -217,12 +214,11 @@ async def _notify(
         "contact": record.contact,
         "reason": record.reason or "(sin especificar)",
         # The template renders this with triple braces ({{{attachments}}}), so it
-        # carries rich HTML — the user's images inline and other files as links.
-        # The HTML already labels every file, so no separate plain-name list.
+        # carries rich HTML — a note of which files are in the zip and a count of
+        # any left in the admin panel.
         "attachments": attachments_html or "(sin archivos)",
         "conversation": conversation or "(sin conversación)",
         "share_link": share_link,
-        "conversation_link": link,
         "to_email": settings.escalation_notify_email,
     }
 

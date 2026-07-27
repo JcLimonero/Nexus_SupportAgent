@@ -444,7 +444,7 @@ def _record_stub():
 
 
 @pytest.mark.anyio
-async def test_notify_sends_conversation_link_and_pdf():
+async def test_notify_sends_conversation_and_pdf():
     from routers import escalations
     sent = []
     with patch.object(escalations, "_send_via_emailjs", lambda p, *a: sent.append(p) or True):
