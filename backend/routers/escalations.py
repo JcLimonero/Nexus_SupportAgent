@@ -195,10 +195,12 @@ async def _snapshot_conversation(db: AsyncSession, session_uuid: uuid.UUID, uid:
 _EMAILJS_URL = "https://api.emailjs.com/api/v1.0/email/send"
 
 
-def _send_via_emailjs(template_params: dict) -> bool:
+def _send_via_emailjs(template_params: dict, timeout: int = 15) -> bool:
     """Blocking server-side POST to EmailJS. No-op if not configured. Never
     raises — the escalation is already saved; email is a bonus, not a guarantee.
-    Returns False only when a real send attempt failed."""
+    Returns False only when a real send attempt failed. timeout is generous for
+    attachment-laden payloads: the default 10 s tripped on the TLS handshake /
+    slow uplink and the files got dropped."""
     if not (settings.emailjs_service_id and settings.emailjs_template_id and settings.emailjs_public_key):
         logger.info("EmailJS not configured — escalation email skipped")
         return True
@@ -219,7 +221,7 @@ def _send_via_emailjs(template_params: dict) -> bool:
             headers={"Content-Type": "application/json", "User-Agent": "NexusSupportAgent/1.0"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             resp.read()
         return True
     except urllib.error.HTTPError as exc:
@@ -275,12 +277,21 @@ async def _notify(
         params["attachments_zip"] = f"data:application/zip;base64,{zip_encoded}"
         params["attachments_zip_name"] = _ZIP_NAME
 
-    if not await asyncio.to_thread(_send_via_emailjs, params) and (encoded or zip_encoded):
-        # An email without the files beats no email — the send may have failed
-        # because the template has no attachment variable or the plan's size
-        # limit is lower than ours. The conversation text and links still go.
-        for k in ("chat_pdf", "chat_pdf_name", "attachments_zip", "attachments_zip_name"):
-            params.pop(k, None)
+    if encoded or zip_encoded:
+        # The attachment payload is a few hundred KB — a slow uplink or TLS
+        # handshake blows past a short deadline, so give it room and one retry
+        # before giving up on the files. Runs in a background task; the extra
+        # wait costs the user nothing.
+        ok = await asyncio.to_thread(_send_via_emailjs, params, 60) or \
+             await asyncio.to_thread(_send_via_emailjs, params, 60)
+        if not ok:
+            # An email without the files beats no email — the send may also fail
+            # because the template has no attachment variable or the plan's size
+            # limit is lower than ours. The conversation text and links still go.
+            for k in ("chat_pdf", "chat_pdf_name", "attachments_zip", "attachments_zip_name"):
+                params.pop(k, None)
+            await asyncio.to_thread(_send_via_emailjs, params)
+    else:
         await asyncio.to_thread(_send_via_emailjs, params)
 
 

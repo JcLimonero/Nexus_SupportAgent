@@ -447,7 +447,7 @@ def _record_stub():
 async def test_notify_sends_conversation_link_and_pdf():
     from routers import escalations
     sent = []
-    with patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+    with patch.object(escalations, "_send_via_emailjs", lambda p, *a: sent.append(p) or True):
         await escalations._notify(_record_stub(), "Usuario · hola", "https://x.mx/shared/tok", b"%PDF-1.7 fake")
     assert len(sent) == 1
     assert sent[0]["conversation"] == "Usuario · hola"
@@ -483,7 +483,7 @@ def test_email_media_html_skips_foreign_urls():
 async def test_notify_passes_attachments_html():
     from routers import escalations
     sent = []
-    with patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+    with patch.object(escalations, "_send_via_emailjs", lambda p, *a: sent.append(p) or True):
         await escalations._notify(_record_stub(), "hola", "", None, "<img src='x'>")
     # The media HTML rides in the `attachments` param — the template renders it
     # raw via {{{attachments}}}.
@@ -496,25 +496,42 @@ async def test_notify_drops_a_pdf_over_the_plan_limit():
     from routers import escalations
     sent = []
     with patch.object(escalations.settings, "emailjs_max_attach_kb", 1), \
-         patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+         patch.object(escalations, "_send_via_emailjs", lambda p, *a: sent.append(p) or True):
         await escalations._notify(_record_stub(), "hola", "", b"%PDF" + b"\x00" * 4096)
     assert "chat_pdf" not in sent[0] and sent[0]["conversation"] == "hola"
 
 
 @pytest.mark.anyio
-async def test_notify_retries_without_the_pdf_when_the_send_fails():
+async def test_notify_retries_with_the_pdf_on_a_transient_failure():
+    # A timed-out first send (slow uplink/handshake) is retried WITH the PDF
+    # still attached — the file shouldn't be dropped over a network hiccup.
     from routers import escalations
     sent = []
 
-    def _fail_first(params):
+    def _fail_first(params, *a):
         sent.append(dict(params))
-        return len(sent) > 1      # first attempt (with PDF) fails
+        return len(sent) > 1      # first attempt fails, retry succeeds
 
     with patch.object(escalations, "_send_via_emailjs", _fail_first):
         await escalations._notify(_record_stub(), "hola", "", b"%PDF-1.7 fake")
     assert len(sent) == 2
-    assert "chat_pdf" in sent[0] and "chat_pdf" not in sent[1]
-    assert sent[1]["conversation"] == "hola"
+    assert "chat_pdf" in sent[0] and "chat_pdf" in sent[1]   # retry keeps the file
+
+
+@pytest.mark.anyio
+async def test_notify_drops_the_pdf_only_after_both_attachment_sends_fail():
+    from routers import escalations
+    sent = []
+
+    def _fail_with_attachment(params, *a):
+        sent.append(dict(params))
+        return "chat_pdf" not in params   # only the fileless fallback succeeds
+
+    with patch.object(escalations, "_send_via_emailjs", _fail_with_attachment):
+        await escalations._notify(_record_stub(), "hola", "", b"%PDF-1.7 fake")
+    assert len(sent) == 3                                     # 2 with the file, 1 without
+    assert "chat_pdf" in sent[0] and "chat_pdf" in sent[1] and "chat_pdf" not in sent[2]
+    assert sent[2]["conversation"] == "hola"
 
 
 # ── Attachment zip (the user's uploads bundled for the email) ──────────────────
@@ -563,7 +580,7 @@ async def test_notify_attaches_the_zip():
     import base64 as _b64
     from routers import escalations
     sent = []
-    with patch.object(escalations, "_send_via_emailjs", lambda p: sent.append(p) or True):
+    with patch.object(escalations, "_send_via_emailjs", lambda p, *a: sent.append(p) or True):
         await escalations._notify(_record_stub(), "hola", "", None, "", b"PK\x03\x04zip")
     assert sent[0]["attachments_zip"].startswith("data:application/zip;base64,")
     assert _b64.b64decode(sent[0]["attachments_zip"].split(",", 1)[1]) == b"PK\x03\x04zip"
@@ -571,18 +588,18 @@ async def test_notify_attaches_the_zip():
 
 
 @pytest.mark.anyio
-async def test_notify_retries_without_the_zip_when_the_send_fails():
+async def test_notify_drops_the_zip_only_after_both_attachment_sends_fail():
     from routers import escalations
     sent = []
 
-    def _fail_first(params):
+    def _fail_with_attachment(params, *a):
         sent.append(dict(params))
-        return len(sent) > 1
+        return "attachments_zip" not in params   # only the fileless fallback succeeds
 
-    with patch.object(escalations, "_send_via_emailjs", _fail_first):
+    with patch.object(escalations, "_send_via_emailjs", _fail_with_attachment):
         await escalations._notify(_record_stub(), "hola", "", None, "", b"PKzip")
-    assert len(sent) == 2
-    assert "attachments_zip" in sent[0] and "attachments_zip" not in sent[1]
+    assert len(sent) == 3                          # 2 with the zip, 1 without
+    assert "attachments_zip" in sent[0] and "attachments_zip" not in sent[2]
 
 
 # ── Admin list / update ───────────────────────────────────────────────────────
