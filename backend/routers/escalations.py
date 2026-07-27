@@ -22,13 +22,10 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator, model
 from sqlalchemy import select, update as sql_update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from html import escape as _html_escape
-
 from db.connection import get_db, AsyncSessionLocal
 from db.models import ChatMessage, ChatSession, EscalationRequest
 from auth.firebase_verify import get_current_user
 from routers.admin import require_admin, save_file, _safe_filename, _looks_like_text
-from routers.media import sign_url
 from config import get_settings
 from transcript import format_transcript, render_pdf
 
@@ -67,40 +64,6 @@ _ATTACH_DETECTED = {"png", "jpg", "gif", "webp", "mp4", "mov", "webm", "pdf", "d
 # ── Conversation snapshot (PDF + text for the email) ──────────────────────────
 _TRANSCRIPT_NAME = "conversacion.pdf"
 _MAIL_TRANSCRIPT_CHARS = 8000   # EmailJS caps request size; the PDF has it all
-# The email is read days after it's sent, so its links must outlive the 1 h the
-# in-app player uses. Unguessable HMAC links to a single file — safe to email.
-_EMAIL_LINK_TTL = 30 * 24 * 3600   # 30 days
-
-
-def _email_media_html(attachments: list[dict]) -> str:
-    """The user's uploads as HTML for the email body: images inline (remote
-    <img> — data URIs are blocked by Gmail et al.), everything else as a link.
-    Absolute, long-lived signed URLs so support can open them from the inbox."""
-    origin = settings.public_origin.rstrip("/")
-    rows: list[str] = []
-    for a in attachments:
-        try:
-            href = sign_url(a["url"], _EMAIL_LINK_TTL)
-        except ValueError:
-            continue
-        if href.startswith("/"):        # local storage → relative; make absolute
-            href = origin + href
-        name = _html_escape(a.get("file_name", "archivo"))
-        if (a.get("content_type") or "").startswith("image/"):
-            rows.append(
-                f'<div style="margin:8px 0"><a href="{href}" target="_blank">'
-                f'<img src="{href}" alt="{name}" style="max-width:320px;max-height:240px;'
-                f'border:1px solid #ddd;border-radius:4px;display:block"></a>'
-                f'<div style="font-size:11px;color:#777;margin-top:2px">{name}</div></div>'
-            )
-        else:
-            rows.append(
-                f'<div style="margin:6px 0">&#128206; '
-                f'<a href="{href}" target="_blank">{name}</a></div>'
-            )
-    return "".join(rows)
-
-
 _ZIP_NAME = "adjuntos.zip"
 
 
@@ -119,7 +82,8 @@ def _build_attachments_zip(media: list[dict], budget_b64: int) -> tuple[bytes | 
     """Zip the uploads that fit within budget_b64 (the base64 length the zip may
     reach, once the conversation PDF is reserved). Greedy smallest-first, so as
     many screenshots as possible ride along. Returns (zip_bytes|None, leftover) —
-    leftover (too big, e.g. videos, or non-local) is linked in the body instead.
+    leftover (too big, e.g. videos, or non-local) only gets a count in the body;
+    support opens it from the admin panel, which keeps every file.
     ponytail: O(n²) re-zip per file, fine for the ≤10-attachment cap."""
     if budget_b64 <= 0:
         return None, list(media)
@@ -472,12 +436,22 @@ async def create_escalation(
     # stay as links in the body. The record itself keeps every file for the panel.
     zip_budget = settings.emailjs_max_attach_kb * 1024 - (len(base64.b64encode(pdf)) if pdf else 0)
     zip_bytes, leftover = await asyncio.to_thread(_build_attachments_zip, user_attachments, zip_budget)
-    attachments_html = _email_media_html(leftover)
+    # No per-file links: the signed URLs 404 unless hit through the prod proxy,
+    # so a link in the inbox is worse than none. Files ride in the zip; anything
+    # too big for it (video, oversized) is reachable from the admin panel, which
+    # keeps every file. Just say what's where.
+    notes = []
     if zip_bytes:
-        attachments_html = (
+        notes.append(
             f'<div style="margin:6px 0;color:#555">&#128230; Archivos adjuntos en '
-            f'<b>{_ZIP_NAME}</b>.</div>' + attachments_html
+            f'<b>{_ZIP_NAME}</b>.</div>'
         )
+    if leftover:
+        notes.append(
+            f'<div style="margin:6px 0;color:#555">&#128206; {len(leftover)} archivo(s) '
+            f'adicional(es) (video u otros) disponibles en el panel de soporte.</div>'
+        )
+    attachments_html = "".join(notes)
 
     record = EscalationRequest(
         session_id=session_uuid,

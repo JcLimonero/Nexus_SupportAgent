@@ -459,26 +459,6 @@ async def test_notify_sends_conversation_link_and_pdf():
     assert sent[0]["chat_pdf_name"] == "conversacion.pdf"
 
 
-def test_email_media_html_inlines_images_and_links_the_rest():
-    from routers import escalations
-    with patch.object(escalations.settings, "public_origin", "https://s.mx"):
-        html = escalations._email_media_html([
-            {"file_name": "captura.png", "url": "/data/escalations/a_captura.png", "content_type": "image/png"},
-            {"file_name": "clip.mp4", "url": "/data/escalations/b_clip.mp4", "content_type": "video/mp4"},
-        ])
-    # One inline image, one link, absolute URLs support can open from the inbox.
-    assert html.count("<img") == 1 and "captura.png" in html
-    assert "clip.mp4" in html  # video is a link, not an <img>
-    assert "https://s.mx/api/media/stream/escalations/a_captura.png?exp=" in html
-    assert "https://s.mx/api/media/stream/escalations/b_clip.mp4?exp=" in html
-
-
-def test_email_media_html_skips_foreign_urls():
-    from routers import escalations
-    # A path we can't sign (not under /data/) is dropped, not rendered broken.
-    assert escalations._email_media_html([{"file_name": "x", "url": "http://evil/x", "content_type": "image/png"}]) == ""
-
-
 @pytest.mark.anyio
 async def test_notify_passes_attachments_html():
     from routers import escalations
