@@ -32,6 +32,15 @@ services:
       VERTEX_AI_PROJECT: nexus-support-agent
       VERTEX_AI_LOCATION: us-central1
       GOOGLE_APPLICATION_CREDENTIALS: /home/nexus/.config/gcloud/application_default_credentials.json
+      # Escalation email — filled from the local .env (untracked). Empty ids
+      # just disable the email; requests still land in /admin/escalations.
+      EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID:-}
+      EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID:-}
+      EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY:-}
+      EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY:-}
+      ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
+      EMAILJS_MAX_ATTACH_KB: ${EMAILJS_MAX_ATTACH_KB:-350}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
     volumes:
       - ./backend:/app
       - nexus_data:/data

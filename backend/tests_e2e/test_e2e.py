@@ -335,6 +335,96 @@ def test_feedback_admin_list(api, admin_token, user_a):
     assert api.get("/api/admin/feedback", headers=bearer(user_a["token"])).status_code == 403
 
 
+# ── 6b. Support requests (human escalation) ───────────────────────────────────
+# Keep POSTs to /api/escalations ≤5 per 60s — the endpoint is rate-limited.
+
+def test_escalation_requires_an_account(api):
+    body = {"name": "Invitado", "phone": "5512345678", "reason": "no puedo facturar un pedido"}
+    assert api.post("/api/escalations", json=body).status_code in (401, 403)
+    # Guests are barred from the whole feature — request and uploads alike.
+    assert api.post(
+        "/api/escalations", headers=bearer(S["guest_token"]), json=body
+    ).status_code == 403
+    assert api.post(
+        "/api/escalations/attachments", headers=bearer(S["guest_token"]),
+        files={"file": ("captura.png", PNG_BYTES, "image/png")},
+    ).status_code == 403
+
+
+def test_escalation_attachment_upload(api, user_a):
+    ok = api.post(
+        "/api/escalations/attachments", headers=bearer(user_a["token"]),
+        files={"file": ("captura.png", PNG_BYTES, "image/png")},
+    )
+    assert ok.status_code == 201, ok.text
+    meta = ok.json()
+    assert meta["url"].startswith("/data/escalations/") and meta["content_type"] == "image/png"
+    S["attachment"] = meta
+
+    bad = api.post(
+        "/api/escalations/attachments", headers=bearer(user_a["token"]),
+        files={"file": ("malware.exe", b"MZ....", "application/octet-stream")},
+    )
+    assert bad.status_code == 400
+
+
+def test_escalation_create_and_admin_flow(api, user_a, admin_token):
+    created = api.post(
+        "/api/escalations", headers=bearer(user_a["token"]),
+        json={
+            "email": "ana@example.com", "phone": "(55) 1234-5678", "name": "Ana",
+            "reason": "Necesito ayuda con facturación", "session_id": S["session1"],
+            "attachments": [S["attachment"]],
+        },
+    )
+    assert created.status_code == 201
+    eid = created.json()["id"]
+    S["escalation_id"] = eid
+
+    # A create referencing a URL outside /data/escalations/ is rejected.
+    assert api.post(
+        "/api/escalations", headers=bearer(user_a["token"]),
+        json={"name": "Ana", "email": "x@x.com", "reason": "adjunto que no subí yo",
+              "attachments": [{"file_name": "kb.pdf", "url": "/data/pdfs/kb.pdf"}]},
+    ).status_code == 422
+
+    # Admin sees it with the attachment; non-admin is forbidden.
+    listing = api.get("/api/admin/escalations", headers=bearer(admin_token))
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["new_count"] >= 1
+    row = next(r for r in body["items"] if r["id"] == eid)
+    # Both ways back are stored, phone normalised to its 10 digits.
+    assert row["contact"] == "ana@example.com · 5512345678" and row["status"] == "new"
+    assert row["session_id"] == S["session1"]
+    # The conversation is snapshotted as a PDF and filed first, ahead of the
+    # user's own upload, so support sees what was tried before the screenshots.
+    assert len(row["attachments"]) == 2
+    transcript, uploaded = row["attachments"]
+    assert transcript["file_name"] == "conversacion.pdf"
+    assert transcript["url"].startswith("/data/escalations/") and transcript["size"] > 0
+    assert uploaded["url"] == S["attachment"]["url"]
+    assert api.get("/api/admin/escalations", headers=bearer(user_a["token"])).status_code == 403
+
+    # Both attachments are viewable via a signed stream URL.
+    for att, head in ((S["attachment"], b"\x89PNG"), (transcript, b"%PDF")):
+        signed = api.post("/api/media/sign", headers=bearer(admin_token), json={"gcs_url": att["url"]})
+        assert signed.status_code == 200
+        streamed = api.get(signed.json()["url"])
+        assert streamed.status_code == 200 and streamed.content.startswith(head)
+
+    # Resolve it, then confirm it shows under the resolved filter.
+    assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(admin_token), json={"status": "resolved"}).status_code == 200
+    resolved = api.get("/api/admin/escalations", params={"status": "resolved"}, headers=bearer(admin_token)).json()
+    assert any(r["id"] == eid for r in resolved["items"])
+
+    # Update validation + not-found + admin-only patch.
+    assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(admin_token), json={"status": "banana"}).status_code == 422
+    import uuid as _uuid
+    assert api.patch(f"/api/admin/escalations/{_uuid.uuid4()}", headers=bearer(admin_token), json={"status": "resolved"}).status_code == 404
+    assert api.patch(f"/api/admin/escalations/{eid}", headers=bearer(user_a["token"]), json={"status": "new"}).status_code == 403
+
+
 # ── 7. Sharing ────────────────────────────────────────────────────────────────
 
 def test_share_and_public_view(api, user_a):

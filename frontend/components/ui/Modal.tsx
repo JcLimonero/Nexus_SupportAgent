@@ -68,7 +68,7 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
       style={{ backgroundColor: "rgba(5,15,26,0.7)", backdropFilter: "blur(2px)" }}
       onClick={onClose}
       onKeyDown={handleKeyDown}
@@ -87,12 +87,19 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
           borderRadius: "var(--radius-lg)",
           boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
           overflow: "hidden",
+          // Cap at the padded container (so the backdrop's p-4/p-6 stays as a
+          // real top/bottom margin) and lay out as a column so the body scrolls
+          // while header/footer stay put — tall content (e.g. many attachments)
+          // no longer pushes the panel off-screen.
+          maxHeight: "100%",
+          display: "flex",
+          flexDirection: "column",
           animation: "nqt-modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both",
           outline: "none",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 pt-6 pb-4">
+        <div className="px-6 pt-6 pb-4" style={{ overflowY: "auto", minHeight: 0 }}>
           {title && (
             <p
               style={{
@@ -115,7 +122,7 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
         {footer && (
           <div
             className="px-6 py-4 flex items-center justify-end gap-3"
-            style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)" }}
+            style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-muted)", flexShrink: 0 }}
           >
             {footer}
           </div>

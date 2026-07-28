@@ -42,6 +42,7 @@ def make_db_override(user=None):
         session = AsyncMock()
         result = MagicMock()
         result.scalar_one_or_none.return_value = user
+        result.scalar_one.return_value = 0  # count() queries → 0 by default
         result.first.return_value = None  # cache lookup → miss by default
         result.scalars.return_value.first.return_value = user
         result.scalars.return_value.all.return_value = [user] if user else []
@@ -59,6 +60,14 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _never_send_real_email():
+    """A filled local .env would otherwise make the escalation tests hit the
+    real EmailJS account. Tests that exercise the send patch this back."""
+    from config import get_settings
+    get_settings().emailjs_service_id = ""
+
+
 @pytest_asyncio.fixture
 async def client():
     """ASGI test client with DB patched out."""
@@ -67,6 +76,10 @@ async def client():
          patch("db.connection.init_db", new_callable=AsyncMock):
         from db.connection import get_db
         from main import app
+        # Rate limiting is exercised in the E2E suite; disable it here so its
+        # per-process window doesn't leak across unit tests (many share a path).
+        from config import get_settings
+        get_settings().rate_limit_enabled = False
         app.dependency_overrides[get_db] = make_db_override()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac

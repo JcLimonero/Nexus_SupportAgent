@@ -3,12 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { localLogout } from "@/lib/auth";
-import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, submitFeedback, shareSession } from "@/lib/api";
+import { sendMessageStream, getSessions, getSessionMessages, getSuggestions, submitFeedback, shareSession, NO_INFO_PREFIX } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { MessageBubble, type Message, type PdfSource, type MediaSource } from "@/components/MessageBubble";
 import { SourcePanel } from "@/components/SourcePanel";
 import { SessionSidebar, type Session } from "@/components/SessionSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { EscalateModal } from "@/components/EscalateModal";
 
 export default function ChatPage() {
   const { user, loading, refresh } = useAuth();
@@ -24,6 +25,7 @@ export default function ChatPage() {
   const [activeSource, setActiveSource]       = useState<PdfSource | null>(null);
   const [suggestions, setSuggestions]         = useState<{ label: string; prompt: string }[]>([]);
   const [isStreaming, setIsStreaming]         = useState(false);
+  const [escalateOpen, setEscalateOpen]       = useState(false);
   const [atBottom, setAtBottom]               = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
@@ -341,6 +343,16 @@ export default function ChatPage() {
     );
   }
 
+  // Support requests need a real account — there's no way to follow up with a
+  // guest beyond what they type, and the backend rejects them anyway.
+  const canEscalate = !!user && !user.is_anon;
+  // Auto-offer human contact when the assistant just said it has no info.
+  const lastMsg = messages[messages.length - 1];
+  const showEscalateOffer =
+    canEscalate && !sending && lastMsg?.role === "assistant" && lastMsg.content.startsWith(NO_INFO_PREFIX);
+  const lastUserQuestion = [...messages].reverse().find((m) => m.role === "user")?.content;
+  const defaultEmail = canEscalate ? user?.email : undefined;
+
   const sidebar = (
     <SessionSidebar
       user={user}
@@ -358,6 +370,13 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
       <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
+      <EscalateModal
+        open={escalateOpen}
+        onClose={() => setEscalateOpen(false)}
+        sessionId={currentSessionId}
+        defaultEmail={defaultEmail}
+        defaultReason={lastUserQuestion}
+      />
       {/* Sidebar — desktop (hidden for guests, or when collapsed) */}
       {!isGuest && !sidebarCollapsed && (
         <div className="hidden md:flex flex-col h-full">
@@ -457,12 +476,35 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Share toolbar — appears once the conversation has a saved session */}
-        {currentSessionId && messages.length > 0 && (
-          <div
-            className="flex items-center justify-end px-4 md:px-8 py-2"
-            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+        {/* Actions toolbar — help requests need an account; share needs a saved session */}
+        {(canEscalate || (currentSessionId && messages.length > 0)) && (
+        <div
+          className={`flex items-center px-4 md:px-8 py-2 ${canEscalate ? "justify-between" : "justify-end"}`}
+          style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+        >
+          {canEscalate && (
+          <button
+            onClick={() => setEscalateOpen(true)}
+            title="Solicitar ayuda de una persona del equipo de soporte"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
+              letterSpacing: "1.5px", textTransform: "uppercase",
+              color: "var(--text-muted)", background: "none",
+              border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
+              padding: "5px 12px", cursor: "pointer",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
           >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Solicitar ayuda
+          </button>
+          )}
+          {currentSessionId && messages.length > 0 && (
             <button
               onClick={handleShare}
               disabled={sharing}
@@ -484,7 +526,8 @@ export default function ChatPage() {
               </svg>
               {sharing ? "Generando..." : "Compartir"}
             </button>
-          </div>
+          )}
+        </div>
         )}
 
         {/* Messages — live region so screen readers announce streamed replies
@@ -600,6 +643,42 @@ export default function ChatPage() {
                     />
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Auto-offer human contact right after a "no info" answer */}
+          {showEscalateOffer && (
+            <div
+              className="flex justify-start"
+              style={{ animation: "nqt-slideUp 0.3s ease both" }}
+            >
+              <div
+                className="px-4 py-3"
+                style={{
+                  backgroundColor: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                  borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
+                  borderRadius: "2px var(--radius) var(--radius) var(--radius)",
+                  maxWidth: 420,
+                }}
+              >
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.5, marginBottom: 10 }}>
+                  ¿Prefieres que te ayude una persona del equipo de soporte?
+                </p>
+                <button
+                  onClick={() => setEscalateOpen(true)}
+                  style={{
+                    fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
+                    letterSpacing: "1.5px", textTransform: "uppercase",
+                    backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)",
+                    border: "none", borderRadius: "var(--radius-sm)", padding: "6px 14px", cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
+                >
+                  Solicitar ayuda
+                </button>
               </div>
             </div>
           )}

@@ -40,6 +40,15 @@ _SERVE_MIME = {
     ".txt":  "text/plain; charset=utf-8",
     ".md":   "text/markdown; charset=utf-8",
     ".csv":  "text/csv; charset=utf-8",
+    # Escalation attachments — inline preview instead of forced download.
+    ".png":  "image/png",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif":  "image/gif",
+    ".webp": "image/webp",
+    ".mov":  "video/quicktime",
+    ".webm": "video/webm",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 
@@ -49,31 +58,37 @@ def _sig(path: str, exp: int) -> str:
     ).hexdigest()
 
 
+def sign_url(gcs_url: str, ttl: int = _SIGN_TTL) -> str:
+    """Mint a streamable URL for a stored file. GCS → an absolute V4 signed URL;
+    local → a relative /api/media/stream path guarded by an HMAC signature.
+    Raises ValueError on a path we didn't produce."""
+    if settings.storage_provider == "gcs":
+        prefix = f"https://storage.googleapis.com/{settings.gcs_bucket_name}/"
+        if not gcs_url.startswith(prefix):
+            raise ValueError("URL de archivo inválida")
+        from datetime import timedelta
+        from google.cloud import storage as gcs
+        blob = gcs.Client().bucket(settings.gcs_bucket_name).blob(unquote(gcs_url[len(prefix):]))
+        return blob.generate_signed_url(version="v4", expiration=timedelta(seconds=ttl))
+
+    if not gcs_url.startswith("/data/"):
+        raise ValueError("URL de archivo inválida")
+    rel = gcs_url[len("/data/"):]
+    exp = int(time.time()) + ttl
+    encoded = "/".join(quote(seg) for seg in rel.split("/"))
+    return f"/api/media/stream/{encoded}?exp={exp}&sig={_sig(rel, exp)}"
+
+
 class SignRequest(BaseModel):
     gcs_url: str
 
 
 @router.post("/sign")
 async def sign_media(body: SignRequest, _: dict = Depends(get_current_user)):
-    if settings.storage_provider == "gcs":
-        prefix = f"https://storage.googleapis.com/{settings.gcs_bucket_name}/"
-        if not body.gcs_url.startswith(prefix):
-            raise HTTPException(status_code=400, detail="URL de archivo inválida")
-        from datetime import timedelta
-        from google.cloud import storage as gcs
-        blob = gcs.Client().bucket(settings.gcs_bucket_name).blob(
-            unquote(body.gcs_url[len(prefix):])
-        )
-        return {"url": blob.generate_signed_url(
-            version="v4", expiration=timedelta(seconds=_SIGN_TTL)
-        )}
-
-    if not body.gcs_url.startswith("/data/"):
-        raise HTTPException(status_code=400, detail="URL de archivo inválida")
-    rel = body.gcs_url[len("/data/"):]
-    exp = int(time.time()) + _SIGN_TTL
-    encoded = "/".join(quote(seg) for seg in rel.split("/"))
-    return {"url": f"/api/media/stream/{encoded}?exp={exp}&sig={_sig(rel, exp)}"}
+    try:
+        return {"url": sign_url(body.gcs_url)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/stream/{file_path:path}")

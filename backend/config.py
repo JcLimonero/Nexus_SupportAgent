@@ -84,6 +84,33 @@ class Settings(BaseSettings):
 
     # ── Rate limiting ────────────────────────────────────────────────────────
     rate_limit_enabled: bool = True
+    # Number of trusted reverse proxies that prepend to X-Forwarded-For, so the
+    # limiter keys on the real client IP instead of the proxy's. On-prem chain is
+    # IIS(ARR) → nginx → backend, so set 2 in prod. 0 = no proxy (local dev),
+    # use the direct peer IP. Assumes ARR forwards the client IP in XFF.
+    trusted_proxy_hops: int = 0
+
+    # ── Escalation abuse guards ──────────────────────────────────────────────
+    # Reject new attachment uploads when free disk drops below this (MB).
+    min_free_disk_mb: int = 500
+    # Startup sweep: delete attachment files of resolved requests older than this.
+    attachment_retention_days: int = 90
+
+    # ── EmailJS (human-escalation notifications) ─────────────────────────────
+    # Server-side REST send. All empty → email disabled (the escalation still
+    # lands in the admin panel, which is the source of truth). In EmailJS, enable
+    # "Allow EmailJS API for non-browser applications" and use the private key.
+    emailjs_service_id: str = ""
+    emailjs_template_id: str = ""
+    emailjs_public_key: str = ""
+    emailjs_private_key: str = ""       # accessToken for strict/server-side mode
+    escalation_notify_email: str = ""   # passed to the template as {{to_email}}
+    # Cap for the base64 chat PDF attached to the email. EmailJS limits
+    # attachments by plan (Personal 500 Kb, Professional 2 Mb); past this the
+    # email goes without the PDF instead of being rejected whole.
+    emailjs_max_attach_kb: int = 350
+    # Public origin, used to build the conversation links inside the email.
+    public_origin: str = ""
 
     @model_validator(mode="after")
     def _check_insecure_secret(self) -> "Settings":

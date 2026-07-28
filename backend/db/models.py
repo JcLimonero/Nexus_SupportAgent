@@ -95,3 +95,24 @@ class MessageFeedback(Base):
     user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     rating: Mapped[str] = mapped_column(String(4), nullable=False)  # 'up' | 'down'
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EscalationRequest(Base):
+    """A user's request to talk to a human. There's no live-agent console, so
+    this is a lightweight ticket admins triage from the panel (and get emailed
+    about). session_id links the conversation so whoever follows up has context."""
+    __tablename__ = "escalation_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Nullable: a user may escalate before their first message creates a session.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    user_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact: Mapped[str] = mapped_column(Text, nullable=False)   # phone/email the user gave
+    name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # User-uploaded files that recreate the problem: [{file_name, url, content_type, size}].
+    attachments: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="new")  # new | in_progress | resolved
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from config import get_settings
 from db.connection import init_db, AsyncSessionLocal
-from routers import health, chat, admin, media
+from routers import health, chat, admin, media, escalations
 
 settings = get_settings()
 
@@ -28,9 +28,29 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/shared":       (120, 60),  # public share view (unguessable token; light guard)
     "/api/chat":         (60, 60),
+    "/api/escalations/attachments": (20, 60),  # file uploads for a handoff request
+    "/api/escalations":  (5, 60),    # 5 human-handoff requests / 60 s per IP (spam guard)
     "/api/admin/upload": (60, 60),   # 60 uploads / 60 s per IP (admin-only; bulk KB seeding)
     "/api/media/stream": (240, 60),  # HMAC-signed streaming; seeking issues many Range requests
 }
+
+
+def _client_ip(scope) -> str:
+    """Real client IP for rate limiting. Behind the reverse-proxy chain the
+    direct peer is the proxy, so its X-Forwarded-For carries the client; with
+    `trusted_proxy_hops` proxies prepending to it, the client sits `hops` from
+    the right (spoof-proof — a client-supplied XFF lands further left). hops=0
+    (local dev) uses the direct peer."""
+    hops = settings.trusted_proxy_hops
+    if hops > 0:
+        for k, v in scope.get("headers", []):
+            if k == b"x-forwarded-for":
+                parts = [p.strip().decode("latin-1") for p in v.split(b",") if p.strip()]
+                if parts:
+                    return parts[-hops] if len(parts) >= hops else parts[0]
+                break
+    client = scope.get("client")
+    return client[0] if client else "unknown"
 
 
 class _RateLimitMiddleware:
@@ -46,8 +66,7 @@ class _RateLimitMiddleware:
         path = scope.get("path", "")
         for prefix, (max_req, window) in _RATE_RULES.items():
             if path == prefix or path.startswith(prefix + "/"):
-                client = scope.get("client")
-                ip = client[0] if client else "unknown"
+                ip = _client_ip(scope)
                 key = f"{ip}:{prefix}"
                 now = time.monotonic()
                 self._windows[key] = [t for t in self._windows[key] if now - t < window]
@@ -114,6 +133,10 @@ async def _migrate():
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_chat_sessions_share_token "
             "ON chat_sessions (share_token)"
         ))
+        await db.execute(text(
+            "ALTER TABLE escalation_requests ADD COLUMN IF NOT EXISTS "
+            "attachments JSONB NOT NULL DEFAULT '[]'::jsonb"
+        ))
         await db.commit()
 
 
@@ -136,10 +159,13 @@ async def lifespan(app: FastAPI):
     import asyncio
     from retrieval.vector_search import warm_up
 
+    from routers.escalations import evict_old_attachments
+
     await init_db()
     await _migrate()
     await _seed_admin()
     await _evict_stale_cache()
+    await evict_old_attachments()
     # Preload the embedding model so the first user doesn't pay the ~6s
     # cold-load. Run in a thread to avoid blocking the event loop.
     await asyncio.to_thread(warm_up)
@@ -186,6 +212,7 @@ app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(media.router)
+app.include_router(escalations.router)
 
 from auth.local_auth import router as local_auth_router
 from routers.users import router as users_router

@@ -239,6 +239,94 @@ export async function submitFeedback(messageId: string, rating: "up" | "down") {
   return res.json();
 }
 
+// ── Human escalation ─────────────────────────────────────────────────────────
+
+// The exact prefix the LLM emits when it can't answer (mirrors
+// backend/routers/chat.py::_NO_INFO_PREFIX). Used to auto-offer human contact.
+export const NO_INFO_PREFIX = "No tengo información sobre ese tema";
+
+export type EscalationStatus = "new" | "in_progress" | "resolved";
+
+export interface EscalationAttachment {
+  file_name: string;
+  url: string;
+  content_type: string | null;
+  size: number | null;
+}
+
+export interface Escalation {
+  id: string;
+  session_id: string | null;
+  user_label: string | null;
+  contact: string;
+  name: string | null;
+  reason: string | null;
+  attachments: EscalationAttachment[];
+  status: EscalationStatus;
+  created_at: string;
+}
+
+// Accepted attachment types (kept in sync with backend _ATTACH_ALLOWED_EXT).
+export const ATTACHMENT_ACCEPT =
+  ".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.pdf,.docx,.xlsx,.txt,.csv";
+export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+export const ATTACHMENT_MAX_COUNT = 10;
+
+export async function uploadEscalationAttachment(file: File): Promise<EscalationAttachment> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${API_URL}/api/escalations/attachments`, {
+    method: "POST",
+    headers: await headers(false), // let the browser set multipart boundary
+    body,
+  });
+  if (!res.ok) throw new Error("Error al subir el archivo");
+  return res.json();
+}
+
+export async function createEscalation(body: {
+  email?: string;
+  phone?: string;
+  name: string;
+  reason: string;
+  sessionId?: string | null;
+  attachments?: EscalationAttachment[];
+}) {
+  const res = await fetch(`${API_URL}/api/escalations`, {
+    method: "POST",
+    headers: await headers(),
+    body: JSON.stringify({
+      email: body.email || undefined,
+      phone: body.phone || undefined,
+      name: body.name,
+      reason: body.reason,
+      session_id: body.sessionId || undefined,
+      attachments: body.attachments && body.attachments.length ? body.attachments : undefined,
+    }),
+  });
+  if (!res.ok) throw new Error("Error al enviar la solicitud");
+  return res.json();
+}
+
+export async function getEscalations(
+  status?: EscalationStatus,
+): Promise<{ new_count: number; items: Escalation[] }> {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_URL}/api/admin/escalations${qs}`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al cargar las escalaciones");
+  return res.json();
+}
+
+export async function updateEscalation(id: string, status: EscalationStatus) {
+  const res = await fetch(`${API_URL}/api/admin/escalations/${id}`, {
+    method: "PATCH",
+    headers: await headers(),
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Error al actualizar la escalación");
+  return res.json();
+}
+
 // Short-lived signed URL the browser can use directly as <video>/<audio> src
 // or open in a tab — streams with Range requests instead of downloading the
 // whole file as a blob first.

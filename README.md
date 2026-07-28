@@ -83,6 +83,27 @@ Login with `admin@nexus.local` / `ChangeMe123!` in local mode.
 `EMBEDDING_DIMENSIONS` is baked into the `document_chunks.embedding` column —
 changing it requires re-indexing every document.
 
+### Secrets in local dev (`.env`)
+
+Everything dev needs is hardcoded in `docker-compose.yml` except the EmailJS
+credentials for support-request notifications, which come from a **`.env` in the
+repo root** (untracked — see `.gitignore`). Copy the EmailJS block of
+`.env.example` into it and fill in the ids; leave them empty and email is simply
+disabled (requests still land in `/admin/escalations`).
+
+**How this differs in production** — same variable names, different plumbing:
+
+| | Local dev | Producción (IONOS VPS) |
+|---|---|---|
+| Archivo | `.env` en la raíz | `.env` en el servidor, hecho de `.env.prod.example` |
+| Compose | `docker-compose.yml` | `docker-compose.prod.yml` |
+| `PUBLIC_ORIGIN` | `http://localhost:3000` | la URL pública real |
+
+`PUBLIC_ORIGIN` is the one that bites: the escalation email builds the share
+link and the admin link from it, so a wrong value in production sends support
+links that point at localhost. It is also used at **frontend build time**, so
+changing it means rebuilding the frontend image, not just restarting it.
+
 ## Running tests
 
 **Backend:**
