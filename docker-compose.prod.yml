@@ -47,6 +47,10 @@ services:
     build: ./backend
     restart: unless-stopped
     environment:
+      # Marks this as a production deploy: disables /docs, enforces the
+      # insecure-JWT-secret guard, and switches CORS to FRONTEND_URL-only.
+      # Needed because storage is local (no GCS bucket to infer prod from).
+      ENVIRONMENT: production
       AUTH_PROVIDER: local
       STORAGE_PROVIDER: local
       EMBEDDING_PROVIDER: local
