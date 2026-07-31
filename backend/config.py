@@ -11,6 +11,14 @@ _INSECURE_SECRETS = {
 
 
 class Settings(BaseSettings):
+    # ── Environment ─────────────────────────────────────────────────────────
+    # dev | production. Drives docs exposure, CORS mode, and the insecure-secret
+    # guard. Set ENVIRONMENT=production in prod (docker-compose.prod.yml). The
+    # old heuristic inferred prod from gcs_bucket_name, which is empty on the
+    # on-prem VPS (local storage) — so prod silently ran as dev. is_production
+    # still treats a set GCS bucket as prod for backward compatibility.
+    environment: str = "dev"
+
     # ── Database ────────────────────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://nexus:nexusdev@db:5432/nexus_agent"
 
@@ -50,8 +58,8 @@ class Settings(BaseSettings):
 
     # ── CORS (production) ────────────────────────────────────────────────────
     # Exact frontend origin allowed to call the API, e.g.
-    # https://nexus-frontend-xxxx.us-central1.run.app. When unset in production
-    # we fall back to a regex that matches any *.run.app origin.
+    # https://app-nexusqtech.com:8443. Unset in production means no cross-origin
+    # browser access — same-origin deployments behind nginx/IIS don't need CORS.
     frontend_url: str = ""
 
     # ── LLM (Gemini via Vertex AI) ───────────────────────────────────────────
@@ -112,15 +120,18 @@ class Settings(BaseSettings):
     # Public origin, used to build the conversation links inside the email.
     public_origin: str = ""
 
+    @property
+    def is_production(self) -> bool:
+        # Explicit ENVIRONMENT wins; a set GCS bucket still counts as prod so
+        # existing cloud deploys keep failing loudly on a weak secret.
+        return self.environment.strip().lower() == "production" or bool(self.gcs_bucket_name)
+
     @model_validator(mode="after")
     def _check_insecure_secret(self) -> "Settings":
-        if (
-            self.gcs_bucket_name  # non-empty → production deployment
-            and self.local_jwt_secret in _INSECURE_SECRETS
-        ):
+        if self.is_production and self.local_jwt_secret in _INSECURE_SECRETS:
             raise ValueError(
                 "LOCAL_JWT_SECRET is set to an insecure default value. "
-                "Set a strong random secret via GCP Secret Manager before deploying."
+                "Set a strong random secret in the environment before deploying."
             )
         return self
 

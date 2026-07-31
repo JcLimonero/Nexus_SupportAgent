@@ -174,7 +174,7 @@ async def lifespan(app: FastAPI):
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
-_is_prod = bool(settings.gcs_bucket_name)  # GCS bucket set → production
+_is_prod = settings.is_production  # ENVIRONMENT=production (or a GCS bucket)
 
 app = FastAPI(
     title="Nexus Support Agent",

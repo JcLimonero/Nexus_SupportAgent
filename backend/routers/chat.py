@@ -276,6 +276,11 @@ async def chat_stream(
             yield f"data: {_json.dumps({'token': cached.answer, 'from_cache': True})}\n\n"
             yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': cached.answer, 'pdf_sources': cached.sources.get('pdfs', []), 'video_sources': cached.sources.get('videos', []), 'follow_ups': cached.follow_ups, 'from_cache': True})}\n\n"
 
+        # Release the request DB connection before the (multi-second) stream —
+        # get_db()'s close runs only after StreamingResponse finishes, and the
+        # generator uses its own AsyncSessionLocal, so holding this one would
+        # pin a pool slot for the whole stream and exhaust the pool under load.
+        await db.close()
         return StreamingResponse(
             generate_cached(),
             media_type="text/event-stream",
@@ -370,6 +375,9 @@ async def chat_stream(
 
         yield f"data: {_json.dumps({'done': True, 'session_id': session_id_str, 'message_id': str(assistant_msg_id), 'answer': answer, 'pdf_sources': final_pdfs, 'video_sources': final_videos, 'follow_ups': follow_ups_list})}\n\n"
 
+    # Release the request DB connection before streaming (see generate_cached
+    # above) — the generator persists via its own AsyncSessionLocal.
+    await db.close()
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
