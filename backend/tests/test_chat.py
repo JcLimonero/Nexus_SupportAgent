@@ -88,6 +88,24 @@ async def test_chat_returns_answer_structure(client):
 
 
 @pytest.mark.anyio
+async def test_chat_gemini_failure_returns_503(client):
+    """A transient Vertex/Gemini failure must be a handled 503, not a raw 500."""
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
+         patch("routers.chat.build_context", return_value=("sin contexto", [], [])), \
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, side_effect=RuntimeError("vertex down")):
+        response = await client.post(
+            "/api/chat",
+            json={"message": "Que es TotalDealer?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 503
+
+
+@pytest.mark.anyio
 async def test_sessions_list(client):
     from db.connection import get_db
     from main import app

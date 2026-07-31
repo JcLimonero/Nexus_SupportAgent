@@ -32,6 +32,11 @@ export default function ChatPage() {
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const abortRef   = useRef<AbortController | null>(null);
 
+  // Abort any in-flight stream if the user navigates away mid-response —
+  // otherwise the reader loop and typewriter timer keep calling setState on an
+  // unmounted component and hold the fetch open.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   useEffect(() => {
     if (!loading && !user) router.push("/");
   }, [user, loading, router]);
