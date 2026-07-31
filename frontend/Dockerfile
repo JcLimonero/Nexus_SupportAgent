@@ -19,4 +19,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 EXPOSE 3000
 ENV PORT=3000
+# Drop root — the standalone server only reads its bundle (writes go to the
+# tmpfs /tmp and /app/.next/cache mounts). `node` user ships in the base image.
+USER node
 CMD ["node", "server.js"]
