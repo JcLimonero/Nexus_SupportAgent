@@ -65,6 +65,56 @@ async def test_token_contains_is_admin(client):
     assert payload["is_admin"] is True
 
 
+# ── Per-request account re-check (audit Phase B, finding 3) ───────────────────
+
+@pytest.mark.anyio
+async def test_deactivated_account_is_rejected(client):
+    """A token stays valid ~30h; deactivating the account must lock it out now."""
+    from unittest.mock import patch
+    from types import SimpleNamespace
+
+    async def _load(claims, db):
+        return SimpleNamespace(is_active=False, is_admin=False)
+
+    with patch("auth.firebase_verify.load_account", _load):
+        response = await client.get(
+            "/api/sessions", headers={"Authorization": f"Bearer {make_jwt()}"}
+        )
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_deleted_account_is_rejected(client):
+    from unittest.mock import patch
+
+    async def _load(claims, db):
+        return None  # user row gone
+
+    with patch("auth.firebase_verify.load_account", _load):
+        response = await client.get(
+            "/api/sessions", headers={"Authorization": f"Bearer {make_jwt()}"}
+        )
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_db_is_admin_overrides_forged_claim(client):
+    """A forged/stale token claiming is_admin must not grant admin — the DB row
+    (is_admin=False here) is authoritative."""
+    from unittest.mock import patch
+    from types import SimpleNamespace
+
+    async def _load(claims, db):
+        return SimpleNamespace(is_active=True, is_admin=False)
+
+    with patch("auth.firebase_verify.load_account", _load):
+        response = await client.get(
+            "/api/admin/conversations",
+            headers={"Authorization": f"Bearer {make_jwt(is_admin=True)}"},
+        )
+    assert response.status_code == 403
+
+
 # ── Anonymous / guest access ──────────────────────────────────────────────────
 
 @pytest.mark.anyio

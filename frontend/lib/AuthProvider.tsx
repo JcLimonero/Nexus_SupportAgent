@@ -24,7 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = getLocalToken();
     if (token) {
       try {
-        const payload = JSON.parse(atob(token.split(".")[1]));
+        // JWT payloads are base64url (-, _, no padding); atob expects standard
+        // base64 and throws on -/_ — which would spuriously log the user out.
+        const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+        const payload = JSON.parse(atob(b64));
         const expired = payload.exp && payload.exp * 1000 < Date.now();
         setUser(expired ? null : { email: payload.email, is_admin: payload.is_admin ?? false, is_anon: payload.is_anon ?? false });
       } catch {

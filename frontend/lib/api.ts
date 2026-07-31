@@ -1,6 +1,20 @@
-import { getBearerToken } from "./auth";
+import { getBearerToken, clearLocalToken } from "./auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// A 401 on any authenticated call means the token expired or the account was
+// deactivated/demoted server-side (backend get_current_user re-checks the DB).
+// Without this the UI keeps firing failing calls and swallows the errors,
+// leaving a silently-broken session. Clear the token and bounce to the landing
+// page. globalThis.fetch avoids recursing back into this wrapper.
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await globalThis.fetch(input, init);
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearLocalToken();
+    if (window.location.pathname !== "/") window.location.href = "/";
+  }
+  return res;
+}
 
 async function headers(json = true): Promise<Record<string, string>> {
   const token = await getBearerToken();
@@ -20,7 +34,7 @@ export async function* sendMessageStream(
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   const token = await getBearerToken();
-  const res = await fetch(`${API_URL}/api/chat/stream`, {
+  const res = await apiFetch(`${API_URL}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message, session_id: sessionId }),
@@ -47,7 +61,7 @@ export async function* sendMessageStream(
 }
 
 export async function sendMessage(message: string, sessionId: string | null) {
-  const res = await fetch(`${API_URL}/api/chat`, {
+  const res = await apiFetch(`${API_URL}/api/chat`, {
     method: "POST",
     headers: await headers(),
     body: JSON.stringify({ message, session_id: sessionId }),
@@ -57,7 +71,7 @@ export async function sendMessage(message: string, sessionId: string | null) {
 }
 
 export async function renameSession(sessionId: string, title: string) {
-  const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, {
+  const res = await apiFetch(`${API_URL}/api/sessions/${sessionId}`, {
     method: "PATCH",
     headers: await headers(),
     body: JSON.stringify({ title }),
@@ -67,7 +81,7 @@ export async function renameSession(sessionId: string, title: string) {
 }
 
 export async function deleteSession(sessionId: string) {
-  const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, {
+  const res = await apiFetch(`${API_URL}/api/sessions/${sessionId}`, {
     method: "DELETE",
     headers: await headers(false),
   });
@@ -76,7 +90,7 @@ export async function deleteSession(sessionId: string) {
 
 export async function getSuggestions(): Promise<{ label: string; prompt: string }[]> {
   try {
-    const res = await fetch(`${API_URL}/api/suggestions`, { headers: await headers() });
+    const res = await apiFetch(`${API_URL}/api/suggestions`, { headers: await headers() });
     if (!res.ok) return [];
     return res.json();
   } catch {
@@ -85,13 +99,13 @@ export async function getSuggestions(): Promise<{ label: string; prompt: string 
 }
 
 export async function getSessions() {
-  const res = await fetch(`${API_URL}/api/sessions`, { headers: await headers() });
+  const res = await apiFetch(`${API_URL}/api/sessions`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al obtener sesiones");
   return res.json();
 }
 
 export async function getSessionMessages(sessionId: string) {
-  const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`, {
+  const res = await apiFetch(`${API_URL}/api/sessions/${sessionId}/messages`, {
     headers: await headers(),
   });
   if (!res.ok) throw new Error("Error al obtener mensajes");
@@ -102,7 +116,7 @@ export async function uploadFile(file: File, retries = 3): Promise<any> {
   const h = await headers(false);
   const body = new FormData();
   body.append("file", file);
-  const res = await fetch(`${API_URL}/api/admin/upload`, { method: "POST", headers: h, body });
+  const res = await apiFetch(`${API_URL}/api/admin/upload`, { method: "POST", headers: h, body });
   // Rate limited (bulk upload overflow) — wait the server's Retry-After and retry.
   if (res.status === 429 && retries > 0) {
     const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
@@ -114,13 +128,13 @@ export async function uploadFile(file: File, retries = 3): Promise<any> {
 }
 
 export async function getDocuments() {
-  const res = await fetch(`${API_URL}/api/admin/documents`, { headers: await headers() });
+  const res = await apiFetch(`${API_URL}/api/admin/documents`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al obtener documentos");
   return res.json();
 }
 
 export async function deleteDocument(fileName: string) {
-  const res = await fetch(`${API_URL}/api/admin/documents/${encodeURIComponent(fileName)}`, {
+  const res = await apiFetch(`${API_URL}/api/admin/documents/${encodeURIComponent(fileName)}`, {
     method: "DELETE",
     headers: await headers(),
   });
@@ -129,7 +143,7 @@ export async function deleteDocument(fileName: string) {
 }
 
 export async function getExcerpt(chunkId: string) {
-  const res = await fetch(`${API_URL}/api/admin/documents/excerpt/${chunkId}`, {
+  const res = await apiFetch(`${API_URL}/api/admin/documents/excerpt/${chunkId}`, {
     headers: await headers(),
   });
   // 404 = the cited chunk no longer exists (document was re-indexed after the
@@ -175,19 +189,19 @@ export async function getConversations(params?: {
   if (params?.filter) qs.set("filter", params.filter);
   if (params?.q) qs.set("q", params.q);
   if (params?.userId) qs.set("user_id", params.userId);
-  const res = await fetch(`${API_URL}/api/admin/conversations?${qs.toString()}`, { headers: await headers() });
+  const res = await apiFetch(`${API_URL}/api/admin/conversations?${qs.toString()}`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al obtener conversaciones");
   return res.json();
 }
 
 export async function getConversation(sessionId: string): Promise<ConversationDetail> {
-  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}`, { headers: await headers() });
+  const res = await apiFetch(`${API_URL}/api/admin/conversations/${sessionId}`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al obtener la conversación");
   return res.json();
 }
 
 export async function deleteConversation(sessionId: string) {
-  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}`, {
+  const res = await apiFetch(`${API_URL}/api/admin/conversations/${sessionId}`, {
     method: "DELETE",
     headers: await headers(false),
   });
@@ -195,7 +209,7 @@ export async function deleteConversation(sessionId: string) {
 }
 
 export async function shareSession(sessionId: string): Promise<{ token: string; path: string }> {
-  const res = await fetch(`${API_URL}/api/sessions/${sessionId}/share`, {
+  const res = await apiFetch(`${API_URL}/api/sessions/${sessionId}/share`, {
     method: "POST",
     headers: await headers(false),
   });
@@ -204,7 +218,7 @@ export async function shareSession(sessionId: string): Promise<{ token: string; 
 }
 
 export async function shareConversationAdmin(sessionId: string): Promise<{ token: string; path: string }> {
-  const res = await fetch(`${API_URL}/api/admin/conversations/${sessionId}/share`, {
+  const res = await apiFetch(`${API_URL}/api/admin/conversations/${sessionId}/share`, {
     method: "POST",
     headers: await headers(false),
   });
@@ -224,13 +238,13 @@ export interface SharedConversation {
 
 // Public — no auth header.
 export async function getSharedConversation(token: string): Promise<SharedConversation> {
-  const res = await fetch(`${API_URL}/api/shared/${token}`);
+  const res = await apiFetch(`${API_URL}/api/shared/${token}`);
   if (!res.ok) throw new Error("Conversación no encontrada");
   return res.json();
 }
 
 export async function submitFeedback(messageId: string, rating: "up" | "down") {
-  const res = await fetch(`${API_URL}/api/messages/${messageId}/feedback`, {
+  const res = await apiFetch(`${API_URL}/api/messages/${messageId}/feedback`, {
     method: "POST",
     headers: await headers(),
     body: JSON.stringify({ rating }),
@@ -275,7 +289,7 @@ export const ATTACHMENT_MAX_COUNT = 10;
 export async function uploadEscalationAttachment(file: File): Promise<EscalationAttachment> {
   const body = new FormData();
   body.append("file", file);
-  const res = await fetch(`${API_URL}/api/escalations/attachments`, {
+  const res = await apiFetch(`${API_URL}/api/escalations/attachments`, {
     method: "POST",
     headers: await headers(false), // let the browser set multipart boundary
     body,
@@ -292,7 +306,7 @@ export async function createEscalation(body: {
   sessionId?: string | null;
   attachments?: EscalationAttachment[];
 }) {
-  const res = await fetch(`${API_URL}/api/escalations`, {
+  const res = await apiFetch(`${API_URL}/api/escalations`, {
     method: "POST",
     headers: await headers(),
     body: JSON.stringify({
@@ -312,13 +326,13 @@ export async function getEscalations(
   status?: EscalationStatus,
 ): Promise<{ new_count: number; items: Escalation[] }> {
   const qs = status ? `?status=${status}` : "";
-  const res = await fetch(`${API_URL}/api/admin/escalations${qs}`, { headers: await headers() });
+  const res = await apiFetch(`${API_URL}/api/admin/escalations${qs}`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al cargar las escalaciones");
   return res.json();
 }
 
 export async function updateEscalation(id: string, status: EscalationStatus) {
-  const res = await fetch(`${API_URL}/api/admin/escalations/${id}`, {
+  const res = await apiFetch(`${API_URL}/api/admin/escalations/${id}`, {
     method: "PATCH",
     headers: await headers(),
     body: JSON.stringify({ status }),
@@ -331,7 +345,7 @@ export async function updateEscalation(id: string, status: EscalationStatus) {
 // or open in a tab — streams with Range requests instead of downloading the
 // whole file as a blob first.
 export async function getSignedMediaUrl(gcsUrl: string): Promise<string> {
-  const res = await fetch(`${API_URL}/api/media/sign`, {
+  const res = await apiFetch(`${API_URL}/api/media/sign`, {
     method: "POST",
     headers: await headers(),
     body: JSON.stringify({ gcs_url: gcsUrl }),
