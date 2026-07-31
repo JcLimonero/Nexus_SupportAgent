@@ -135,6 +135,20 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _check_embedding_dims(self) -> "Settings":
+        # The pgvector column width is fixed at Vector(embedding_dimensions), so
+        # a provider/dimension mismatch fails every insert and query at runtime
+        # instead of at startup. Catch it loudly here. local MiniLM = 384-D,
+        # Vertex text-multilingual-embedding-002 = 768-D.
+        expected = 768 if self.embedding_provider == "vertexai" else 384
+        if self.embedding_dimensions != expected:
+            raise ValueError(
+                f"EMBEDDING_DIMENSIONS={self.embedding_dimensions} does not match "
+                f"EMBEDDING_PROVIDER={self.embedding_provider} (expected {expected})."
+            )
+        return self
+
     class Config:
         env_file = ".env"
 

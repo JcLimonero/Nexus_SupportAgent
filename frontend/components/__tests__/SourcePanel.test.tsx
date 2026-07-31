@@ -102,7 +102,7 @@ describe("SourcePanel", () => {
     fireEvent.click(screen.getByText("Ver documento"));
     await waitFor(() => expect(mockGetSignedMediaUrl).toHaveBeenCalledWith("/data/pdfs/manual.pdf"));
     await waitFor(() =>
-      expect(openSpy).toHaveBeenCalledWith("http://api/api/media/stream/pdfs/manual.pdf?exp=1&sig=x", "_blank")
+      expect(openSpy).toHaveBeenCalledWith("http://api/api/media/stream/pdfs/manual.pdf?exp=1&sig=x", "_blank", "noopener")
     );
     openSpy.mockRestore();
   });

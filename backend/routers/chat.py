@@ -154,8 +154,14 @@ async def chat(
     chunks = await search_chunks(db, request.message)
     context, pdf_sources, video_sources = build_context(chunks)
 
-    # Call Gemini (blocking SDK → thread)
-    gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    # Call Gemini (blocking SDK → thread). On a transient Vertex failure return
+    # a handled 503 instead of a raw 500 with a stack trace — the /chat/stream
+    # path degrades gracefully, so this one should too.
+    try:
+        gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    except Exception as exc:
+        logger.error("Gemini error on /chat: %s", exc)
+        raise HTTPException(status_code=503, detail="Error al procesar la respuesta")
     answer = gemini_result["answer"]
     follow_ups = gemini_result.get("follow_ups", [])
 

@@ -42,18 +42,23 @@ export function SourcePanel({
 
   useEffect(() => {
     if (!source?.chunk_id) { setData(null); return; }
+    // Guard against a race: clicking source A then B must not let A's slower
+    // response overwrite B's excerpt (or setState after unmount).
+    let active = true;
     setLoading(true);
     setError("");
     getExcerpt(source.chunk_id)
-      .then(setData)
-      .catch((e: unknown) =>
+      .then((d) => { if (active) setData(d); })
+      .catch((e: unknown) => {
+        if (!active) return;
         setError(
           e instanceof Error && e.message === "excerpt_not_found"
             ? "El fragmento citado ya no está disponible: el documento fue re-indexado después de esta respuesta. Vuelve a hacer la pregunta para obtener referencias actualizadas."
             : "No se pudo cargar el fragmento.",
-        ),
-      )
-      .finally(() => setLoading(false));
+        );
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [source?.chunk_id]);
 
   // Reset video player when source file changes (gcs_url covers both PDFs and videos)
@@ -117,7 +122,9 @@ export function SourcePanel({
       if (isMedia) {
         setVideoUrl(url);
       } else {
-        window.open(url, "_blank");
+        // noopener: window.open (unlike <a target=_blank>) leaves window.opener
+        // live, letting the opened doc navigate this tab (reverse tabnabbing).
+        window.open(url, "_blank", "noopener");
       }
     } catch {
       if (currentGcsUrlRef.current === fetchFor) setError("No se pudo cargar el archivo.");
