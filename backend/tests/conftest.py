@@ -55,6 +55,23 @@ def make_db_override(user=None):
     return _override
 
 
+@pytest.fixture(autouse=True)
+def _stub_account():
+    """get_current_user now re-checks the account against the DB every request.
+    The unit tests mock the DB, so stub the lookup to mirror the JWT claims —
+    existing tests keep their exact behaviour. Deactivation/demotion tests
+    patch auth.firebase_verify.load_account themselves. (The E2E suite has its
+    own conftest and exercises the real DB path.)"""
+    from types import SimpleNamespace
+    import auth.firebase_verify as fv
+
+    async def _load(claims, db):
+        return SimpleNamespace(is_active=True, is_admin=claims.get("is_admin", False))
+
+    with patch.object(fv, "load_account", _load):
+        yield
+
+
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
