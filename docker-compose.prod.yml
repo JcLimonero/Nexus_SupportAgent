@@ -64,7 +64,7 @@ services:
       # Gemini (the LLM) runs on Vertex AI — required even with local embeddings.
       VERTEX_AI_PROJECT: ${VERTEX_AI_PROJECT:?set VERTEX_AI_PROJECT in .env}
       VERTEX_AI_LOCATION: ${VERTEX_AI_LOCATION:-us-central1}
-      GEMINI_MODEL: gemini-3.5-flash
+      GEMINI_MODEL: gemini-3.7-flash
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
       RATE_LIMIT_ENABLED: "true"
       # Chain is IIS(ARR) → nginx → backend, so the real client sits 2 hops deep
