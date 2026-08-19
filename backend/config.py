@@ -63,14 +63,15 @@ class Settings(BaseSettings):
     frontend_url: str = ""
 
     # ── LLM (Gemini via Vertex AI) ───────────────────────────────────────────
-    gemini_model: str = "gemini-3.5-flash"
-    # Thinking budget (tokens). gemini-3.5-flash is a reasoning model whose
-    # default dynamic budget burns several seconds of server-side thinking
-    # before the first token — wasteful for extractive RAG QA. Measured on the
+    gemini_model: str = "gemini-3.7-flash"
+    # Thinking budget (tokens). Flash is a reasoning model whose default dynamic
+    # budget burns several seconds of server-side thinking before the first
+    # token — wasteful for extractive RAG QA. Measured on 3.5-flash against the
     # live Vertex global endpoint: budget=0 → ~1.3s TTFT (tight variance);
     # default and budget=512 → ~4–6s with high variance (512 buys no win).
     # budget=0 grounds identically to non-zero budgets on well-formed queries
     # (grounding failures observed were retrieval misses, not thinking-related).
+    # Not re-measured on 3.7-flash — re-check TTFT if latency regresses.
     gemini_thinking_budget: int = 0
 
     # ── RAG tuning ──────────────────────────────────────────────────────────
