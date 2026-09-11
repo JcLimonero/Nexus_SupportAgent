@@ -69,11 +69,18 @@ jobs:
         working-directory: backend
         run: |
           # transformers (transitive via sentence-transformers==3.0.1, which pins
-          # transformers<5 so the 5.3.0 fix is unreachable without a major bump).
-          # Both CVEs are RCE via from_pretrained() on an attacker-controlled
+          # transformers<5 so the fixes are unreachable without a major bump).
+          # Most of these are RCE via from_pretrained() on an attacker-controlled
           # config.json; this app only loads one pinned, trusted embedding model
-          # (all-MiniLM-L6-v2) and never loads user-supplied models, so neither
-          # is reachable here. Revisit when sentence-transformers moves to 5.x.
+          # (all-MiniLM-L6-v2) and never loads user-supplied models, so none is
+          # reachable here.
+          # PYSEC-2026-3929 is a path traversal in save_pretrained() via
+          # chat_template keys, reachable only when loading AND saving an
+          # attacker-controlled Hub repo — this app never calls save_pretrained().
+          # sentence-transformers 5.2.3 (2026-02) now requires transformers>=5.0.0,
+          # which would clear most of this list. Tracked as its own dependency
+          # bump: it changes the library behind every embedding, so it needs its
+          # own testing rather than riding along with an unrelated change.
           pip-audit --requirement requirements.txt \
             --ignore-vuln PYSEC-2022-42969 \
             --ignore-vuln PYSEC-2025-183 \
@@ -83,7 +90,8 @@ jobs:
             --ignore-vuln GHSA-69w3-r845-3855 \
             --ignore-vuln GHSA-rrmf-rvhw-rf47 \
             --ignore-vuln PYSEC-2026-2289 \
-            --ignore-vuln PYSEC-2026-2290
+            --ignore-vuln PYSEC-2026-2290 \
+            --ignore-vuln PYSEC-2026-3929
 
   # ── Frontend tests (every push / PR) ────────────────────────────────────────
   frontend-test:

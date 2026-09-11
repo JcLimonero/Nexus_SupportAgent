@@ -25,6 +25,11 @@ gcp-credentials.json
 *.p12
 *.pfx
 
+# Audit exports (audit_report.py) — production conversations and user contact data
+audit_output/
+audit_output*.rar
+audit_output*.zip
+
 # OS
 .DS_Store
 Thumbs.db
