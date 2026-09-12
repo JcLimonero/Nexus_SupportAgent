@@ -33,7 +33,11 @@ Reglas que debes seguir siempre:
 4. Si la respuesta no está en el contexto, responde: "No tengo información sobre ese tema en los documentos disponibles. Te recomiendo contactar al equipo de soporte."
 5. Sé conciso y estructurado. Usa listas numeradas para pasos y viñetas para listas de opciones.
 6. No inventes pasos, números de versión, rutas de menú ni configuraciones que no aparezcan en el contexto.
-7. Cuando el contexto provenga de un video de capacitación, puedes mencionarlo al usuario."""
+7. Cuando el contexto provenga de un video de capacitación, puedes mencionarlo al usuario.
+8. Declara qué fragmentos usaste realmente. La recuperación siempre entrega varios
+   fragmentos y normalmente solo uno o dos contienen la respuesta; citar los demás
+   confunde al usuario. Incluye un número SOLO si tomaste información de ese
+   fragmento para redactar tu respuesta. Si ninguno sirvió, declara una lista vacía."""
 
 _RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -43,8 +47,14 @@ _RESPONSE_SCHEMA = {
             "type": "ARRAY",
             "items": {"type": "STRING"},
         },
+        # 1-based [Fragmento N] numbers the answer actually drew on. The caller
+        # narrows its citations to these; an absent field means "don't filter".
+        "used_fragments": {
+            "type": "ARRAY",
+            "items": {"type": "INTEGER"},
+        },
     },
-    "required": ["answer", "follow_ups"],
+    "required": ["answer", "follow_ups", "used_fragments"],
 }
 
 _ENDPOINT = (
@@ -138,9 +148,14 @@ def ask_gemini(history: list[dict], question: str, context: str) -> dict:
     raw = text_parts[-1] if text_parts else parts[0].get("text", "")
     try:
         result = json.loads(raw)
+        # used_fragments stays None when the model omitted it, which tells the
+        # caller to cite everything rather than nothing — an absent field must
+        # not read as "the model used no fragments".
+        used = result.get("used_fragments")
         return {
             "answer": str(result.get("answer", raw)),
             "follow_ups": [str(f) for f in result.get("follow_ups", []) if f],
+            "used_fragments": [int(i) for i in used if isinstance(i, int)] if isinstance(used, list) else None,
         }
     except (json.JSONDecodeError, KeyError):
         return {"answer": raw, "follow_ups": []}
@@ -255,7 +270,9 @@ async def stream_gemini_response(history: list[dict], question: str, context: st
         "parts": [{"text": (
             f"Contexto de los documentos:\n{context}\n\n---\n"
             f"Pregunta: {question}\n\n"
-            "Responde en Markdown. Al terminar, en una nueva línea escribe exactamente:\n"
+            "Responde en Markdown. Al terminar, en dos líneas nuevas escribe exactamente:\n"
+            'NEXUS_FUENTES: [1, 2]\n'
+            "(los números de [Fragmento N] que realmente usaste, o [] si ninguno sirvió)\n"
             'NEXUS_FOLLOW_UPS: ["pregunta1", "pregunta2"]\n'
             "(2-3 preguntas de seguimiento relevantes en español, o [] si no aplica)"
         )}],
