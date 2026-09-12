@@ -89,7 +89,35 @@ class Settings(BaseSettings):
     # clearly off-topic chunks, so borderline-irrelevant context still reaches
     # the LLM. Tune against real user queries — and note local MiniLM and Vertex
     # embeddings have different distance ranges, so the value is per-provider.
+    # Measured 2026-09-11 (rag_eval.py, 384d MiniLM): every chunk scores below
+    # 0.61, so this cutoff currently never fires. Re-measure before changing it.
     retrieval_max_distance: float = 0.8
+    # Relative cutoff: drop chunks further than this from the nearest one. 0.0
+    # disables it. Off by default on purpose — measured with rag_eval.py at
+    # delta 0.04 it halved the chunks reaching the LLM (3.58 → 1.83) but cost
+    # two questions their correct document (hit@k 10/12 → 8/12), because it
+    # prunes context *before* generation. Narrowing citations after generation
+    # (NEXUS_FUENTES, see routers/chat.py) buys the same tidiness with no
+    # recall cost, so reach for this only when context length is the problem.
+    retrieval_relative_delta: float = 0.0
+
+    # ── OCR (image-only PDFs) ────────────────────────────────────────────────
+    # The TotalDealer manuals are page screenshots: PyMuPDF extracts ~100–150
+    # chars of header per page while the actual procedure lives in the image.
+    # Those near-empty pages still become chunks, which both hides the content
+    # and pollutes retrieval. When a page yields less than ocr_min_chars, re-read
+    # it through Tesseract instead.
+    # Needs tesseract-ocr + the language pack in the image (see backend/Dockerfile).
+    # If Tesseract is missing this degrades to the old behaviour with a warning,
+    # so an un-rebuilt deployment keeps working.
+    ocr_enabled: bool = True
+    ocr_language: str = "spa"
+    ocr_min_chars: int = 200
+    # 72 (PyMuPDF's default) renders too coarse for UI screenshots; 200 reads
+    # menu labels and field names reliably at ~1–3 s/page.
+    ocr_dpi: int = 200
+    # Empty → rely on the TESSDATA_PREFIX env var set in the Dockerfile.
+    ocr_tessdata_path: str = ""
 
     # ── Rate limiting ────────────────────────────────────────────────────────
     rate_limit_enabled: bool = True

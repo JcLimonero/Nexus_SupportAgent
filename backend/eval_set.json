@@ -1,0 +1,91 @@
+{
+  "description": "Conjunto de evaluación de recuperación. Preguntas tomadas literalmente del export de producción del 2026-09-11 (audit_report.py). 'expected_file' es el documento que DEBERÍA quedar en primer lugar; null significa que el corpus no cubre el tema y lo correcto es no citar nada.",
+  "questions": [
+    {
+      "q": "como aplico un anticipo a una factura",
+      "expected_file": "Caso_08_Caja_Anticipos.docx"
+    },
+    {
+      "q": "no puedo hacer corte de caja",
+      "expected_file": "Caso_03_Caja.docx"
+    },
+    {
+      "q": "No timbra la factura de auto nuevo",
+      "expected_file": "Caso_11_Facturacion.docx",
+      "note": "MiniLM la falla: pone Caso_01_Refacciones primero"
+    },
+    {
+      "q": "No puedo cerrar orden de servicio",
+      "expected_file": "Caso_02_Servicio.docx"
+    },
+    {
+      "q": "¿Qué se debe hacer cuando un ajuste de inventario por merma no aparece en los reportes?",
+      "expected_file": "Caso_10_Inventarios.docx"
+    },
+    {
+      "q": "¿Por qué un empleado nuevo que acabo de dar de alta en Recursos Humanos no aparece en la lista de técnicos?",
+      "expected_file": "Caso_06_RH.docx"
+    },
+    {
+      "q": "¿Por qué el sistema no me permite seleccionar a un proveedor activo para programar su pago?",
+      "expected_file": "Caso_04_CXP.docx"
+    },
+    {
+      "q": "¿Qué debo hacer si el sistema no me deja facturar un pedido de mostrador porque dice que la pieza no tiene existencia?",
+      "expected_file": "Caso_01_Refacciones.docx"
+    },
+    {
+      "q": "¿Cómo puedo elaborar un anticipo a proveedores para gastos a comprobar o viáticos?",
+      "expected_file": "Anticipo a proveedores.mp4"
+    },
+    {
+      "q": "¿Qué campos son obligatorios para la interfaz Blueservice MG?",
+      "expected_file": "Manual de Configuracion Blueservice Verion 1.0.docx.pdf",
+      "note": "PDF de capturas: solo alcanzable con OCR activo (fase 26)"
+    },
+    {
+      "q": "¿Cómo configuro la autorespuesta de Outlook cuando salgo de vacaciones?",
+      "expected_file": "Manual de confguracion de Autorespuesta en Microsoft Teams y Outlook Version 1.0.pdf",
+      "note": "PDF de capturas: solo alcanzable con OCR activo (fase 26)"
+    },
+    {
+      "q": "¿Qué datos se capturan al registrar el recibo de entrada de una unidad comprada?",
+      "expected_file": "Manual de Usuario Compra de Unidades Version 4.0.pdf",
+      "note": "PDF de capturas: solo alcanzable con OCR activo (fase 26)"
+    },
+    {
+      "q": "donde registro un bono por la venta de un auto nuevo",
+      "expected_file": null
+    },
+    {
+      "q": "Como puedo crear un paquete de servicio",
+      "expected_file": null
+    },
+    {
+      "q": "Como cuadro la contabilidad",
+      "expected_file": null
+    },
+    {
+      "q": "como puedo devolver una compra de vehiculo?",
+      "expected_file": null,
+      "note": "revisar tras el OCR: el Manual de Compra de Unidades podría cubrirlo"
+    },
+    {
+      "q": "cual es el proceso para hacer una transferencia de unidades",
+      "expected_file": null,
+      "note": "revisar tras el OCR: el Manual de Compra de Unidades podría cubrirlo"
+    },
+    {
+      "q": "¿Que permiso necesito para cambiar kilometraje?",
+      "expected_file": null
+    },
+    {
+      "q": "como cancelar nota de credito por aplicacion de anticipo",
+      "expected_file": null
+    },
+    {
+      "q": "como puedo cancelar un recibo fiscal desde caja?",
+      "expected_file": null
+    }
+  ]
+}

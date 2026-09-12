@@ -159,9 +159,12 @@ async def chat(
     answer = gemini_result["answer"]
     follow_ups = gemini_result.get("follow_ups", [])
 
-    # Don't cite documents when the model says it has no relevant info.
+    # Don't cite documents when the model says it has no relevant info; otherwise
+    # narrow the citations to the fragments it declared it used.
     if _is_no_info(answer):
         pdf_sources, video_sources = [], []
+    else:
+        pdf_sources, video_sources = _sources_for(chunks, gemini_result.get("used_fragments"))
 
     # Persist both messages
     db.add(ChatMessage(session_id=session.id, role="user", content=request.message))
@@ -184,12 +187,66 @@ async def chat(
 
 
 _NEXUS_MARKER = "NEXUS_FOLLOW_UPS:"
+# Emitted before the follow-ups: the [Fragmento N] numbers the model actually
+# used. Retrieval hands the model max_chunks_retrieved chunks whether or not
+# they're relevant, and a 2026-09 production audit found every single answer
+# citing a full set of four — an anticipo question citing Caso_10_Inventarios,
+# a merma question citing Caso_06_RH. Distance can't fix that (covered and
+# uncovered questions sit 0.06 apart), but the model has read the fragments and
+# knows which ones carried the answer.
+_SOURCES_MARKER = "NEXUS_FUENTES:"
 # Hold back just enough to detect a partial marker split across a chunk boundary.
 # A fixed-size tail buffer is fragile: long Spanish follow-up arrays (often
 # >150 chars) would have their marker start streamed to the client before we
 # could strip it. Detecting the marker incrementally and only holding back
 # len(marker)-1 chars is both correct for any follow-up length and faster.
-_MARKER_HOLD = len(_NEXUS_MARKER) - 1
+_MARKER_HOLD = max(len(_NEXUS_MARKER), len(_SOURCES_MARKER)) - 1
+
+
+def _first_marker(text: str) -> int:
+    """Index where the trailer starts — the earliest of either marker, or -1.
+
+    The answer ends at whichever trailer line the model emits first, so both
+    markers have to be searched, not just the follow-ups one.
+    """
+    hits = [i for i in (text.find(_NEXUS_MARKER), text.find(_SOURCES_MARKER)) if i >= 0]
+    return min(hits) if hits else -1
+
+
+def _trailer_list(trailer: str, marker: str) -> list | None:
+    """Parse `marker: [...]` out of the trailer. None when absent or malformed.
+
+    Reads only to the end of that line, so the two markers don't swallow each
+    other regardless of the order the model emits them in.
+    """
+    idx = trailer.find(marker)
+    if idx < 0:
+        return None
+    line = trailer[idx + len(marker):].split("\n", 1)[0].strip()
+    try:
+        value = _json.loads(line)
+    except _json.JSONDecodeError:
+        return None
+    return value if isinstance(value, list) else None
+
+
+def _sources_for(chunks: list[dict], used: list | None) -> tuple[list[dict], list[dict]]:
+    """Citations narrowed to the fragments the model declared it used.
+
+    `used` is None when the model didn't emit the marker (or emitted garbage) —
+    then we fall back to citing everything retrieved, i.e. the old behaviour.
+    An explicit empty list is meaningful: the model read the fragments and none
+    of them answered the question, so nothing is cited.
+    """
+    if used is None:
+        _, pdfs, videos = build_context(chunks)
+        return pdfs, videos
+    picked = [
+        chunks[i - 1] for i in used
+        if isinstance(i, int) and 1 <= i <= len(chunks)
+    ]
+    _, pdfs, videos = build_context(picked)
+    return pdfs, videos
 
 
 @router.post("/chat/stream")
@@ -294,13 +351,13 @@ async def chat_stream(
     async def generate():
         accumulated = ""
         yielded = 0       # chars of `accumulated` already streamed to the client
-        marker_idx = -1   # position of the NEXUS_FOLLOW_UPS marker once seen
+        marker_idx = -1   # where the trailer (fuentes + follow-ups) begins
 
         try:
             async for delta in stream_gemini_response(history, user_message, context):
                 accumulated += delta
                 if marker_idx < 0:
-                    marker_idx = accumulated.find(_NEXUS_MARKER)
+                    marker_idx = _first_marker(accumulated)
                 if marker_idx >= 0:
                     # Marker reached — stream only the answer up to it, then stop;
                     # everything after the marker is follow-ups, never streamed.
@@ -319,19 +376,17 @@ async def chat_stream(
             yield f"data: {_json.dumps({'error': 'Error al procesar la respuesta'})}\n\n"
             return
 
-        # Finalize — split answer / follow-ups on the marker.
+        # Finalize — split the answer from the trailer.
         answer = accumulated
         follow_ups_list: list[str] = []
+        used_fragments: list | None = None
         if marker_idx < 0:
-            marker_idx = accumulated.find(_NEXUS_MARKER)
+            marker_idx = _first_marker(accumulated)
         if marker_idx >= 0:
             answer = accumulated[:marker_idx].rstrip()
-            try:
-                follow_ups_list = _json.loads(accumulated[marker_idx + len(_NEXUS_MARKER):].strip())
-                if not isinstance(follow_ups_list, list):
-                    follow_ups_list = []
-            except _json.JSONDecodeError:
-                follow_ups_list = []
+            trailer = accumulated[marker_idx:]
+            follow_ups_list = _trailer_list(trailer, _NEXUS_MARKER) or []
+            used_fragments = _trailer_list(trailer, _SOURCES_MARKER)
             # Flush any answer chars we were still holding back before the marker.
             if yielded < marker_idx:
                 yield f"data: {_json.dumps({'token': accumulated[yielded:marker_idx]})}\n\n"
@@ -340,8 +395,12 @@ async def chat_stream(
             if yielded < len(accumulated):
                 yield f"data: {_json.dumps({'token': accumulated[yielded:]})}\n\n"
 
-        # Don't cite documents when the model reports no relevant info.
-        final_pdfs, final_videos = ([], []) if _is_no_info(answer) else (pdf_sources, video_sources)
+        # Don't cite documents when the model reports no relevant info; otherwise
+        # cite only the fragments it declared it used.
+        if _is_no_info(answer):
+            final_pdfs, final_videos = [], []
+        else:
+            final_pdfs, final_videos = _sources_for(chunks, used_fragments)
 
         # Persist messages in a fresh session to avoid closed-connection issues
         assistant_msg_id = uuid.uuid4()

@@ -90,22 +90,32 @@ async def search_chunks(
 
     dist = DocumentChunk.embedding.cosine_distance(query_embedding)
     result = await db.execute(
-        select(DocumentChunk)
+        select(DocumentChunk, dist.label("distance"))
         # Drop chunks that aren't even loosely related — off-topic questions
         # otherwise ship the 4 nearest-but-irrelevant chunks to the LLM.
         .where(dist <= settings.retrieval_max_distance)
         .order_by(dist)
         .limit(k)
     )
+    rows = result.all()
+
+    # Optional relative cutoff, applied after the absolute one (disabled by
+    # default — see config.retrieval_relative_delta for the measured trade-off).
+    delta = settings.retrieval_relative_delta
+    if delta > 0 and rows:
+        best = rows[0].distance
+        rows = [r for r in rows if r.distance <= best + delta]
+
     return [
         {
-            "id": str(r.id),
-            "content": r.content,
-            "source_type": r.source_type,
-            "file_name": r.file_name,
-            "gcs_url": r.gcs_url,
-            "page_number": r.page_number,
-            "start_time": r.start_time,
+            "id": str(r.DocumentChunk.id),
+            "content": r.DocumentChunk.content,
+            "source_type": r.DocumentChunk.source_type,
+            "file_name": r.DocumentChunk.file_name,
+            "gcs_url": r.DocumentChunk.gcs_url,
+            "page_number": r.DocumentChunk.page_number,
+            "start_time": r.DocumentChunk.start_time,
+            "distance": float(r.distance),
         }
-        for r in result.scalars().all()
+        for r in rows
     ]
