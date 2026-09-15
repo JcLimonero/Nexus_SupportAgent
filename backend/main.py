@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from config import get_settings
 from db.connection import init_db, AsyncSessionLocal
-from routers import health, chat, admin, media, escalations
+from routers import health, chat, admin, media, escalations, status_banners
 
 settings = get_settings()
 
@@ -27,6 +27,10 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/auth/guest":   (30, 60),   # 30 guest tokens / 60 s per IP (mint-abuse guard)
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/shared":       (120, 60),  # public share view (unguessable token; light guard)
+    "/api/status/incidents": (30, 60),  # external-monitor webhook (shared key)
+    # Public banner poll: every open tab asks ~1/min and an office full of users
+    # can share one NAT IP, so this is generous on purpose — the answer is cached.
+    "/api/status":       (600, 60),
     "/api/chat":         (60, 60),
     "/api/escalations/attachments": (20, 60),  # file uploads for a handoff request
     "/api/escalations":  (5, 60),    # 5 human-handoff requests / 60 s per IP (spam guard)
@@ -160,6 +164,7 @@ async def lifespan(app: FastAPI):
     from retrieval.vector_search import warm_up
 
     from routers.escalations import evict_old_attachments
+    import service_status
 
     await init_db()
     await _migrate()
@@ -169,7 +174,13 @@ async def lifespan(app: FastAPI):
     # Preload the embedding model so the first user doesn't pay the ~6s
     # cold-load. Run in a thread to avoid blocking the event loop.
     await asyncio.to_thread(warm_up)
+    monitor = None
+    if settings.status_monitor_enabled:
+        await service_status.restore_open_incidents()
+        monitor = asyncio.create_task(service_status.run_monitor())
     yield
+    if monitor:
+        monitor.cancel()
 
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
@@ -213,6 +224,7 @@ app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(media.router)
 app.include_router(escalations.router)
+app.include_router(status_banners.router)
 
 from auth.local_auth import router as local_auth_router
 from routers.users import router as users_router

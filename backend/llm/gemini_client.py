@@ -67,6 +67,11 @@ _STREAM_ENDPOINT = (
     "/locations/global/publishers/google/models/{model}:streamGenerateContent?alt=sse"
 )
 
+_COUNT_TOKENS_ENDPOINT = (
+    "https://aiplatform.googleapis.com/v1/projects/{project}"
+    "/locations/global/publishers/google/models/{model}:countTokens"
+)
+
 
 def _get_token() -> str:
     with _token_lock:
@@ -82,6 +87,25 @@ def _get_token() -> str:
         _token_cache["expiry"] = expiry.timestamp() if expiry else now + 3600
         logger.debug("GCP token refreshed, expires in ~%.0fs", _token_cache["expiry"] - now)
         return _token_cache["value"]
+
+
+def probe_count_tokens(timeout: float = 10) -> None:
+    """Free liveness probe for the status monitor. countTokens isn't billed, yet
+    it goes through the same credentials, endpoint and model name a real answer
+    needs — a revoked key, a renamed model or an unreachable Vertex all fail it.
+    It can't see generation-side trouble (quota, overload); the monitor covers
+    that by also watching real chat failures. Synchronous; raises on failure."""
+    url = _COUNT_TOKENS_ENDPOINT.format(
+        project=settings.vertex_ai_project,
+        model=settings.gemini_model,
+    )
+    response = _http.post(
+        url,
+        headers={"Authorization": f"Bearer {_get_token()}"},
+        json={"contents": [{"role": "user", "parts": [{"text": "ping"}]}]},
+        timeout=timeout,
+    )
+    response.raise_for_status()
 
 
 def ask_gemini(history: list[dict], question: str, context: str) -> dict:

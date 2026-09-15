@@ -3,7 +3,10 @@
 Tests run in file order — later sections reuse state from earlier ones via S,
 and the rate-limit test runs last because it poisons the login window.
 """
+import os
 import time
+import uuid
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -574,6 +577,107 @@ def test_admin_cache_flush(api, admin_token, user_a):
     assert api.delete("/api/admin/cache", headers=bearer(admin_token)).status_code == 204
     stats = api.get("/api/admin/cache/stats", headers=bearer(admin_token)).json()
     assert stats["total_entries"] == 0
+
+
+# ── 10b. Service status banners ───────────────────────────────────────────────
+# Banners are global state: every test deletes what it creates (in `finally`),
+# so a failure midway can't leave a chat-blocking notice on the dev stack.
+
+def _public_ids(api) -> list[str]:
+    return [b["id"] for b in api.get("/api/status").json()["banners"]]
+
+
+def test_status_public_endpoint_needs_no_auth(api):
+    resp = api.get("/api/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["state"] in ("ok", "degraded", "down") and isinstance(body["banners"], list)
+
+
+def test_status_banner_admin_flow(api, admin_token, user_a):
+    admin = bearer(admin_token)
+    marker = f"Aviso E2E {uuid.uuid4().hex[:8]}"
+    created: list[str] = []
+    try:
+        assert api.post("/api/admin/banners", headers=bearer(user_a["token"]), json={"message": marker}).status_code == 403
+
+        live = api.post("/api/admin/banners", headers=admin, json={"message": marker, "severity": "warning", "contact": "45454545"})
+        assert live.status_code == 201, live.text
+        live_id = live.json()["id"]
+        created.append(live_id)
+        tomorrow = (datetime.utcnow() + timedelta(days=1)).isoformat() + "Z"
+        future = api.post("/api/admin/banners", headers=admin, json={"message": f"{marker} programado", "starts_at": tomorrow})
+        assert future.status_code == 201, future.text
+        created.append(future.json()["id"])
+
+        # Live shows publicly; scheduled doesn't until its time.
+        assert live_id in _public_ids(api) and future.json()["id"] not in _public_ids(api)
+        listing = api.get("/api/admin/banners", headers=admin).json()
+        assert live_id in [b["id"] for b in listing["active"]]
+        assert future.json()["id"] in [b["id"] for b in listing["scheduled"]]
+
+        # News reaches the public view.
+        assert api.post(f"/api/admin/banners/{live_id}/updates", headers=admin,
+                        json={"text": "Encontramos el error y trabajamos en ello"}).status_code == 201
+        shown = next(b for b in api.get("/api/status").json()["banners"] if b["id"] == live_id)
+        assert shown["updates"][-1]["text"] == "Encontramos el error y trabajamos en ello"
+        assert shown["contact"] == "45454545" and "created_by" not in shown
+
+        # Ending it removes it publicly and files it under history.
+        assert api.patch(f"/api/admin/banners/{live_id}", headers=admin, json={"end_now": True}).status_code == 200
+        assert live_id not in _public_ids(api)
+        assert live_id in [b["id"] for b in api.get("/api/admin/banners", headers=admin).json()["past"]]
+
+        assert api.post("/api/admin/banners", headers=admin, json={"message": "hey"}).status_code == 422
+        assert api.patch(f"/api/admin/banners/{uuid.uuid4()}", headers=admin, json={"end_now": True}).status_code == 404
+    finally:
+        for bid in created:
+            api.delete(f"/api/admin/banners/{bid}", headers=admin)
+
+
+def test_status_simulated_external_monitor_blocks_chat(api, admin_token, user_a):
+    admin = bearer(admin_token)
+    assert api.post("/api/admin/status/simulate", headers=bearer(user_a["token"]), json={"action": "open"}).status_code == 403
+    api.post("/api/admin/status/simulate", headers=admin, json={"action": "resolve"})   # repeat-safe
+    opened = api.post("/api/admin/status/simulate", headers=admin, json={"action": "open"})
+    assert opened.status_code == 200 and opened.json()["state"] == "opened", opened.text
+    bid = opened.json()["id"]
+    try:
+        status = api.get("/api/status").json()
+        shown = next(b for b in status["banners"] if b["id"] == bid)
+        assert shown["source"] == "webhook" and shown["blocks_chat"] and shown["eta_at"]
+        assert status["chat_blocked"] is True
+        resolved = api.post("/api/admin/status/simulate", headers=admin, json={"action": "resolve"})
+        assert resolved.json()["state"] == "resolved"
+        assert bid not in _public_ids(api)
+    finally:
+        api.post("/api/admin/status/simulate", headers=admin, json={"action": "resolve"})
+        api.delete(f"/api/admin/banners/{bid}", headers=admin)
+
+
+def test_status_webhook_requires_the_shared_key(api, admin_token):
+    key = os.environ.get("STATUS_WEBHOOK_KEY", "")
+    body = {"incident_key": "e2e-monitor", "action": "open", "message": "Falla simulada desde la suite E2E"}
+    if not key:
+        assert api.post("/api/status/incidents", json=body).status_code == 404   # disabled
+        return
+    headers = {"X-Status-Key": key}
+    resolve = {"incident_key": "e2e-monitor", "action": "resolve"}
+    api.post("/api/status/incidents", headers=headers, json=resolve)   # repeat-safe
+    assert api.post("/api/status/incidents", json=body).status_code == 401
+    assert api.post("/api/status/incidents", headers={"X-Status-Key": "wrong"}, json=body).status_code == 401
+    opened = api.post("/api/status/incidents", headers=headers, json=body)
+    assert opened.status_code == 200 and opened.json()["state"] == "opened", opened.text
+    bid = opened.json()["id"]
+    try:
+        again = api.post("/api/status/incidents", headers=headers, json=body)
+        assert again.json() == {"state": "updated", "id": bid}
+        assert bid in _public_ids(api)
+        assert api.post("/api/status/incidents", headers=headers, json=resolve).json()["state"] == "resolved"
+        assert bid not in _public_ids(api)
+    finally:
+        api.post("/api/status/incidents", headers=headers, json=resolve)
+        api.delete(f"/api/admin/banners/{bid}", headers=bearer(admin_token))
 
 
 # ── 11. Rate limiting (last — poisons the login window for ~60s) ──────────────

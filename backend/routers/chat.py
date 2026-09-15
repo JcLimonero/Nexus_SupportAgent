@@ -18,6 +18,7 @@ from auth.local_auth import guest_label
 from retrieval.vector_search import search_chunks, embed_text
 from retrieval.context_builder import build_context
 from llm.gemini_client import ask_gemini, stream_gemini_response
+import service_status
 
 logger = logging.getLogger(__name__)
 
@@ -373,8 +374,12 @@ async def chat_stream(
                         yielded = safe
         except Exception as exc:
             logger.error("Gemini stream error: %s", exc)
+            # Feeds the status monitor's Gemini check (quota/overload errors
+            # only surface while generating, never in its free probe).
+            service_status.record_llm_result(False)
             yield f"data: {_json.dumps({'error': 'Error al procesar la respuesta'})}\n\n"
             return
+        service_status.record_llm_result(True)
 
         # Finalize — split the answer from the trailer.
         answer = accumulated
