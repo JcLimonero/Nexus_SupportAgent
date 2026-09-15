@@ -175,6 +175,7 @@ export default function AdminPage() {
         subtitle="Documentos, estadísticas y gestión de usuarios."
         maxWidth="max-w-4xl"
         counts={counts ?? undefined}
+        countsPending={counts == null}
       />
 
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-8 space-y-8">

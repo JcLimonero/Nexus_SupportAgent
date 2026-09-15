@@ -103,23 +103,38 @@ export function AdminIcon({ name, size = 16 }: { name: AdminIconName; size?: num
  *
  * Pass `counts` when the page already knows a number (e.g. after triaging an
  * escalation) so the badge updates immediately; anything not passed is fetched.
+ * Set `countsPending` when the page will supply BOTH counts itself once its own
+ * fetch resolves (e.g. /admin) — this skips our fetch entirely instead of
+ * racing it. Without it, a page whose `counts` prop is only ever partial (e.g.
+ * the escalations page never knows the avisos count) would otherwise refetch
+ * both endpoints every time its own `counts` prop happens to go through an
+ * incomplete shape — which for a page like /admin/escalations is every filter
+ * change, not just first mount.
  */
 export function AdminHeader({
   title,
   subtitle,
   maxWidth = "max-w-5xl",
   counts,
+  countsPending = false,
   children,
 }: {
   title: string;
   subtitle?: React.ReactNode;
   maxWidth?: string;
   counts?: Partial<AdminCounts>;
+  countsPending?: boolean;
   children?: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
-  const complete = counts?.escalations != null && counts?.avisos != null;
-  const fetched = useAdminCounts(!complete);
+  // Decided once, at mount: whether we ever need to fetch a count ourselves.
+  // Re-deriving this on every render would refire the fetch whenever `counts`
+  // flickers back to an incomplete shape (a page's own reload, a filter
+  // change) instead of only when this header first appears.
+  const [needsFetch] = useState(
+    () => !countsPending && (counts?.escalations == null || counts?.avisos == null),
+  );
+  const fetched = useAdminCounts(needsFetch);
   const merged: AdminCounts = {
     escalations: counts?.escalations ?? fetched?.escalations ?? 0,
     avisos: counts?.avisos ?? fetched?.avisos ?? 0,

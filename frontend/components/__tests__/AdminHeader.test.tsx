@@ -73,4 +73,37 @@ describe("AdminHeader", () => {
     await waitFor(() => expect(mockBanners).toHaveBeenCalled());
     expect(screen.getAllByRole("link")).toHaveLength(6);   // 5 sections + back to chat
   });
+
+  it("fetches at most once even when a page only ever supplies a partial count (avisos page: only avisos)", async () => {
+    const { rerender } = render(<AdminHeader title="Avisos" counts={undefined} />);
+    await waitFor(() => expect(mockEscalations).toHaveBeenCalledTimes(1));
+    expect(mockBanners).toHaveBeenCalledTimes(1);
+
+    // The page's own list finishes loading and starts passing its known count.
+    rerender(<AdminHeader title="Avisos" counts={{ avisos: 3 }} />);
+    expect(mockEscalations).toHaveBeenCalledTimes(1);
+    expect(mockBanners).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches at most once across an escalations-style reload that flickers `counts` back to undefined", async () => {
+    const { rerender } = render(<AdminHeader title="Escalaciones" counts={undefined} />);
+    await waitFor(() => expect(mockEscalations).toHaveBeenCalledTimes(1));
+
+    // First load resolves: the page now knows its own count...
+    rerender(<AdminHeader title="Escalaciones" counts={{ escalations: 5 }} />);
+    // ...then the admin switches filter tabs, which re-fetches the list and
+    // drops back to `counts={undefined}` while it's in flight.
+    rerender(<AdminHeader title="Escalaciones" counts={undefined} />);
+    rerender(<AdminHeader title="Escalaciones" counts={{ escalations: 8 }} />);
+
+    expect(mockEscalations).toHaveBeenCalledTimes(1);
+    expect(mockBanners).toHaveBeenCalledTimes(1);
+  });
+
+  it("never fetches when countsPending signals the page will supply both counts itself", async () => {
+    render(<AdminHeader title="Panel" countsPending />);
+    await Promise.resolve();
+    expect(mockEscalations).not.toHaveBeenCalled();
+    expect(mockBanners).not.toHaveBeenCalled();
+  });
 });
