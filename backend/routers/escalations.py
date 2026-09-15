@@ -159,18 +159,20 @@ async def _snapshot_conversation(db: AsyncSession, session_uuid: uuid.UUID, uid:
 _EMAILJS_URL = "https://api.emailjs.com/api/v1.0/email/send"
 
 
-def _send_via_emailjs(template_params: dict, timeout: int = 15) -> bool:
+def _send_via_emailjs(template_params: dict, timeout: int = 15, template_id: str | None = None) -> bool:
     """Blocking server-side POST to EmailJS. No-op if not configured. Never
     raises — the escalation is already saved; email is a bonus, not a guarantee.
     Returns False only when a real send attempt failed. timeout is generous for
     attachment-laden payloads: the default 10 s tripped on the TLS handshake /
-    slow uplink and the files got dropped."""
-    if not (settings.emailjs_service_id and settings.emailjs_template_id and settings.emailjs_public_key):
-        logger.info("EmailJS not configured — escalation email skipped")
+    slow uplink and the files got dropped. template_id overrides the escalation
+    template (the service-status alerts use their own)."""
+    template_id = template_id or settings.emailjs_template_id
+    if not (settings.emailjs_service_id and template_id and settings.emailjs_public_key):
+        logger.info("EmailJS not configured — email skipped")
         return True
     payload = {
         "service_id": settings.emailjs_service_id,
-        "template_id": settings.emailjs_template_id,
+        "template_id": template_id,
         "user_id": settings.emailjs_public_key,
         "template_params": template_params,
     }

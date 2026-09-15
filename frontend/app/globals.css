@@ -8,6 +8,11 @@ html, body {
 
 /* ── Nexus Q Tech design tokens ────────────────────────────────────────────── */
 :root {
+  /* service-status banner label colors (readable on the tinted strip) */
+  --status-critical: #b91c1c;
+  --status-warning:  #b45309;
+  --status-info:     #0369a1;
+
   /* fonts — variables provided by next/font in layout.tsx, with web-safe fallbacks.
      Reference these everywhere instead of repeating the family strings inline. */
   --font-body:      var(--font-barlow), "Barlow", system-ui, sans-serif;
@@ -57,6 +62,10 @@ html, body {
 }
 
 html.dark {
+  --status-critical: #f87171;
+  --status-warning:  #fbbf24;
+  --status-info:     #38bdf8;
+
   --bg-page:          #071929;
   --bg-surface:       #0d2137;
   --bg-muted:         #0f2847;

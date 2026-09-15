@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { uploadFile, getDocuments, deleteDocument, getEscalations } from "@/lib/api";
+import { uploadFile, getDocuments, deleteDocument, getEscalations, getAdminBanners } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { getBearerToken } from "@/lib/auth";
@@ -59,14 +59,19 @@ export default function AdminPage() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleting, setDeleting]     = useState(false);
   const [escalationCount, setEscalationCount] = useState(0);
+  const [activeBannerCount, setActiveBannerCount] = useState(0);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/");
-    if (user?.is_admin) { loadDocs(); loadStats(); loadEscalations(); }
+    if (user?.is_admin) { loadDocs(); loadStats(); loadEscalations(); loadBanners(); }
   }, [user, loading]);
 
   const loadEscalations = async () => {
     try { setEscalationCount((await getEscalations("new")).new_count); } catch {}
+  };
+
+  const loadBanners = async () => {
+    try { setActiveBannerCount((await getAdminBanners()).active.length); } catch {}
   };
 
   const loadDocs = async () => {
@@ -176,6 +181,17 @@ export default function AdminPage() {
                   {escalationCount > 0 && (
                     <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, color: "#fff", backgroundColor: "#ef4444", borderRadius: 999, padding: "0px 6px", textDecoration: "none" }}>
                       {escalationCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => router.push("/admin/avisos")}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  Avisos →
+                  {activeBannerCount > 0 && (
+                    <span title="Avisos activos" style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, color: "#fff", backgroundColor: "#f59e0b", borderRadius: 999, padding: "0px 6px", textDecoration: "none" }}>
+                      {activeBannerCount}
                     </span>
                   )}
                 </button>

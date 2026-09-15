@@ -149,6 +149,26 @@ class Settings(BaseSettings):
     # Public origin, used to build the conversation links inside the email.
     public_origin: str = ""
 
+    # ── Service status (banners + self-monitor) ──────────────────────────────
+    # Background loop that checks DB / Gemini / disk and raises a chat-blocking
+    # banner by itself. Unit tests never start it (no lifespan in the ASGI client).
+    status_monitor_enabled: bool = True
+    status_check_interval_s: int = 60
+    # Consecutive failed checks before a banner opens / passed checks before it
+    # clears — keeps one slow probe from flashing an outage at every user.
+    status_fail_threshold: int = 3
+    status_ok_threshold: int = 2
+    # Real chat streams feed the Gemini check too: this many failures inside the
+    # window, with no success after the latest one, count as the LLM being down.
+    status_llm_error_window_s: int = 300
+    status_llm_error_threshold: int = 3
+    # Shared secret an external monitor sends as X-Status-Key to
+    # POST /api/status/incidents. Empty = webhook disabled (404).
+    status_webhook_key: str = ""
+    # Second EmailJS template for outage alerts (same service/keys/recipient as
+    # escalations). Empty = no alert emails; banners still work.
+    emailjs_status_template_id: str = ""
+
     @property
     def is_production(self) -> bool:
         # Explicit ENVIRONMENT wins; a set GCS bucket still counts as prod so

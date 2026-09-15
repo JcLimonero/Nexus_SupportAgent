@@ -11,7 +11,9 @@ test.describe("admin panel", () => {
 
   test("upload a document, see it indexed, delete it", async ({ page }) => {
     await page.goto("/admin");
-    await expect(page.getByText("Documentos indexados")).toBeVisible();
+    // exact: the empty-state line "No hay documentos indexados aún." also matches
+    // a substring search while the list is still loading.
+    await expect(page.getByText("Documentos indexados", { exact: true })).toBeVisible();
 
     await page.locator("#file-input").setInputFiles({
       name: BROWSER_DOC,
