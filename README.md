@@ -11,7 +11,7 @@ RAG-based support chatbot for TotalDealer ERP. Users ask questions in Spanish an
 - **Follow-up suggestions** — each answer surfaces 3 related questions as one-click chips
 - **Source document viewer** — PDF chips open an in-app panel showing the exact excerpt used; VID chips stream the video via short-lived signed URLs with native Range seeking (no full download)
 - **Thumbs feedback** — users rate each answer up/down; admins view all feedback from the admin panel
-- **Admin dashboard** — system stats (users, sessions, messages, documents, cache hits, feedback ratio), document upload/delete, and user management
+- **Admin dashboard** — system stats (users, sessions, messages, documents, cache hits, feedback ratio), document upload/delete, and user management; every admin page shares a section tab bar with live counters (new escalations, active notices), and `/admin` opens with quick-access cards
 - **Service status banners** — admins publish or schedule notices at `/admin/avisos` (severity, estimated fix time, contact phone, live updates) that every visitor sees, login page included; a self-monitor (database, Gemini, disk) and an external-monitor webhook raise chat-blocking outage banners automatically, with optional EmailJS alerts. If the backend itself is unreachable, the frontend shows a built-in fallback
 - **User management** — create users, activate/deactivate, promote/demote admin role
 - **Toast notifications** — success/error feedback on all admin and user actions

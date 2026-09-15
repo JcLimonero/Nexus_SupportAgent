@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { AdminHeader } from "@/components/AdminHeader";
 import { MarkdownContent } from "@/components/MessageBubble";
 import { useToast } from "@/components/Toast";
 import { ConfirmDialog } from "@/components/ui";
@@ -139,37 +139,16 @@ function ConversationsInner() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-      {/* Header */}
-      <div className="px-8 py-5" style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}>
-        <div className="max-w-5xl mx-auto flex items-start justify-between">
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-              <h1 style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
-                Conversaciones
-              </h1>
-            </div>
-            <p style={{ fontSize: 12, color: "#64748b", marginTop: 2, fontWeight: 300, paddingLeft: 11 }}>
-              {userFilter ? "Conversaciones de un usuario." : "Historial de chats de usuarios registrados e invitados."}
-            </p>
-            {userFilter && (
-              <button onClick={() => router.push("/admin/conversations")}
-                style={{ marginTop: 6, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", paddingLeft: 11 }}>
-                Ver todas →
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-1">
-            <ThemeToggle className="p-1 transition-colors" style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties} />
-            <button onClick={() => router.push("/admin")}
-              style={{ fontSize: 10, color: "#64748b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}>
-              ← Admin
-            </button>
-          </div>
-        </div>
-      </div>
+      <AdminHeader
+        title="Conversaciones"
+        subtitle={userFilter ? "Conversaciones de un usuario." : "Historial de chats de usuarios registrados e invitados."}
+      >
+        {userFilter && (
+          <button onClick={() => router.push("/admin/conversations")} className="admin-back-link" style={{ marginTop: 8, marginLeft: 11, background: "none", cursor: "pointer" }}>
+            Ver todas →
+          </button>
+        )}
+      </AdminHeader>
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6">
         {/* Filters + search */}

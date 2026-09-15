@@ -2,8 +2,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
-import { uploadFile, getDocuments, deleteDocument, getEscalations, getAdminBanners } from "@/lib/api";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import Link from "next/link";
+import { uploadFile, getDocuments, deleteDocument } from "@/lib/api";
+import { AdminHeader, AdminIcon, useAdminCounts, type AdminIconName } from "@/components/AdminHeader";
 import { useToast } from "@/components/Toast";
 import { getBearerToken } from "@/lib/auth";
 
@@ -47,6 +48,40 @@ function StatCard({ label, value, sub }: { label: string; value: number | string
   );
 }
 
+// Card accent follows what's waiting: red for untriaged requests, amber for live
+// notices, brand blue otherwise. Text uses the theme-aware status tokens.
+const QUICK_TONE = {
+  neutral:  { accent: "var(--nqt-blue, #0ea5e9)", text: "var(--text-muted)" },
+  critical: { accent: "#ef4444", text: "var(--status-critical)" },
+  warning:  { accent: "#f59e0b", text: "var(--status-warning)" },
+};
+
+function QuickLink({ href, icon, title, value, detail, tone = "neutral" }: {
+  href: string;
+  icon: AdminIconName;
+  title: string;
+  value: number | string;
+  detail: string;
+  tone?: keyof typeof QUICK_TONE;
+}) {
+  const t = QUICK_TONE[tone];
+  return (
+    <Link href={href} className="admin-quick-card" style={{ "--card-accent": t.accent } as React.CSSProperties}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 min-w-0" style={{ color: t.accent }}>
+          <AdminIcon name={icon} />
+          <span style={{ fontFamily: "var(--font-condensed)", fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)" }}>
+            {title}
+          </span>
+        </span>
+        <span aria-hidden="true" style={{ color: "var(--text-faint)" }}>→</span>
+      </div>
+      <p style={{ fontFamily: "var(--font-condensed)", fontSize: 26, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1, marginTop: 10 }}>{value}</p>
+      <p style={{ fontSize: 11, color: t.text, marginTop: 4 }}>{detail}</p>
+    </Link>
+  );
+}
+
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -58,21 +93,13 @@ export default function AdminPage() {
   const [stats, setStats]           = useState<Stats | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleting, setDeleting]     = useState(false);
-  const [escalationCount, setEscalationCount] = useState(0);
-  const [activeBannerCount, setActiveBannerCount] = useState(0);
+  // Shared with the header so its tab badges don't fetch the same numbers again.
+  const counts = useAdminCounts(!!user?.is_admin);
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/");
-    if (user?.is_admin) { loadDocs(); loadStats(); loadEscalations(); loadBanners(); }
+    if (user?.is_admin) { loadDocs(); loadStats(); }
   }, [user, loading]);
-
-  const loadEscalations = async () => {
-    try { setEscalationCount((await getEscalations("new")).new_count); } catch {}
-  };
-
-  const loadBanners = async () => {
-    try { setActiveBannerCount((await getAdminBanners()).active.length); } catch {}
-  };
 
   const loadDocs = async () => {
     try { setDocs(await getDocuments()); } catch {}
@@ -143,79 +170,46 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-      {/* Header */}
-      <div
-        className="px-8 py-5"
-        style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}
-      >
-        <div className="max-w-4xl mx-auto flex items-start justify-between">
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-              <h1 style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
-                Panel de administración
-              </h1>
-            </div>
-            <p style={{ fontSize: 12, color: "#64748b", marginTop: 2, fontWeight: 300, paddingLeft: 11 }}>
-              Documentos, estadísticas y gestión de usuarios.
-            </p>
-            {user?.is_admin && (
-              <div className="flex items-center gap-4" style={{ paddingLeft: 11, marginTop: 8 }}>
-                <button
-                  onClick={() => router.push("/admin/users")}
-                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
-                  Gestionar usuarios →
-                </button>
-                <button
-                  onClick={() => router.push("/admin/conversations")}
-                  style={{ fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
-                  Ver conversaciones →
-                </button>
-                <button
-                  onClick={() => router.push("/admin/escalations")}
-                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
-                  Escalaciones →
-                  {escalationCount > 0 && (
-                    <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, color: "#fff", backgroundColor: "#ef4444", borderRadius: 999, padding: "0px 6px", textDecoration: "none" }}>
-                      {escalationCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => router.push("/admin/avisos")}
-                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
-                  Avisos →
-                  {activeBannerCount > 0 && (
-                    <span title="Avisos activos" style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, color: "#fff", backgroundColor: "#f59e0b", borderRadius: 999, padding: "0px 6px", textDecoration: "none" }}>
-                      {activeBannerCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-1">
-            <ThemeToggle
-              className="transition-colors p-1"
-              style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties}
-            />
-            <button
-              onClick={() => router.push("/chat")}
-              style={{ fontSize: 10, color: "#64748b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e8f0")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
-            >
-              ← Chat
-            </button>
-          </div>
-        </div>
-      </div>
+      <AdminHeader
+        title="Panel de administración"
+        subtitle="Documentos, estadísticas y gestión de usuarios."
+        maxWidth="max-w-4xl"
+        counts={counts ?? undefined}
+        countsPending={counts == null}
+      />
 
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-8 space-y-8">
+
+        {/* Quick access — each section with what's waiting in it */}
+        <div>
+          <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+            Accesos rápidos
+          </p>
+          <div data-testid="admin-quick-links" className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <QuickLink
+              href="/admin/users" icon="users" title="Usuarios"
+              value={stats?.users.total ?? "—"}
+              detail={stats ? `${stats.users.active} activos` : "Cargando…"}
+            />
+            <QuickLink
+              href="/admin/conversations" icon="conversations" title="Conversaciones"
+              value={stats?.sessions.total ?? "—"}
+              detail={stats ? `${stats.messages.total} mensajes` : "Cargando…"}
+            />
+            <QuickLink
+              href="/admin/escalations" icon="escalations" title="Escalaciones"
+              value={counts?.escalations ?? "—"}
+              detail={!counts ? "Cargando…" : counts.escalations > 0 ? "Nuevas por atender" : "Sin pendientes"}
+              tone={counts && counts.escalations > 0 ? "critical" : "neutral"}
+            />
+            <QuickLink
+              href="/admin/avisos" icon="notices" title="Avisos"
+              value={counts?.avisos ?? "—"}
+              detail={!counts ? "Cargando…" : counts.avisos > 0 ? "Activos ahora" : "Sin avisos activos"}
+              tone={counts && counts.avisos > 0 ? "warning" : "neutral"}
+            />
+          </div>
+        </div>
 
         {/* Stats grid */}
         <div>
