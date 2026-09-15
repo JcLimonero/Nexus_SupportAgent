@@ -36,6 +36,30 @@ test.describe("admin panel", () => {
     await expect(page.locator("li", { hasText: BROWSER_DOC })).toHaveCount(0);
   });
 
+  test("tab bar and quick-access cards move between admin sections", async ({ page }) => {
+    await page.goto("/admin");
+    const nav = page.getByRole("navigation", { name: "Secciones de administración" });
+    await expect(nav.getByRole("link", { name: /Resumen/ })).toHaveAttribute("aria-current", "page");
+
+    await nav.getByRole("link", { name: /Usuarios/ }).click();
+    await expect(page).toHaveURL(/\/admin\/users$/);
+    await expect(nav.getByRole("link", { name: /Usuarios/ })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("link", { name: /Resumen/ })).not.toHaveAttribute("aria-current");
+
+    await nav.getByRole("link", { name: /Resumen/ }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await page.getByTestId("admin-quick-links").getByRole("link", { name: /Escalaciones/ }).click();
+    await expect(page).toHaveURL(/\/admin\/escalations$/);
+    await expect(nav.getByRole("link", { name: /Escalaciones/ })).toHaveAttribute("aria-current", "page");
+
+    await nav.getByRole("link", { name: /Avisos/ }).click();
+    await expect(page).toHaveURL(/\/admin\/avisos$/);
+    await expect(page.getByRole("heading", { name: "Avisos de servicio" })).toBeVisible();
+
+    await page.getByRole("link", { name: "← Chat" }).click();
+    await expect(page).toHaveURL(/\/chat$/);
+  });
+
   test("create, deactivate and delete a user", async ({ page }) => {
     await page.goto("/admin/users");
     await expect(page.getByText("Usuarios registrados")).toBeVisible();

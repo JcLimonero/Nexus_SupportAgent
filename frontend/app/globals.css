@@ -61,6 +61,74 @@ html, body {
   --btn-primary-hover: #0284c7;
 }
 
+/* ── Admin navigation ──────────────────────────────────────────────────────────
+   The admin header is always dark, so these use fixed colors rather than the
+   theme tokens. Tabs are links styled as outlined buttons so they read as
+   clickable; the current page is filled. */
+.admin-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #1e3a5f;
+  border-radius: var(--radius-sm);
+  background-color: rgba(13, 33, 55, 0.6);
+  color: #cbd5e1;
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+.admin-nav-tab svg { color: var(--nqt-blue); }
+.admin-nav-tab:hover { border-color: var(--nqt-blue); background-color: rgba(14, 165, 233, 0.12); color: #ffffff; }
+.admin-nav-tab:focus-visible { outline: 2px solid var(--nqt-blue); outline-offset: 2px; }
+.admin-nav-tab[aria-current="page"] { border-color: var(--nqt-blue); background-color: var(--nqt-blue); color: #ffffff; }
+.admin-nav-tab[aria-current="page"] svg { color: #ffffff; }
+
+.admin-nav-count {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  letter-spacing: 0;
+  padding: 0 7px;
+  border-radius: 999px;
+  background-color: #ef4444;
+  color: #ffffff;
+}
+.admin-nav-count[data-tone="avisos"] { background-color: #f59e0b; color: #422006; }
+
+.admin-back-link {
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border: 1px solid #1e3a5f;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+.admin-back-link:hover { color: #ffffff; border-color: var(--nqt-blue); }
+.admin-back-link:focus-visible { outline: 2px solid var(--nqt-blue); outline-offset: 2px; }
+
+/* Quick-access cards on /admin (theme-aware: they sit on the page body). */
+.admin-quick-card {
+  display: block;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--card-accent, var(--nqt-blue));
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 14px 16px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.admin-quick-card:hover { border-color: var(--card-accent, var(--nqt-blue)); transform: translateY(-1px); }
+.admin-quick-card:focus-visible { outline: 2px solid var(--nqt-blue); outline-offset: 2px; }
+
 html.dark {
   --status-critical: #f87171;
   --status-warning:  #fbbf24;
