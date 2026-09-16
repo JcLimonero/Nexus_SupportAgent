@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/lib/AuthProvider";
 import { getAdminBanners, getEscalations } from "@/lib/api";
 
 // ── Sections ─────────────────────────────────────────────────────────────────
@@ -127,6 +128,7 @@ export function AdminHeader({
   children?: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
+  const { user } = useAuth();
   // Decided once, at mount: whether we ever need to fetch a count ourselves.
   // Re-deriving this on every render would refire the fetch whenever `counts`
   // flickers back to an incomplete shape (a page's own reload, a filter
@@ -134,7 +136,14 @@ export function AdminHeader({
   const [needsFetch] = useState(
     () => !countsPending && (counts?.escalations == null || counts?.avisos == null),
   );
-  const fetched = useAdminCounts(needsFetch);
+  // Gate on confirmed admin status, same as the per-page checks this header
+  // replaced — otherwise a signed-in non-admin (or a guest) rendering one of
+  // these routes for the instant before its redirect fires would still call
+  // the require_admin-guarded escalations/banners endpoints. `user` starts
+  // `null` until AuthProvider's own effect resolves the token, so this stays
+  // reactive rather than a one-time decision: it fetches once `is_admin`
+  // flips true, same as it always would have for an actual admin.
+  const fetched = useAdminCounts(needsFetch && !!user?.is_admin);
   const merged: AdminCounts = {
     escalations: counts?.escalations ?? fetched?.escalations ?? 0,
     avisos: counts?.avisos ?? fetched?.avisos ?? 0,

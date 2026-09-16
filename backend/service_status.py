@@ -134,6 +134,12 @@ async def _active_banners() -> list[dict]:
     return [b for b, ends_at in _cache["rows"] if ends_at is None or ends_at > now]
 
 
+async def is_chat_blocked() -> bool:
+    """Cheap enough to call on every chat request — reuses the same up-to-10s
+    -old cache /api/status serves from, no extra DB round trip of its own."""
+    return (await public_status())["chat_blocked"]
+
+
 async def public_status() -> dict:
     banners = await _active_banners()
     ids = {b["id"] for b in banners}
@@ -287,7 +293,8 @@ async def _check_llm() -> str:
 
 
 async def _check_disk() -> str:
-    free_mb = shutil.disk_usage(settings.local_storage_path).free / (1024 * 1024)
+    usage = await asyncio.to_thread(shutil.disk_usage, settings.local_storage_path)
+    free_mb = usage.free / (1024 * 1024)
     if free_mb < settings.min_free_disk_mb:
         raise RuntimeError(f"Solo {free_mb:,.0f} MB libres")
     return f"{free_mb:,.0f} MB libres"
@@ -375,18 +382,27 @@ async def _apply(chk: _Check) -> None:
         await _resolve_incident(chk)
 
 
+async def _run_one(key: str, fn) -> tuple[str, bool | None, str]:
+    try:
+        return key, True, await fn()
+    except _Skipped as exc:
+        return key, None, str(exc)
+    except Exception as exc:
+        return key, False, _describe(exc)
+
+
 async def run_checks_once() -> None:
-    for key, fn in _CHECK_FUNCS.items():
+    # Independent checks (DB ping, an HTTPS call to Vertex with its own 15s
+    # timeout, a disk stat) — run them concurrently so a slow one can't stretch
+    # out how long the other two take to report, or the overall poll cadence.
+    now = datetime.utcnow()
+    results = await asyncio.gather(*(_run_one(key, fn) for key, fn in _CHECK_FUNCS.items()))
+    for key, ok, detail in results:
         chk = _checks[key]
-        chk.checked_at = datetime.utcnow()
-        try:
-            chk.detail = await fn()
-            chk.ok = True
-        except _Skipped as exc:
-            chk.ok, chk.detail = None, str(exc)
+        chk.checked_at = now
+        chk.ok, chk.detail = ok, detail
+        if ok is None:   # _Skipped — neither up nor down, hysteresis untouched
             continue
-        except Exception as exc:
-            chk.ok, chk.detail = False, _describe(exc)
         await _apply(chk)
 
 

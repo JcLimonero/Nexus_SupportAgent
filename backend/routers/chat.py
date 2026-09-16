@@ -119,6 +119,9 @@ async def chat(
 ):
     user_id = user["uid"]
 
+    if await service_status.is_chat_blocked():
+        raise HTTPException(status_code=503, detail="El chat no está disponible en este momento por una interrupción del servicio.")
+
     # Get or create session
     if request.session_id:
         result = await db.execute(
@@ -156,7 +159,15 @@ async def chat(
     context, pdf_sources, video_sources = build_context(chunks)
 
     # Call Gemini (blocking SDK → thread)
-    gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    try:
+        gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    except Exception as exc:
+        logger.error("Gemini call error: %s", exc)
+        # Feeds the status monitor's Gemini check, same as the streaming path —
+        # quota/overload errors only surface while generating.
+        service_status.record_llm_result(False)
+        raise HTTPException(status_code=502, detail="Error al procesar la respuesta") from exc
+    service_status.record_llm_result(True)
     answer = gemini_result["answer"]
     follow_ups = gemini_result.get("follow_ups", [])
 
@@ -258,6 +269,9 @@ async def chat_stream(
 ):
     """SSE endpoint — streams Gemini tokens as they arrive."""
     user_id = user["uid"]
+
+    if await service_status.is_chat_blocked():
+        raise HTTPException(status_code=503, detail="El chat no está disponible en este momento por una interrupción del servicio.")
 
     if request.session_id:
         result = await db.execute(

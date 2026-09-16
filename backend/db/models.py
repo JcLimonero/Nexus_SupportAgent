@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Boolean, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from pgvector.sqlalchemy import Vector
@@ -123,6 +123,16 @@ class StatusBanner(Base):
     admins, by the self-monitor, or by an external monitor's webhook. Live when
     starts_at has passed, ends_at (if any) hasn't, and nobody ended it."""
     __tablename__ = "status_banners"
+    __table_args__ = (
+        # Two concurrent webhook "open" calls for the same incident_key (a
+        # retried alert, or two monitor instances) could otherwise both miss an
+        # existing-row SELECT and INSERT a duplicate. This lets the DB reject
+        # the loser so the request can fall back to updating the winner instead.
+        Index(
+            "ux_status_banners_open_incident_key", "incident_key", unique=True,
+            postgresql_where=text("ended_at IS NULL AND incident_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     message: Mapped[str] = mapped_column(Text, nullable=False)

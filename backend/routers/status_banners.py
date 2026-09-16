@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import service_status as status
@@ -38,6 +39,8 @@ def _check_times(starts_at: datetime, ends_at: datetime | None, eta_at: datetime
         raise ValueError("La fecha de fin debe ser posterior al inicio")
     if eta_at is not None and eta_at <= starts_at:
         raise ValueError("El tiempo estimado de solución debe ser posterior al inicio")
+    if eta_at is not None and ends_at is not None and eta_at > ends_at:
+        raise ValueError("El tiempo estimado de solución no puede ser posterior al fin del aviso")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -120,17 +123,26 @@ async def _get_banner(db: AsyncSession, banner_id: str) -> StatusBanner:
 
 def _append_update(row: StatusBanner, text: str, at: datetime) -> None:
     # Reassign, don't mutate: SQLAlchemy doesn't track in-place JSONB changes.
-    row.updates = [*(row.updates or []), {"at": status.iso(at), "text": text}]
+    # Capped here too, not just in add_banner_update's pre-check: the
+    # webhook/simulate path (_apply_incident) has no per-call quota of its own,
+    # so a monitor that keeps refreshing an open incident with varying text
+    # can't grow this without bound over a long-running outage.
+    updates = [*(row.updates or []), {"at": status.iso(at), "text": text}]
+    row.updates = updates[-_MAX_UPDATES:]
 
 
-async def _apply_incident(db: AsyncSession, body: IncidentBody, actor: str) -> dict:
-    key = f"webhook:{body.incident_key}"
-    row = (await db.execute(
+async def _find_open_incident(db: AsyncSession, key: str) -> StatusBanner | None:
+    return (await db.execute(
         select(StatusBanner)
         .where(StatusBanner.incident_key == key, StatusBanner.ended_at.is_(None))
         .order_by(StatusBanner.created_at.desc())
         .limit(1)
     )).scalars().first()
+
+
+async def _apply_incident(db: AsyncSession, body: IncidentBody, actor: str) -> dict:
+    key = f"webhook:{body.incident_key}"
+    row = await _find_open_incident(db, key)
     now = datetime.utcnow()
     title = f"Monitor externo · {body.incident_key}"
 
@@ -156,10 +168,23 @@ async def _apply_incident(db: AsyncSession, body: IncidentBody, actor: str) -> d
         if body.update:
             _append_update(row, body.update, now)
         db.add(row)
-        await db.commit()
-        status.invalidate()
-        status.run_in_background(status.email_incident("open", title, row.message, body.update or "", now))
-        return {"state": "opened", "id": str(row.id)}
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Another request opened this incident_key between our SELECT and
+            # this INSERT (e.g. a retried webhook, or two monitors firing
+            # together) — the partial unique index on (incident_key WHERE
+            # ended_at IS NULL) rejected ours. Fall through to the "already
+            # open" branch below and merge into the row that won the race,
+            # instead of erroring or leaving a duplicate banner behind.
+            await db.rollback()
+            row = await _find_open_incident(db, key)
+            if row is None:
+                raise
+        else:
+            status.invalidate()
+            status.run_in_background(status.email_incident("open", title, row.message, body.update or "", now))
+            return {"state": "opened", "id": str(row.id)}
 
     # Already open: a repeated alert refreshes it. No second email.
     row.message, row.severity, row.blocks_chat = body.message, body.severity, body.blocks_chat

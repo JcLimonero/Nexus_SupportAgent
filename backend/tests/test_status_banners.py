@@ -208,6 +208,32 @@ async def _disk_ok():
 
 
 @pytest.mark.anyio
+async def test_checks_run_concurrently_not_sequentially():
+    """Regression: run_checks_once used to await db/llm/disk one after another,
+    so a slow check (Gemini, up to a 15s timeout) delayed when the unrelated
+    checks even started, stretching the whole poll cycle."""
+    order = []
+
+    async def slow():
+        order.append("slow-start")
+        await asyncio.sleep(0.05)
+        order.append("slow-end")
+        return "ok"
+
+    async def fast():
+        order.append("fast-start")
+        order.append("fast-end")
+        return "ok"
+
+    funcs = {"db": slow, "llm": fast, "disk": fast}
+    with patch.dict(service_status._CHECK_FUNCS, funcs, clear=True), \
+         patch.object(service_status, "_persist", AsyncMock()):
+        await service_status.run_checks_once()
+    # Sequential execution would only reach "fast-start" after "slow-end".
+    assert order.index("fast-start") < order.index("slow-end")
+
+
+@pytest.mark.anyio
 async def test_monitor_opens_after_the_threshold_and_clears_after_recovery(emails):
     db_ok = {"value": False}
 
@@ -414,6 +440,8 @@ async def test_admin_schedules_with_timezone_aware_times(client):
     {"ends_at": _iso(datetime.utcnow() - timedelta(hours=1))},
     {"starts_at": "2030-01-01T10:00:00Z", "ends_at": "2030-01-01T09:00:00Z"},
     {"starts_at": "2030-01-01T10:00:00Z", "eta_at": "2030-01-01T10:00:00Z"},
+    # eta_at scheduled to land after the banner itself has already stopped showing
+    {"starts_at": "2030-01-01T10:00:00Z", "ends_at": "2030-01-01T11:00:00Z", "eta_at": "2030-01-01T12:00:00Z"},
 ])
 async def test_create_validation(client, override):
     response = await client.post("/api/admin/banners", headers=_admin(), json=_create(**override))
@@ -482,6 +510,17 @@ async def test_patch_rejects_an_end_before_the_start(client):
     response = await client.patch(
         f"/api/admin/banners/{row.id}", headers=_admin(),
         json={"ends_at": _iso(row.starts_at - timedelta(hours=1))},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_patch_rejects_an_eta_after_the_end(client):
+    row = _banner(ends_at=datetime.utcnow() + timedelta(hours=1))
+    _use_row(row)
+    response = await client.patch(
+        f"/api/admin/banners/{row.id}", headers=_admin(),
+        json={"eta_at": _iso(row.ends_at + timedelta(hours=1))},
     )
     assert response.status_code == 422
 
@@ -573,6 +612,60 @@ async def test_webhook_opens_an_incident_and_emails(client, emails):
     )
     assert response.status_code == 200 and response.json()["state"] == "opened"
     assert emails == ["open"]
+
+
+@pytest.mark.anyio
+async def test_webhook_open_race_falls_back_to_updating_the_winner(client, emails):
+    """Regression: two near-simultaneous webhook opens for the same
+    incident_key (a retried alert, or two monitor instances) used to both pass
+    the "no existing row" SELECT and INSERT a duplicate banner. The partial
+    unique index now rejects the loser's INSERT; it must merge into the
+    winner's row instead of erroring or leaving a duplicate behind."""
+    get_settings().status_webhook_key = "s3cret"
+    from db.connection import get_db
+    from main import app
+    from sqlalchemy.exc import IntegrityError
+
+    winner = _banner(source="webhook", incident_key="webhook:erp-api", severity="critical", blocks_chat=True)
+
+    async def _override():
+        session = AsyncMock()
+        result = MagicMock()
+        # First SELECT (before the INSERT) finds nothing; the second, after the
+        # rollback, finds the row the concurrent request just committed.
+        result.scalars.return_value.first.side_effect = [None, winner]
+        session.execute = AsyncMock(return_value=result)
+        session.add = MagicMock()
+        session.commit = AsyncMock(side_effect=[IntegrityError("insert", {}, Exception("duplicate key")), None])
+        session.rollback = AsyncMock()
+        yield session
+    app.dependency_overrides[get_db] = _override
+
+    response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=_OPEN)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "updated" and body["id"] == str(winner.id)
+    # No stray "opened" email for the request that actually lost the race.
+    assert emails == []
+
+
+@pytest.mark.anyio
+async def test_webhook_update_text_is_capped_even_without_the_admin_precheck(client, emails):
+    """add_banner_update has an explicit _MAX_UPDATES pre-check; _apply_incident
+    (webhook/simulate) doesn't, so the cap has to live in _append_update itself
+    or a monitor that keeps refreshing an open incident can grow it forever."""
+    get_settings().status_webhook_key = "s3cret"
+    row = _banner(
+        source="webhook", incident_key="webhook:erp-api",
+        updates=[{"at": "2026-01-01T00:00:00Z", "text": f"update {i}"} for i in range(50)],
+    )
+    _use_row(row)
+    body = {**_OPEN, "update": "Una actualización más"}
+    response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=body)
+    assert response.status_code == 200
+    assert len(row.updates) == 50
+    assert row.updates[-1]["text"] == "Una actualización más"
+    assert row.updates[0]["text"] == "update 1"   # oldest entry dropped, not an error
 
 
 @pytest.mark.anyio

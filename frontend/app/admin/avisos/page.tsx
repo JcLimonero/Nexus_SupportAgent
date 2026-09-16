@@ -389,12 +389,14 @@ function checkState(c: StatusCheck): { label: string; color: string } {
   return { label: "Sin datos", color: "var(--text-faint)" };
 }
 
-function ChecksCard({ checks, now }: { checks: StatusChecks | null; now: Date }) {
+function ChecksCard({ checks, now, error }: { checks: StatusChecks | null; now: Date; error: boolean }) {
   return (
     <section style={card} className="p-5 h-full">
       <p style={sectionLabel}>Estado del sistema</p>
       {!checks ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>Cargando...</p>
+        <p style={{ fontSize: 12, color: error ? "#ef4444" : "var(--text-muted)", marginTop: 8 }}>
+          {error ? "No se pudo cargar el estado del sistema. Reintentando..." : "Cargando..."}
+        </p>
       ) : (
         <>
           <p style={{ ...hint, marginTop: 4, lineHeight: 1.5 }}>
@@ -491,6 +493,7 @@ export default function AvisosPage() {
 
   const [lists, setLists] = useState<BannerLists | null>(null);
   const [checks, setChecks] = useState<StatusChecks | null>(null);
+  const [checksError, setChecksError] = useState(false);
   const [tab, setTab] = useState<Tab>("active");
   const [formKey, setFormKey] = useState(0);
   const [editing, setEditing] = useState<string | null>(null);
@@ -513,7 +516,12 @@ export default function AvisosPage() {
   const loadChecks = useCallback(async () => {
     try {
       setChecks(await getStatusChecks());
-    } catch { /* the card keeps its loading state */ }
+      setChecksError(false);
+    } catch {
+      // Keep any last-good `checks` on screen; just flag that the retry failed
+      // so a first-load failure doesn't leave the card silently stuck forever.
+      setChecksError(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -600,7 +608,7 @@ export default function AvisosPage() {
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
           <div className="md:col-span-2">
-            <ChecksCard checks={checks} now={now} />
+            <ChecksCard checks={checks} now={now} error={checksError} />
           </div>
           <SimulationCard webhookEnabled={!!checks?.webhook_enabled} busy={busy} onSimulate={simulate} />
         </div>

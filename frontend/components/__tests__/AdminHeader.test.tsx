@@ -3,20 +3,26 @@ import { render, screen, waitFor } from "@testing-library/react";
 jest.mock("next/navigation", () => ({ usePathname: jest.fn() }));
 jest.mock("@/lib/api", () => ({ getEscalations: jest.fn(), getAdminBanners: jest.fn() }));
 jest.mock("@/components/ThemeToggle", () => ({ ThemeToggle: () => null }));
+jest.mock("@/lib/AuthProvider", () => ({ useAuth: jest.fn() }));
 
 import { usePathname } from "next/navigation";
 import { getAdminBanners, getEscalations } from "@/lib/api";
+import { useAuth } from "@/lib/AuthProvider";
 import { AdminHeader, isActiveSection } from "../AdminHeader";
 
 const mockPathname = usePathname as jest.Mock;
 const mockEscalations = getEscalations as jest.Mock;
 const mockBanners = getAdminBanners as jest.Mock;
+const mockUseAuth = useAuth as jest.Mock;
+
+const ADMIN_USER = { user: { email: "admin@nexus.local", is_admin: true, is_anon: false }, loading: false, refresh: jest.fn() };
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockPathname.mockReturnValue("/admin");
   mockEscalations.mockResolvedValue({ new_count: 0, items: [] });
   mockBanners.mockResolvedValue({ active: [], scheduled: [], past: [] });
+  mockUseAuth.mockReturnValue(ADMIN_USER);
 });
 
 describe("isActiveSection", () => {
@@ -105,5 +111,36 @@ describe("AdminHeader", () => {
     await Promise.resolve();
     expect(mockEscalations).not.toHaveBeenCalled();
     expect(mockBanners).not.toHaveBeenCalled();
+  });
+
+  // Regression: a signed-in non-admin (or guest) landing directly on an admin
+  // route used to still trigger these require_admin-guarded fetches for the
+  // render before the page's own redirect effect ran.
+  it("never fetches admin-only counts when the signed-in user is not an admin", async () => {
+    mockUseAuth.mockReturnValue({ user: { email: "user@nexus.local", is_admin: false, is_anon: false }, loading: false, refresh: jest.fn() });
+    render(<AdminHeader title="Panel" />);
+    await Promise.resolve();
+    expect(mockEscalations).not.toHaveBeenCalled();
+    expect(mockBanners).not.toHaveBeenCalled();
+  });
+
+  it("never fetches while auth is still resolving (user null, loading)", async () => {
+    mockUseAuth.mockReturnValue({ user: null, loading: true, refresh: jest.fn() });
+    render(<AdminHeader title="Panel" />);
+    await Promise.resolve();
+    expect(mockEscalations).not.toHaveBeenCalled();
+    expect(mockBanners).not.toHaveBeenCalled();
+  });
+
+  it("fetches once admin status resolves after mounting with an unknown user", async () => {
+    mockUseAuth.mockReturnValue({ user: null, loading: true, refresh: jest.fn() });
+    const { rerender } = render(<AdminHeader title="Panel" />);
+    await Promise.resolve();
+    expect(mockEscalations).not.toHaveBeenCalled();
+
+    mockUseAuth.mockReturnValue(ADMIN_USER);
+    rerender(<AdminHeader title="Panel" />);
+    await waitFor(() => expect(mockEscalations).toHaveBeenCalledTimes(1));
+    expect(mockBanners).toHaveBeenCalledTimes(1);
   });
 });

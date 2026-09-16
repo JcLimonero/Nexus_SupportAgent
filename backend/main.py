@@ -141,6 +141,15 @@ async def _migrate():
             "ALTER TABLE escalation_requests ADD COLUMN IF NOT EXISTS "
             "attachments JSONB NOT NULL DEFAULT '[]'::jsonb"
         ))
+        # create_all only creates brand-new tables — a status_banners table
+        # already on disk from before this index was added to db/models.py
+        # never gets it retroactively, leaving the open-incident race it
+        # closes unfixed there.
+        await db.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_status_banners_open_incident_key "
+            "ON status_banners (incident_key) "
+            "WHERE ended_at IS NULL AND incident_key IS NOT NULL"
+        ))
         await db.commit()
 
 
