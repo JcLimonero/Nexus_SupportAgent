@@ -49,11 +49,12 @@ function StatCard({ label, value, sub }: { label: string; value: number | string
 }
 
 // Card accent follows what's waiting: red for untriaged requests, amber for live
-// notices, brand blue otherwise. Text uses the theme-aware status tokens.
+// notices, brand blue otherwise — the same --status-* tokens the banner strip
+// uses, so a severity renders one color everywhere.
 const QUICK_TONE = {
-  neutral:  { accent: "var(--nqt-blue, #0ea5e9)", text: "var(--text-muted)" },
-  critical: { accent: "#ef4444", text: "var(--status-critical)" },
-  warning:  { accent: "#f59e0b", text: "var(--status-warning)" },
+  neutral:  { accent: "var(--status-ok-accent)", text: "var(--text-muted)" },
+  critical: { accent: "var(--status-critical-accent)", text: "var(--status-critical)" },
+  warning:  { accent: "var(--status-warning-accent)", text: "var(--status-warning)" },
 };
 
 function QuickLink({ href, icon, title, value, detail, tone = "neutral" }: {
@@ -94,7 +95,9 @@ export default function AdminPage() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleting, setDeleting]     = useState(false);
   // Shared with the header so its tab badges don't fetch the same numbers again.
-  const counts = useAdminCounts(!!user?.is_admin);
+  const isAdmin = !!user?.is_admin;
+  const counts = useAdminCounts({ escalations: isAdmin, avisos: isAdmin });
+  const countsLoading = counts.escalations === undefined;
 
   useEffect(() => {
     if (!loading && (!user || !user.is_admin)) router.push("/");
@@ -174,8 +177,7 @@ export default function AdminPage() {
         title="Panel de administración"
         subtitle="Documentos, estadísticas y gestión de usuarios."
         maxWidth="max-w-4xl"
-        counts={counts ?? undefined}
-        countsPending={counts == null}
+        counts={{ escalations: counts.escalations ?? null, avisos: counts.avisos ?? null }}
       />
 
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-8 space-y-8">
@@ -198,15 +200,15 @@ export default function AdminPage() {
             />
             <QuickLink
               href="/admin/escalations" icon="escalations" title="Escalaciones"
-              value={counts?.escalations ?? "—"}
-              detail={!counts ? "Cargando…" : counts.escalations > 0 ? "Nuevas por atender" : "Sin pendientes"}
-              tone={counts && counts.escalations > 0 ? "critical" : "neutral"}
+              value={counts.escalations ?? "—"}
+              detail={countsLoading ? "Cargando…" : (counts.escalations ?? 0) > 0 ? "Nuevas por atender" : "Sin pendientes"}
+              tone={(counts.escalations ?? 0) > 0 ? "critical" : "neutral"}
             />
             <QuickLink
               href="/admin/avisos" icon="notices" title="Avisos"
-              value={counts?.avisos ?? "—"}
-              detail={!counts ? "Cargando…" : counts.avisos > 0 ? "Activos ahora" : "Sin avisos activos"}
-              tone={counts && counts.avisos > 0 ? "warning" : "neutral"}
+              value={counts.avisos ?? "—"}
+              detail={countsLoading ? "Cargando…" : (counts.avisos ?? 0) > 0 ? "Activos ahora" : "Sin avisos activos"}
+              tone={(counts.avisos ?? 0) > 0 ? "warning" : "neutral"}
             />
           </div>
         </div>

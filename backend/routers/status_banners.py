@@ -2,7 +2,8 @@
 behind /admin/avisos. Rows come from admins and from the self-monitor.
 
 The self-monitor and the cache live in service_status.py; this module only
-reads and writes rows, then invalidates that cache.
+reads and writes rows, then invalidates that cache — and tells the monitor to
+let go of an incident an admin ended or deleted (status.forget_incident).
 """
 import uuid
 from datetime import datetime
@@ -197,6 +198,12 @@ async def update_banner(
         row.ended_at = now
     row.updated_at = now
     await db.commit()
+    # A monitor banner that is no longer live — ended by hand, or given an
+    # ends_at that has already passed — has to be dropped from the monitor's
+    # memory too, or it reappears on the next DB hiccup and its check can never
+    # open another one. Still failing? It raises a fresh incident, by design.
+    if row.ended_at is not None or (row.ends_at is not None and row.ends_at <= now):
+        status.forget_incident(str(row.id))
     status.invalidate()
     return status.serialize(row)
 
@@ -226,8 +233,10 @@ async def delete_banner(
     _: dict = Depends(require_admin),
 ):
     row = await _get_banner(db, banner_id)
+    deleted_id = str(row.id)
     await db.delete(row)
     await db.commit()
+    status.forget_incident(deleted_id)   # same reason as the end_now path above
     status.invalidate()
     return Response(status_code=204)
 

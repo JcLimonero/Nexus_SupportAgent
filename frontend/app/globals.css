@@ -13,6 +13,16 @@ html, body {
   --status-warning:  #b45309;
   --status-info:     #0369a1;
 
+  /* Accent (strip border, icon, card edge) and its tint for the same three
+     severities, shared by every surface that shows one. `ok` is the neutral /
+     "info" severity. Each tint is its own accent at low alpha — change both. */
+  --status-critical-accent: #dc2626;
+  --status-warning-accent:  #f59e0b;
+  --status-ok-accent:       var(--nqt-blue, #0ea5e9);
+  --status-critical-bg:     rgba(220, 38, 38, 0.09);
+  --status-warning-bg:      rgba(245, 158, 11, 0.12);
+  --status-ok-bg:           rgba(14, 165, 233, 0.09);
+
   /* fonts — variables provided by next/font in layout.tsx, with web-safe fallbacks.
      Reference these everywhere instead of repeating the family strings inline. */
   --font-body:      var(--font-barlow), "Barlow", system-ui, sans-serif;
@@ -133,6 +143,16 @@ html.dark {
   --status-critical: #f87171;
   --status-warning:  #fbbf24;
   --status-info:     #38bdf8;
+
+  /* Only the label colors above lighten for dark mode; the accents and tints
+     render at full strength on both themes. Restated here so a dark-only
+     contrast fix has one place to land. */
+  --status-critical-accent: #dc2626;
+  --status-warning-accent:  #f59e0b;
+  --status-ok-accent:       var(--nqt-blue, #0ea5e9);
+  --status-critical-bg:     rgba(220, 38, 38, 0.09);
+  --status-warning-bg:      rgba(245, 158, 11, 0.12);
+  --status-ok-bg:           rgba(14, 165, 233, 0.09);
 
   --bg-page:          #071929;
   --bg-surface:       #0d2137;

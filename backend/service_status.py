@@ -33,6 +33,12 @@ settings = get_settings()
 
 _SEVERITY_RANK = {"critical": 0, "warning": 1, "info": 2}
 _DB_TIMEOUT_S = 5
+# Outer budget for the Gemini probe. asyncio.to_thread can't be cancelled, so
+# when this fires the probe thread keeps running and holds a slot in the default
+# executor that ask_gemini, embed_text and the disk check all share. It must
+# stay above the probe's own inner timeouts (llm.gemini_client._TOKEN_TIMEOUT_S
+# + _PROBE_TIMEOUT_S = 13s) so the thread ends on its own before we give up.
+_LLM_PROBE_TIMEOUT_S = 15
 
 
 # ── Serialization ─────────────────────────────────────────────────────────────
@@ -184,6 +190,18 @@ def llm_failing(now: float | None = None) -> bool:
     return last_ok is None or last_ok < failures[-1]
 
 
+def _consume_llm_evidence() -> None:
+    """The recorded chat failures have done their job once the banner exists —
+    from here recovery is the probe's call. Keeping them would strand us: the
+    banner blocks chat, chat is the only thing that records events, so
+    llm_failing() would stay true for the whole status_llm_error_window_s no
+    matter how healthy Vertex got, and chat would stay blocked minutes after
+    the model came back. Trade-off: if generation really is still broken, the
+    first real chats after the banner clears record fresh failures and the
+    incident reopens — a possible flap we prefer over a stuck block."""
+    _llm_events.clear()
+
+
 # ── Self-monitor ──────────────────────────────────────────────────────────────
 
 class _Skipped(Exception):
@@ -223,12 +241,19 @@ def _new_checks() -> dict[str, _Check]:
 
 _checks: dict[str, _Check] = _new_checks()
 
+# Closes the DB refused, retried on later ticks. Kept apart from _Check so a
+# resolved incident stops being displayed immediately whether or not its row
+# could be closed — bookkeeping here, never state anyone sees.
+_pending_closes: deque[dict] = deque(maxlen=20)
+
 
 def reset_state() -> None:
-    """Test hook: forget checks, incidents, LLM events and the banner cache."""
+    """Test hook: forget checks, incidents, LLM events, pending writes and the
+    banner cache."""
     global _checks, _refresh_lock
     _checks = _new_checks()
     _llm_events.clear()
+    _pending_closes.clear()
     _cache.update({"at": 0.0, "fresh": False, "rows": [], "gen": 0})
     _refresh_lock = asyncio.Lock()   # each test runs on its own event loop
 
@@ -245,7 +270,7 @@ async def _check_llm() -> str:
     if not settings.vertex_ai_project:
         raise _Skipped("Vertex AI no configurado")
     from llm.gemini_client import probe_count_tokens
-    await asyncio.wait_for(asyncio.to_thread(probe_count_tokens), timeout=15)
+    await asyncio.wait_for(asyncio.to_thread(probe_count_tokens), timeout=_LLM_PROBE_TIMEOUT_S)
     if llm_failing():
         raise RuntimeError("Vertex responde, pero varias respuestas recientes del chat fallaron")
     return f"{settings.gemini_model} disponible"
@@ -274,53 +299,131 @@ async def _persist(banner: StatusBanner) -> None:
         await db.commit()
 
 
-async def _open_incident(chk: _Check) -> None:
-    now = datetime.utcnow()
-    banner = StatusBanner(
-        id=uuid.uuid4(), message=chk.message, severity="critical", blocks_chat=True,
-        starts_at=now, updates=[], source="monitor", incident_key=f"monitor:{chk.key}",
-        created_by="monitor", created_at=now, updated_at=now,
+def _incident_row(key: str, banner_id: uuid.UUID, message: str, opened_at: datetime,
+                  ended_at: datetime | None = None) -> StatusBanner:
+    """The row for one monitor incident. Built fresh for every write attempt —
+    a retry can't reuse an instance a failed session already touched."""
+    return StatusBanner(
+        id=banner_id, message=message, severity="critical", blocks_chat=True,
+        starts_at=opened_at, ended_at=ended_at, updates=[], source="monitor",
+        incident_key=f"monitor:{key}", created_by="monitor",
+        created_at=opened_at, updated_at=ended_at or opened_at,
     )
-    chk.incident, chk.opened_at = serialize(banner), now
+
+
+async def _try_persist_open(chk: _Check) -> bool:
+    """Write the row for the incident currently open on chk. False = still
+    memory-only, which a later tick retries."""
+    inc = chk.incident
+    if inc is None:
+        return False
+    row = _incident_row(chk.key, uuid.UUID(inc["id"]), inc["message"], chk.opened_at or datetime.utcnow())
     try:
-        await asyncio.wait_for(_persist(banner), timeout=_DB_TIMEOUT_S)
-        chk.persisted = True
+        await asyncio.wait_for(_persist(row), timeout=_DB_TIMEOUT_S)
     except Exception as exc:
         # Expected when the DB is the thing that's down — memory serves it.
         logger.warning("Monitor incident for %s kept in memory only: %s", chk.key, _describe(exc))
-        chk.persisted = False
+        return False
+    chk.persisted = True
+    return True
+
+
+async def _open_incident(chk: _Check) -> None:
+    now = datetime.utcnow()
+    row = _incident_row(chk.key, uuid.uuid4(), chk.message, now)
+    chk.incident, chk.opened_at, chk.persisted = serialize(row), now, False
+    if chk.key == "llm":
+        _consume_llm_evidence()
+    await _try_persist_open(chk)
     invalidate()
     logger.error("Status monitor: %s is down (%s) — banner opened", chk.label, chk.detail)
 
 
-async def _persist_close(key: str, inc: dict, opened_at: datetime | None, now: datetime) -> None:
+async def _persist_close(key: str, inc: dict, opened_at: datetime | None, now: datetime,
+                         persisted: bool) -> None:
     async with dbc.AsyncSessionLocal() as db:
         row = await db.get(StatusBanner, uuid.UUID(inc["id"]))
         if row is None:
+            if persisted:
+                # The row was written and is gone: an admin hard-deleted it.
+                # Re-inserting would resurrect a deleted record in the Historial
+                # tab and in audit_report.py hours after the fact.
+                logger.info("Monitor incident %s (%s) was deleted — nothing to close", inc["id"], key)
+                return
             # Opened while the DB was unreachable — record it for history.
-            db.add(StatusBanner(
-                id=uuid.UUID(inc["id"]), message=inc["message"], severity="critical",
-                blocks_chat=True, starts_at=opened_at or now, ended_at=now, updates=[],
-                source="monitor", incident_key=f"monitor:{key}", created_by="monitor",
-                created_at=opened_at or now, updated_at=now,
-            ))
+            db.add(_incident_row(key, uuid.UUID(inc["id"]), inc["message"], opened_at or now, ended_at=now))
         elif row.ended_at is None:
             row.ended_at = now
             row.updated_at = now
         await db.commit()
 
 
+async def _try_persist_close(pending: dict) -> bool:
+    try:
+        await asyncio.wait_for(
+            _persist_close(pending["key"], pending["inc"], pending["opened_at"],
+                           pending["now"], pending["persisted"]),
+            timeout=_DB_TIMEOUT_S,
+        )
+    except Exception as exc:
+        logger.warning("Could not record the end of the %s incident: %s", pending["key"], _describe(exc))
+        return False
+    return True
+
+
 async def _resolve_incident(chk: _Check) -> None:
     now = datetime.utcnow()
-    inc, opened_at = chk.incident, chk.opened_at
+    pending = {"key": chk.key, "inc": chk.incident, "opened_at": chk.opened_at,
+               "now": now, "persisted": chk.persisted}
+    # Stop showing it first, and never put it back: the check has recovered
+    # whether or not its row can be closed right now.
     chk.incident, chk.opened_at, chk.persisted = None, None, False
-    if inc:
-        try:
-            await asyncio.wait_for(_persist_close(chk.key, inc, opened_at, now), timeout=_DB_TIMEOUT_S)
-        except Exception as exc:
-            logger.warning("Could not record the end of the %s incident: %s", chk.key, _describe(exc))
+    if chk.key == "llm":
+        _consume_llm_evidence()
+    if pending["inc"] and not await _try_persist_close(pending):
+        # ended_at stays NULL and _load_active_banners filters on exactly that,
+        # so without a retry this keeps being served as a live chat-blocking
+        # banner for a check the admin panel already shows as healthy.
+        _pending_closes.append(pending)
     invalidate()
     logger.warning("Status monitor: %s recovered — banner cleared", chk.label)
+
+
+async def _flush_pending_writes() -> None:
+    """Retry the incident writes the DB refused on an earlier tick: a close that
+    never lands blocks chat forever, and an open that never lands leaves an
+    ongoing outage with no row — nothing for /admin/avisos to show or end, and
+    nothing for restore_open_incidents to re-adopt after a restart."""
+    changed = False
+    for pending in list(_pending_closes):
+        if await _try_persist_close(pending):
+            _pending_closes.remove(pending)
+            changed = True
+    for chk in _checks.values():
+        if chk.incident is not None and not chk.persisted and await _try_persist_open(chk):
+            changed = True
+    if changed:
+        invalidate()
+
+
+def forget_incident(banner_id: str) -> None:
+    """An admin ended or deleted a banner — drop the monitor's copy of it.
+
+    Without this the in-memory incident outlives the row: public_status merges
+    it back in the moment any DB read fails, and chk.down keeps the check from
+    ever opening another one. Resetting the hysteresis is deliberate — a check
+    that is *still* failing raises a fresh incident status_fail_threshold ticks
+    later, because an ongoing outage must not be left invisible just because
+    someone closed the banner it raised."""
+    for chk in _checks.values():
+        if chk.incident and chk.incident["id"] == banner_id:
+            chk.incident, chk.opened_at, chk.persisted = None, None, False
+            chk.down, chk.fails, chk.oks = False, 0, 0
+            logger.info("Status monitor: an admin closed the %s incident %s — forgotten", chk.key, banner_id)
+    # The admin's write is the last word on that row: a queued close would
+    # either do nothing or fight the delete.
+    for pending in [p for p in _pending_closes if p["inc"]["id"] == banner_id]:
+        _pending_closes.remove(pending)
 
 
 async def _apply(chk: _Check) -> None:
@@ -349,9 +452,13 @@ async def _run_one(key: str, fn) -> tuple[str, bool | None, str]:
 
 
 async def run_checks_once() -> None:
-    # Independent checks (DB ping, an HTTPS call to Vertex with its own 15s
-    # timeout, a disk stat) — run them concurrently so a slow one can't stretch
-    # out how long the other two take to report, or the overall poll cadence.
+    # Anything the DB refused earlier goes first, so a recovered incident's row
+    # gets closed even though its check will never report again.
+    await _flush_pending_writes()
+    # Independent checks (DB ping, an HTTPS call to Vertex with its own
+    # _LLM_PROBE_TIMEOUT_S budget, a disk stat) — run them concurrently so a
+    # slow one can't stretch out how long the other two take to report, or the
+    # overall poll cadence.
     now = datetime.utcnow()
     results = await asyncio.gather(*(_run_one(key, fn) for key, fn in _CHECK_FUNCS.items()))
     for key, ok, detail in results:

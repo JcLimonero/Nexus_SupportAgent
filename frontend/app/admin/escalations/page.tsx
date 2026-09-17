@@ -142,7 +142,7 @@ export default function EscalationsPage() {
       <AdminHeader
         title="Escalaciones"
         subtitle="Usuarios que solicitaron ayuda del equipo de soporte."
-        counts={fetching ? undefined : { escalations: newCount }}
+        counts={{ escalations: fetching ? null : newCount }}
       />
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6">

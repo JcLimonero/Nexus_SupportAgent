@@ -80,34 +80,38 @@ describe("AdminHeader", () => {
     expect(screen.getAllByRole("link")).toHaveLength(6);   // 5 sections + back to chat
   });
 
-  it("fetches at most once even when a page only ever supplies a partial count (avisos page: only avisos)", async () => {
-    const { rerender } = render(<AdminHeader title="Avisos" counts={undefined} />);
+  // Regression: /admin/avisos loads the banner list for its own table, so the
+  // header asking for it again was a second call for a number the page had.
+  it("never refetches a count the page claims with null while its own request is in flight (avisos page)", async () => {
+    const { rerender } = render(<AdminHeader title="Avisos" counts={{ avisos: null }} />);
     await waitFor(() => expect(mockEscalations).toHaveBeenCalledTimes(1));
-    expect(mockBanners).toHaveBeenCalledTimes(1);
+    expect(mockBanners).not.toHaveBeenCalled();
 
-    // The page's own list finishes loading and starts passing its known count.
+    // The page's own list finishes loading and supplies the real number.
     rerender(<AdminHeader title="Avisos" counts={{ avisos: 3 }} />);
     expect(mockEscalations).toHaveBeenCalledTimes(1);
-    expect(mockBanners).toHaveBeenCalledTimes(1);
+    expect(mockBanners).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: /Avisos/ })).toHaveTextContent("3");
   });
 
-  it("fetches at most once across an escalations-style reload that flickers `counts` back to undefined", async () => {
-    const { rerender } = render(<AdminHeader title="Escalaciones" counts={undefined} />);
-    await waitFor(() => expect(mockEscalations).toHaveBeenCalledTimes(1));
+  it("fetches at most once across an escalations-style reload that flickers its own count back to null", async () => {
+    const { rerender } = render(<AdminHeader title="Escalaciones" counts={{ escalations: null }} />);
+    await waitFor(() => expect(mockBanners).toHaveBeenCalledTimes(1));
+    expect(mockEscalations).not.toHaveBeenCalled();
 
     // First load resolves: the page now knows its own count...
     rerender(<AdminHeader title="Escalaciones" counts={{ escalations: 5 }} />);
     // ...then the admin switches filter tabs, which re-fetches the list and
-    // drops back to `counts={undefined}` while it's in flight.
-    rerender(<AdminHeader title="Escalaciones" counts={undefined} />);
+    // drops the count back to null while it's in flight.
+    rerender(<AdminHeader title="Escalaciones" counts={{ escalations: null }} />);
     rerender(<AdminHeader title="Escalaciones" counts={{ escalations: 8 }} />);
 
-    expect(mockEscalations).toHaveBeenCalledTimes(1);
     expect(mockBanners).toHaveBeenCalledTimes(1);
+    expect(mockEscalations).not.toHaveBeenCalled();
   });
 
-  it("never fetches when countsPending signals the page will supply both counts itself", async () => {
-    render(<AdminHeader title="Panel" countsPending />);
+  it("never fetches when the page claims both counts itself (/admin)", async () => {
+    render(<AdminHeader title="Panel" counts={{ escalations: null, avisos: null }} />);
     await Promise.resolve();
     expect(mockEscalations).not.toHaveBeenCalled();
     expect(mockBanners).not.toHaveBeenCalled();

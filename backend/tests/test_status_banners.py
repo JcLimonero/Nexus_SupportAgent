@@ -185,6 +185,35 @@ async def _disk_ok():
     return "OK"
 
 
+async def _down():
+    raise RuntimeError("connection refused")
+
+
+async def _up():
+    return "Conectada"
+
+
+def _monitor_funcs(db=_down):
+    return {"db": db, "llm": _skip, "disk": _disk_ok}
+
+
+def _session_ctx(session):
+    """A stand-in for dbc.AsyncSessionLocal yielding `session`."""
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=ctx)
+
+
+async def _raise_db_incident(persist=None):
+    """Run the db check to its fail threshold — the monitor opens an incident."""
+    with patch.dict(service_status._CHECK_FUNCS, _monitor_funcs()), \
+         patch.object(service_status, "_persist", persist or AsyncMock()):
+        for _ in range(get_settings().status_fail_threshold):
+            await service_status.run_checks_once()
+    return service_status._checks["db"]
+
+
 @pytest.mark.anyio
 async def test_checks_run_concurrently_not_sequentially():
     """Regression: run_checks_once used to await db/llm/disk one after another,
@@ -320,6 +349,121 @@ def test_llm_failures_age_out_of_the_window():
         service_status.record_llm_result(False)
     later = time.monotonic() + get_settings().status_llm_error_window_s + 1
     assert not service_status.llm_failing(now=later)
+
+
+# ── Self-monitor: writes the DB refused ───────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_a_memory_only_incident_is_written_on_a_later_tick():
+    """Regression: _open_incident gave up after one failed write, so an outage
+    that began while the DB was unreachable never got a row — admins couldn't
+    see or end it, and a restart lost the banner for an ongoing outage."""
+    persist = AsyncMock(side_effect=[OSError("db down"), None])
+    chk = await _raise_db_incident(persist)
+    assert chk.incident and not chk.persisted and persist.await_count == 1
+
+    with patch.dict(service_status._CHECK_FUNCS, _monitor_funcs()), \
+         patch.object(service_status, "_persist", persist):
+        await service_status.run_checks_once()
+    assert chk.persisted and persist.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_a_failed_close_is_retried_until_the_row_is_ended():
+    """Regression: a close-write that raised was only logged and never retried,
+    so the row kept ended_at NULL and _load_active_banners went on serving a
+    chat-blocking banner for a check /admin/avisos already showed as healthy."""
+    close = AsyncMock(side_effect=[OSError("db down"), None])
+    chk = await _raise_db_incident()
+
+    with patch.dict(service_status._CHECK_FUNCS, _monitor_funcs(db=_up)), \
+         patch.object(service_status, "_persist", AsyncMock()), \
+         patch.object(service_status, "_persist_close", close):
+        for _ in range(get_settings().status_ok_threshold):
+            await service_status.run_checks_once()
+        # Nobody sees it any more, but the row is still open — so it is queued.
+        assert not chk.down and chk.incident is None
+        assert len(service_status._pending_closes) == 1
+        await service_status.run_checks_once()
+    assert close.await_count == 2 and not service_status._pending_closes
+    assert chk.incident is None   # a retried close never brings the banner back
+
+
+@pytest.mark.anyio
+async def test_a_deleted_monitor_row_is_not_reinserted_on_recovery():
+    """Regression: "no row" meant "opened while the DB was down, write it for
+    history" — equally true after an admin hard-deleted it, which then came back
+    hours later in the Historial tab and in audit_report.py's export."""
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=None)
+    session.add = MagicMock()
+    inc = {"id": str(uuid.uuid4()), "message": "Estamos teniendo problemas técnicos."}
+    now = datetime.utcnow()
+    with patch.object(service_status.dbc, "AsyncSessionLocal", _session_ctx(session)):
+        await service_status._persist_close("db", inc, now, now, True)
+        assert session.add.call_count == 0    # it was written, then deleted by an admin
+        await service_status._persist_close("db", inc, now, now, False)
+        assert session.add.call_count == 1    # never written — keep it for history
+
+
+# ── Self-monitor: an admin closing what the monitor raised ────────────────────
+
+@pytest.mark.anyio
+async def test_a_still_failing_check_reopens_after_an_admin_ends_its_banner():
+    """chk.down used to be cleared only by recovery, so once an admin ended a
+    monitor banner the check stayed silent for the rest of the outage. Raising
+    a fresh incident is deliberate: an ongoing outage must not go unannounced."""
+    chk = await _raise_db_incident()
+    first = chk.incident["id"]
+
+    service_status.forget_incident(first)
+    assert chk.incident is None and not chk.down and chk.fails == 0
+
+    chk = await _raise_db_incident()
+    assert chk.down and chk.incident and chk.incident["id"] != first
+
+
+@pytest.mark.anyio
+async def test_forget_incident_drops_a_queued_close_for_that_banner():
+    close = AsyncMock(side_effect=OSError("db down"))
+    chk = await _raise_db_incident()
+    banner_id = chk.incident["id"]
+    with patch.dict(service_status._CHECK_FUNCS, _monitor_funcs(db=_up)), \
+         patch.object(service_status, "_persist", AsyncMock()), \
+         patch.object(service_status, "_persist_close", close):
+        for _ in range(get_settings().status_ok_threshold):
+            await service_status.run_checks_once()
+    assert len(service_status._pending_closes) == 1
+    service_status.forget_incident(banner_id)   # the admin's delete is the last word
+    assert not service_status._pending_closes
+
+
+# ── Self-monitor: Gemini recovery ─────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_a_gemini_incident_clears_on_the_probe_once_chat_is_blocked():
+    """Regression: the chat failures that opened the banner also kept it open.
+    Blocked chat can't call Gemini, so no passing event could ever be recorded
+    and llm_failing() stayed true for the whole error window — chat stayed
+    blocked minutes after Vertex was healthy again."""
+    for _ in range(get_settings().status_llm_error_threshold):
+        service_status.record_llm_result(False)
+    assert service_status.llm_failing()
+
+    chk = service_status._checks["llm"]
+    with patch.dict(service_status._CHECK_FUNCS, {"db": _up, "disk": _disk_ok}), \
+         patch.object(service_status.settings, "vertex_ai_project", "nexus-test"), \
+         patch("llm.gemini_client.probe_count_tokens", MagicMock()), \
+         patch.object(service_status, "_persist", AsyncMock()), \
+         patch.object(service_status, "_persist_close", AsyncMock()):
+        for _ in range(get_settings().status_fail_threshold):
+            await service_status.run_checks_once()
+        assert chk.down and chk.incident            # the chat failures opened it…
+        assert not service_status.llm_failing()     # …and were consumed doing so
+
+        for _ in range(get_settings().status_ok_threshold):
+            await service_status.run_checks_once()
+    assert not chk.down and chk.incident is None    # the free probe alone cleared it
 
 
 # ── Admin: auth ───────────────────────────────────────────────────────────────
@@ -510,6 +654,47 @@ async def test_admin_deletes_a_banner(client):
     assert (await client.delete(f"/api/admin/banners/{row.id}", headers=_admin())).status_code == 204
     _use_row(None)
     assert (await client.delete(f"/api/admin/banners/{uuid.uuid4()}", headers=_admin())).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_ending_a_monitor_banner_keeps_it_from_reappearing(client):
+    """Regression: ending it only touched the row. The monitor's in-memory copy
+    stayed put, and public_status merged it back in the moment any DB read
+    failed — the banner an admin deliberately ended re-blocked chat for
+    everyone."""
+    chk = await _raise_db_incident()
+    row = _banner(id=uuid.UUID(chk.incident["id"]), source="monitor", incident_key="monitor:db",
+                  severity="critical", blocks_chat=True)
+    _use_row(row)
+
+    response = await client.patch(f"/api/admin/banners/{row.id}", headers=_admin(), json={"end_now": True})
+    assert response.status_code == 200 and chk.incident is None
+
+    # A failing read is exactly when the memory copy used to come back.
+    with patch.object(service_status, "_load_active_banners", AsyncMock(side_effect=OSError("db down"))):
+        body = await service_status.public_status()
+    assert body["banners"] == [] and body["chat_blocked"] is False
+
+
+@pytest.mark.anyio
+async def test_a_past_ends_at_also_forgets_the_monitor_incident(client):
+    chk = await _raise_db_incident()
+    row = _banner(id=uuid.UUID(chk.incident["id"]), source="monitor", incident_key="monitor:db")
+    _use_row(row)
+    response = await client.patch(
+        f"/api/admin/banners/{row.id}", headers=_admin(),
+        json={"ends_at": _iso(datetime.utcnow() - timedelta(seconds=1))},
+    )
+    assert response.status_code == 200 and chk.incident is None and not chk.down
+
+
+@pytest.mark.anyio
+async def test_deleting_a_monitor_banner_forgets_the_incident(client):
+    chk = await _raise_db_incident()
+    row = _banner(id=uuid.UUID(chk.incident["id"]), source="monitor", incident_key="monitor:db")
+    _use_row(row)
+    assert (await client.delete(f"/api/admin/banners/{row.id}", headers=_admin())).status_code == 204
+    assert chk.incident is None and not chk.down and chk.fails == 0
 
 
 @pytest.mark.anyio

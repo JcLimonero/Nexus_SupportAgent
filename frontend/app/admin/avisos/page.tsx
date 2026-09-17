@@ -164,6 +164,13 @@ function BannerForm({
     }
     setError("");
     if (started) delete result.starts_at;   // omitted = unchanged on PATCH
+    // The ETA needs the same treatment: datetime-local has no seconds field, so
+    // an ETA loaded into the form and sent back untouched would move itself up
+    // to 59s earlier — on an edit that never opened the ETA picker.
+    if (mode === "edit" && f.etaMode === initial.etaMode && f.etaAt === initial.etaAt
+        && f.etaMinutes === initial.etaMinutes) {
+      delete result.eta_at;
+    }
     await onSubmit(result);
   };
 
@@ -375,8 +382,8 @@ function UpdateComposer({
 // ── System checks + simulation ───────────────────────────────────────────────
 
 function checkState(c: StatusCheck): { label: string; color: string } {
-  if (c.down) return { label: "Caído", color: "#ef4444" };
-  if (c.ok === false) return { label: "Con fallas", color: "#f59e0b" };
+  if (c.down) return { label: "Caído", color: "var(--status-critical-accent)" };
+  if (c.ok === false) return { label: "Con fallas", color: "var(--status-warning-accent)" };
   if (c.ok) return { label: "Operando", color: "#22c55e" };
   return { label: "Sin datos", color: "var(--text-faint)" };
 }
@@ -539,11 +546,13 @@ export default function AvisosPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-      {/* Pass the live count so the tab badge follows publish/end right away. */}
+      {/* Claim the avisos count even before it loads (null): the badge then
+          follows publish/end right away, and the header doesn't fetch the very
+          list this page is already loading. */}
       <AdminHeader
         title="Avisos de servicio"
         subtitle="Banners para todos los usuarios cuando el servicio falla o hay mantenimiento."
-        counts={lists ? { avisos: activeCount } : undefined}
+        counts={{ avisos: lists ? activeCount : null }}
       />
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-6">
@@ -583,7 +592,7 @@ export default function AvisosPage() {
               >
                 <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 8 }}>
                   <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--nqt-blue, #0ea5e9)")}>{SOURCE_LABEL[b.source] ?? b.source}</span>
-                  {b.blocks_chat && <span style={badge("#ef4444")}>Bloquea el chat</span>}
+                  {b.blocks_chat && <span style={badge("var(--status-critical-accent)")}>Bloquea el chat</span>}
                   <span style={hint}>{rowTimes(b, tab, now)}</span>
                 </div>
 

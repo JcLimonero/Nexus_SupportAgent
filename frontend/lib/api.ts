@@ -383,14 +383,18 @@ export interface StatusChecks {
   checks: StatusCheck[];
 }
 
-// FastAPI sends a string detail for HTTPException and a list for validation
-// errors; pydantic prefixes model-validator messages with "Value error, ".
+// FastAPI sends a string detail for HTTPException (always Spanish here) and a
+// list for validation errors. Pydantic tags our own validators' messages with
+// "Value error, "; everything else in that list is pydantic's own English
+// ("String should have at least 5 characters"), which must never reach an
+// all-Spanish UI — those fall back to the caller's Spanish text.
 async function errorDetail(res: Response, fallback: string): Promise<string> {
+  const ours = "Value error, ";
   try {
     const body = await res.json();
     if (typeof body?.detail === "string") return body.detail;
     const first = Array.isArray(body?.detail) ? body.detail[0]?.msg : null;
-    if (typeof first === "string") return first.replace(/^Value error, /, "");
+    if (typeof first === "string" && first.startsWith(ours)) return first.slice(ours.length);
   } catch { /* not JSON */ }
   return fallback;
 }

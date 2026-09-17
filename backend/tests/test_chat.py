@@ -579,6 +579,56 @@ async def test_suggestions_fallback_on_generation_error(client):
     assert r.json() == _FALLBACK_SUGGESTIONS
 
 
+@pytest.mark.anyio
+async def test_suggestions_report_llm_failure_to_monitor(client):
+    """This path calls Gemini for real, so its failures have to reach the
+    self-monitor. A quota error during a quiet chat window used to be invisible:
+    /api/suggestions just served the generic fallback and no banner ever opened."""
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache, _FALLBACK_SUGGESTIONS
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "x.pdf"; row.source_type = "pdf"; row.content = "algo"
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+    with patch("llm.gemini_client.generate_suggestion_questions",
+               side_effect=RuntimeError("429 quota exceeded")), \
+         patch("service_status.record_llm_result") as record:
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+
+    record.assert_called_once_with(False)
+    # Fallback behaviour is unchanged — only the reporting was missing.
+    assert r.status_code == 200
+    assert r.json() == _FALLBACK_SUGGESTIONS
+
+
+@pytest.mark.anyio
+async def test_suggestions_report_llm_success_to_monitor(client):
+    """Successes are reported as well: llm_failing() compares the newest success
+    against the newest failure, so a failure-only signal would raise false alarms."""
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "x.pdf"; row.source_type = "pdf"; row.content = "algo"
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+    generated = [{"label": "Facturación", "prompt": "¿Cómo emito una factura?"}]
+    with patch("llm.gemini_client.generate_suggestion_questions", return_value=generated), \
+         patch("service_status.record_llm_result") as record:
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+
+    record.assert_called_once_with(True)
+    assert r.status_code == 200
+    assert r.json() == generated
+
+
 # ── Conversation sharing (public links) ───────────────────────────────────────
 
 import uuid as _uuid

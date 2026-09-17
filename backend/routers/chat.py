@@ -521,11 +521,19 @@ async def get_suggestions(
         if samples:
             try:
                 generated = await asyncio.to_thread(generate_suggestion_questions, samples, 6)
+                # Successes are reported too: llm_failing() weighs the newest
+                # success against the newest failure, so reporting only the
+                # failures here would bias it toward false alarms.
+                service_status.record_llm_result(True)
                 if generated:
                     suggestions = generated
                     ttl = _SUGGESTION_TTL
             except Exception as exc:
                 logger.error("Suggestion generation failed, using fallback: %s", exc)
+                # Feeds the status monitor's Gemini check, same as the chat paths —
+                # this is a real generation, and in a quiet chat window it may be
+                # the only call able to see a quota/overload error.
+                service_status.record_llm_result(False)
 
         _suggestion_cache["value"] = suggestions
         _suggestion_cache["expiry"] = time.monotonic() + ttl

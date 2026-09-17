@@ -15,6 +15,11 @@ export interface AdminCounts {
   avisos: number;        // service banners live right now
 }
 
+/** What a page tells the header about each count. A number — or `null` while
+ *  the page's own request is still in flight — claims it: the header won't ask
+ *  for that number itself. Leaving a key out hands it to the header. */
+export type SuppliedCounts = { [K in keyof AdminCounts]?: number | null };
+
 const SECTIONS: { href: string; label: string; icon: AdminIconName; count?: keyof AdminCounts }[] = [
   { href: "/admin", label: "Resumen", icon: "overview" },
   { href: "/admin/users", label: "Usuarios", icon: "users" },
@@ -29,24 +34,37 @@ export function isActiveSection(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** Counters for the tab badges. Failures read as 0 — a badge is a hint, never a blocker. */
-export function useAdminCounts(enabled = true): AdminCounts | null {
-  const [counts, setCounts] = useState<AdminCounts | null>(null);
+/** Counters for the tab badges, fetching only the ones asked for — /admin/avisos
+ *  and /admin/escalations already load the very list a count comes from, so
+ *  requesting it again there is a second call for a number they have.
+ *  Failures read as 0 — a badge is a hint, never a blocker. */
+export function useAdminCounts(need: { escalations: boolean; avisos: boolean }): SuppliedCounts {
+  // Destructured: the caller builds a fresh object every render, so the effect
+  // has to depend on the two booleans, not the object holding them.
+  const { escalations: needEscalations, avisos: needAvisos } = need;
+  const [counts, setCounts] = useState<SuppliedCounts>({});
   useEffect(() => {
-    if (!enabled) return;
+    if (!needEscalations && !needAvisos) return;
     let alive = true;
     (async () => {
-      const [escalations, banners] = await Promise.allSettled([getEscalations("new"), getAdminBanners()]);
+      const [escalations, banners] = await Promise.allSettled([
+        needEscalations ? getEscalations("new") : Promise.resolve(null),
+        needAvisos ? getAdminBanners() : Promise.resolve(null),
+      ]);
       if (!alive) return;
-      setCounts({
-        escalations: escalations.status === "fulfilled" ? escalations.value.new_count : 0,
-        avisos: banners.status === "fulfilled" ? banners.value.active.length : 0,
-      });
+      const next: SuppliedCounts = {};
+      if (needEscalations) {
+        next.escalations = escalations.status === "fulfilled" && escalations.value ? escalations.value.new_count : 0;
+      }
+      if (needAvisos) {
+        next.avisos = banners.status === "fulfilled" && banners.value ? banners.value.active.length : 0;
+      }
+      setCounts(next);
     })();
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [needEscalations, needAvisos]);
   return counts;
 }
 
@@ -102,40 +120,35 @@ export function AdminIcon({ name, size = 16 }: { name: AdminIconName; size?: num
  * chat, and the section tab bar. The tabs are links (they navigate) styled as
  * outlined buttons, with the current page highlighted and live counters.
  *
- * Pass `counts` when the page already knows a number (e.g. after triaging an
- * escalation) so the badge updates immediately; anything not passed is fetched.
- * Set `countsPending` when the page will supply BOTH counts itself once its own
- * fetch resolves (e.g. /admin) — this skips our fetch entirely instead of
- * racing it. Without it, a page whose `counts` prop is only ever partial (e.g.
- * the escalations page never knows the avisos count) would otherwise refetch
- * both endpoints every time its own `counts` prop happens to go through an
- * incomplete shape — which for a page like /admin/escalations is every filter
- * change, not just first mount.
+ * Pass a number in `counts` when the page already knows it (e.g. after triaging
+ * an escalation) so the badge updates immediately, and `null` for a count the
+ * page owns but hasn't loaded yet — either way we won't request it ourselves.
+ * Omit a key to hand that count to us. A page that loads one of these lists
+ * anyway (/admin/avisos, /admin/escalations) should always claim its own, or
+ * every visit pays for the same endpoint twice.
  */
 export function AdminHeader({
   title,
   subtitle,
   maxWidth = "max-w-5xl",
   counts,
-  countsPending = false,
   children,
 }: {
   title: string;
   subtitle?: React.ReactNode;
   maxWidth?: string;
-  counts?: Partial<AdminCounts>;
-  countsPending?: boolean;
+  counts?: SuppliedCounts;
   children?: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
   const { user } = useAuth();
-  // Decided once, at mount: whether we ever need to fetch a count ourselves.
-  // Re-deriving this on every render would refire the fetch whenever `counts`
-  // flickers back to an incomplete shape (a page's own reload, a filter
-  // change) instead of only when this header first appears.
-  const [needsFetch] = useState(
-    () => !countsPending && (counts?.escalations == null || counts?.avisos == null),
-  );
+  // Decided once, at mount, per count. Re-deriving on every render would refire
+  // the fetch whenever `counts` flickers back to an incomplete shape (a page's
+  // own reload, a filter change) instead of only when this header first appears.
+  const [needs] = useState(() => ({
+    escalations: counts?.escalations === undefined,
+    avisos: counts?.avisos === undefined,
+  }));
   // Gate on confirmed admin status, same as the per-page checks this header
   // replaced — otherwise a signed-in non-admin (or a guest) rendering one of
   // these routes for the instant before its redirect fires would still call
@@ -143,10 +156,14 @@ export function AdminHeader({
   // `null` until AuthProvider's own effect resolves the token, so this stays
   // reactive rather than a one-time decision: it fetches once `is_admin`
   // flips true, same as it always would have for an actual admin.
-  const fetched = useAdminCounts(needsFetch && !!user?.is_admin);
+  const isAdmin = !!user?.is_admin;
+  const fetched = useAdminCounts({
+    escalations: needs.escalations && isAdmin,
+    avisos: needs.avisos && isAdmin,
+  });
   const merged: AdminCounts = {
-    escalations: counts?.escalations ?? fetched?.escalations ?? 0,
-    avisos: counts?.avisos ?? fetched?.avisos ?? 0,
+    escalations: counts?.escalations ?? fetched.escalations ?? 0,
+    avisos: counts?.avisos ?? fetched.avisos ?? 0,
   };
 
   return (

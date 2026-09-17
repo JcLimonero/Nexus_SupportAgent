@@ -122,9 +122,9 @@ export const useServiceStatus = () => useContext(ServiceStatusContext);
 // ── Presentation ─────────────────────────────────────────────────────────────
 
 const TONE: Record<Severity, { accent: string; text: string; bg: string }> = {
-  critical: { accent: "#dc2626", text: "var(--status-critical)", bg: "rgba(220, 38, 38, 0.09)" },
-  warning: { accent: "#f59e0b", text: "var(--status-warning)", bg: "rgba(245, 158, 11, 0.12)" },
-  info: { accent: "var(--nqt-blue, #0ea5e9)", text: "var(--status-info)", bg: "rgba(14, 165, 233, 0.09)" },
+  critical: { accent: "var(--status-critical-accent)", text: "var(--status-critical)", bg: "var(--status-critical-bg)" },
+  warning: { accent: "var(--status-warning-accent)", text: "var(--status-warning)", bg: "var(--status-warning-bg)" },
+  info: { accent: "var(--status-ok-accent)", text: "var(--status-info)", bg: "var(--status-ok-bg)" },
 };
 
 // text-secondary, not text-muted: the muted token is ~2:1 on the tinted strip in

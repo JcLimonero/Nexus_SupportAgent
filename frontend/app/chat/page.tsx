@@ -217,6 +217,31 @@ export default function ChatPage() {
       })();
     };
 
+    // An `error` frame ends the stream without a `done`, and a dropped
+    // connection never reaches one either — so this is the only chance to stop
+    // the reveal loop (it polls forever otherwise) and fill the empty bubble.
+    const failLast = async (detail?: string) => {
+      streamDone = true;
+      if (revealPromise) await revealPromise;
+      const reason = detail?.trim().replace(/[.\s]+$/, "") || "Ocurrió un error";
+      const notice = `${reason}. Por favor intenta de nuevo.`;
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = {
+            ...last,
+            // Keep whatever already streamed — a partial answer the user watched
+            // arrive is less confusing than text that vanishes on failure.
+            content: last.content
+              ? `${last.content}\n\n*La respuesta quedó incompleta. ${notice}*`
+              : notice,
+          };
+        }
+        return updated;
+      });
+    };
+
     // Optional pause before answering so it feels like the assistant is composing.
     if (opts?.delayMs) {
       await new Promise((r) => setTimeout(r, opts.delayMs));
@@ -247,6 +272,8 @@ export default function ChatPage() {
           }
         } else if ("error" in event) {
           reportServiceError();
+          await failLast(event.error);
+          break;
         } else if ("done" in event && event.done) {
           const aborted = controller.signal.aborted;
           if (typewriter) {
@@ -293,17 +320,7 @@ export default function ChatPage() {
       } else {
         // Network drop or 5xx — have the status banner re-check right away.
         reportServiceError();
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
-              content: "Ocurrió un error. Por favor intenta de nuevo.",
-            };
-          }
-          return updated;
-        });
+        await failLast();
       }
     } finally {
       abortRef.current = null;
