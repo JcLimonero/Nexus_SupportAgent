@@ -163,47 +163,6 @@ async def public_status() -> dict:
     }
 
 
-# ── Outage alert email ────────────────────────────────────────────────────────
-
-def email_configured() -> bool:
-    return bool(settings.emailjs_service_id and settings.emailjs_status_template_id and settings.emailjs_public_key)
-
-
-async def email_incident(kind: str, title: str, message: str, detail: str, started_at: datetime | None) -> None:
-    """Best-effort alert to the support mailbox when an automatic incident opens
-    or clears. Never raises — the banner is what users rely on."""
-    if not email_configured():
-        return
-    from routers.escalations import _send_via_emailjs   # lazy: pulls in the router stack
-
-    opened = kind == "open"
-    params = {
-        "subject": f"{'Servicio interrumpido' if opened else 'Servicio restablecido'} — {title}",
-        "status": "Interrumpido" if opened else "Restablecido",
-        "title": title,
-        "message": message,
-        "detail": detail or "",
-        "started_at": started_at.strftime("%Y-%m-%d %H:%M UTC") if started_at else "",
-        "resolved_at": "" if opened else datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-        "admin_link": f"{settings.public_origin}/admin/avisos" if settings.public_origin else "",
-        "to_email": settings.escalation_notify_email,
-    }
-    try:
-        await asyncio.to_thread(_send_via_emailjs, params, 15, settings.emailjs_status_template_id)
-    except Exception as exc:
-        logger.error("Status alert email failed: %s", exc)
-
-
-_background_tasks: set[asyncio.Task] = set()
-
-
-def run_in_background(coro) -> None:
-    """Fire-and-forget that keeps a reference, so the task isn't GC'd mid-send."""
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-
 # ── Passive Gemini signal ─────────────────────────────────────────────────────
 
 _llm_events: deque[tuple[float, bool]] = deque(maxlen=50)
@@ -332,7 +291,6 @@ async def _open_incident(chk: _Check) -> None:
         chk.persisted = False
     invalidate()
     logger.error("Status monitor: %s is down (%s) — banner opened", chk.label, chk.detail)
-    run_in_background(email_incident("open", chk.label, chk.message, chk.detail, now))
 
 
 async def _persist_close(key: str, inc: dict, opened_at: datetime | None, now: datetime) -> None:
@@ -363,7 +321,6 @@ async def _resolve_incident(chk: _Check) -> None:
             logger.warning("Could not record the end of the %s incident: %s", chk.key, _describe(exc))
     invalidate()
     logger.warning("Status monitor: %s recovered — banner cleared", chk.label)
-    run_in_background(email_incident("resolve", chk.label, chk.message, chk.detail, opened_at))
 
 
 async def _apply(chk: _Check) -> None:
@@ -442,8 +399,6 @@ def checks_snapshot() -> dict:
         "interval_s": settings.status_check_interval_s,
         "fail_threshold": settings.status_fail_threshold,
         "ok_threshold": settings.status_ok_threshold,
-        "webhook_enabled": bool(settings.status_webhook_key),
-        "email_enabled": email_configured(),
         "checks": [
             {
                 "key": c.key,

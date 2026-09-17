@@ -11,7 +11,6 @@ import {
   deleteBanner,
   getAdminBanners,
   getStatusChecks,
-  simulateIncident,
   updateBanner,
   type BannerLists,
   type StatusCheck,
@@ -42,7 +41,6 @@ const SEVERITY_CHOICES: { key: Severity; label: string }[] = [
 const SOURCE_LABEL: Record<StatusBanner["source"], string> = {
   manual: "Manual",
   monitor: "Monitor interno",
-  webhook: "Monitor externo",
 };
 
 const EMPTY_TEXT: Record<Tab, string> = {
@@ -51,12 +49,6 @@ const EMPTY_TEXT: Record<Tab, string> = {
   past: "Aún no hay avisos finalizados.",
 };
 
-const SIMULATION_RESULT: Record<string, string> = {
-  opened: "Caída simulada: el aviso ya es visible para todos los usuarios.",
-  updated: "La simulación ya estaba activa.",
-  resolved: "Simulación resuelta: el aviso se retiró.",
-  not_open: "No había una simulación activa.",
-};
 
 // ── Styles (same inline-token approach as the other admin pages) ─────────────
 
@@ -425,44 +417,8 @@ function ChecksCard({ checks, now, error }: { checks: StatusChecks | null; now: 
               );
             })}
           </ul>
-          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10 }}>
-            Alertas por correo: {checks.email_enabled ? "activadas" : "desactivadas (configura EMAILJS_STATUS_TEMPLATE_ID)"}
-          </p>
         </>
       )}
-    </section>
-  );
-}
-
-function SimulationCard({
-  webhookEnabled,
-  busy,
-  onSimulate,
-}: {
-  webhookEnabled: boolean;
-  busy: boolean;
-  onSimulate: (action: "open" | "resolve") => void;
-}) {
-  return (
-    <section style={card} className="p-5 h-full">
-      <p style={sectionLabel}>Monitor externo · simulación</p>
-      <p style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.5, marginTop: 6 }}>
-        Envía la misma petición que haría una herramienta de monitoreo externa. El aviso bloquea el chat y aparece en
-        todas las pantallas, incluido el inicio de sesión.
-      </p>
-      <div className="flex gap-2 flex-wrap" style={{ marginTop: 12 }}>
-        <button type="button" disabled={busy} style={actionButton("#ef4444", true, busy)} onClick={() => onSimulate("open")}>
-          Simular caída
-        </button>
-        <button type="button" disabled={busy} style={actionButton("#22c55e", false, busy)} onClick={() => onSimulate("resolve")}>
-          Resolver simulación
-        </button>
-      </div>
-      <p style={{ ...hint, marginTop: 12, lineHeight: 1.6 }}>
-        Webhook real <code>POST /api/status/incidents</code>:{" "}
-        {webhookEnabled ? "habilitado" : "deshabilitado (configura STATUS_WEBHOOK_KEY)"}. Desde una terminal:{" "}
-        <code>{".\\scripts\\simulate-incident.ps1 -Open"}</code>
-      </p>
     </section>
   );
 }
@@ -558,21 +514,6 @@ export default function AvisosPage() {
     }
   };
 
-  const simulate = async (action: "open" | "resolve") => {
-    setBusy(true);
-    try {
-      const { state } = await simulateIncident(action);
-      toast(SIMULATION_RESULT[state] ?? "Listo.", "success");
-      await load();
-      refreshPublicStatus();
-      setTab(action === "open" ? "active" : "past");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "No se pudo simular el incidente.", "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const switchTab = (next: Tab) => {
     setTab(next);
     setEditing(null);
@@ -606,12 +547,7 @@ export default function AvisosPage() {
       />
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="md:col-span-2">
-            <ChecksCard checks={checks} now={now} error={checksError} />
-          </div>
-          <SimulationCard webhookEnabled={!!checks?.webhook_enabled} busy={busy} onSimulate={simulate} />
-        </div>
+        <ChecksCard checks={checks} now={now} error={checksError} />
 
         <section style={card} className="p-5">
           <p style={sectionLabel}>Nuevo aviso</p>
@@ -646,7 +582,7 @@ export default function AvisosPage() {
                 style={{ borderTop: i === 0 ? "none" : "1px solid var(--border-default)" }}
               >
                 <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 8 }}>
-                  <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--nqt-blue, #0ea5e9)")}>{SOURCE_LABEL[b.source]}</span>
+                  <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--nqt-blue, #0ea5e9)")}>{SOURCE_LABEL[b.source] ?? b.source}</span>
                   {b.blocks_chat && <span style={badge("#ef4444")}>Bloquea el chat</span>}
                   <span style={hint}>{rowTimes(b, tab, now)}</span>
                 </div>

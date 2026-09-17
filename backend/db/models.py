@@ -120,12 +120,12 @@ class EscalationRequest(Base):
 
 class StatusBanner(Base):
     """A service notice shown to every visitor (login page included). Written by
-    admins, by the self-monitor, or by an external monitor's webhook. Live when
-    starts_at has passed, ends_at (if any) hasn't, and nobody ended it."""
+    admins or raised by the self-monitor. Live when starts_at has passed,
+    ends_at (if any) hasn't, and nobody ended it."""
     __tablename__ = "status_banners"
     __table_args__ = (
-        # Two concurrent webhook "open" calls for the same incident_key (a
-        # retried alert, or two monitor instances) could otherwise both miss an
+        # Two concurrent "open" calls for the same incident_key (the monitor
+        # reopening after a restart, say) could otherwise both miss an
         # existing-row SELECT and INSERT a duplicate. This lets the DB reject
         # the loser so the request can fall back to updating the winner instead.
         Index(
@@ -146,8 +146,8 @@ class StatusBanner(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # set when someone ends it
     # News posted while it's live: [{at: ISO-8601 UTC, text}], oldest first.
     updates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual")  # manual | monitor | webhook
-    # Dedupe key for automatic incidents ("monitor:db", "webhook:<key>") so a
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual")  # manual | monitor
+    # Dedupe key for automatic incidents ("monitor:db") so a
     # repeated alert refreshes the open banner instead of stacking another.
     incident_key: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
     created_by: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -162,12 +162,6 @@ class Settings(BaseSettings):
     # window, with no success after the latest one, count as the LLM being down.
     status_llm_error_window_s: int = 300
     status_llm_error_threshold: int = 3
-    # Shared secret an external monitor sends as X-Status-Key to
-    # POST /api/status/incidents. Empty = webhook disabled (404).
-    status_webhook_key: str = ""
-    # Second EmailJS template for outage alerts (same service/keys/recipient as
-    # escalations). Empty = no alert emails; banners still work.
-    emailjs_status_template_id: str = ""
 
     @property
     def is_production(self) -> bool:

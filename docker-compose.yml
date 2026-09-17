@@ -41,11 +41,6 @@ services:
       ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
       EMAILJS_MAX_ATTACH_KB: ${EMAILJS_MAX_ATTACH_KB:-350}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
-      # Service status: external-monitor webhook key (a dev default so
-      # scripts/simulate-incident.ps1 works out of the box) and the optional
-      # EmailJS template for outage alerts.
-      STATUS_WEBHOOK_KEY: ${STATUS_WEBHOOK_KEY:-dev-status-key}
-      EMAILJS_STATUS_TEMPLATE_ID: ${EMAILJS_STATUS_TEMPLATE_ID:-}
     volumes:
       - ./backend:/app
       - nexus_data:/data

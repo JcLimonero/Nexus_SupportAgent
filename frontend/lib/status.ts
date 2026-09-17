@@ -4,7 +4,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export type Severity = "info" | "warning" | "critical";
-export type BannerSource = "manual" | "monitor" | "webhook";
+export type BannerSource = "manual" | "monitor";
 
 export interface BannerUpdate {
   at: string;

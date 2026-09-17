@@ -1,27 +1,22 @@
 """Service-status banners: the public read every page polls, the admin CRUD
-behind /admin/avisos, and the webhook an external monitor calls.
+behind /admin/avisos. Rows come from admins and from the self-monitor.
 
 The self-monitor and the cache live in service_status.py; this module only
 reads and writes rows, then invalidates that cache.
 """
-import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, StringConstraints, model_validator
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import service_status as status
-from config import get_settings
 from db.connection import get_db
 from db.models import StatusBanner
 from routers.admin import require_admin
-
-settings = get_settings()
 
 router = APIRouter(prefix="/api", tags=["status"])
 
@@ -31,7 +26,6 @@ Contact = Annotated[str, StringConstraints(strip_whitespace=True, max_length=120
 UpdateText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
 
 _MAX_UPDATES = 50
-_MAX_ETA_MINUTES = 7 * 24 * 60
 
 
 def _check_times(starts_at: datetime, ends_at: datetime | None, eta_at: datetime | None) -> None:
@@ -80,29 +74,6 @@ class UpdateBody(BaseModel):
     text: UpdateText
 
 
-class IncidentBody(BaseModel):
-    """What an external monitor sends. `incident_key` is the monitor's own name
-    for the problem; repeating an open alert refreshes the banner in place."""
-    incident_key: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:\-]+$")]
-    action: Literal["open", "resolve"]
-    message: Message | None = None
-    severity: Severity = "critical"
-    blocks_chat: bool = True
-    contact: Contact | None = None
-    eta_minutes: int | None = Field(default=None, ge=1, le=_MAX_ETA_MINUTES)
-    update: UpdateText | None = None
-
-    @model_validator(mode="after")
-    def _open_needs_message(self):
-        if self.action == "open" and not self.message:
-            raise ValueError("Para abrir un incidente se requiere un mensaje")
-        return self
-
-
-class SimulateBody(BaseModel):
-    action: Literal["open", "resolve"]
-
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _parse_id(banner_id: str) -> uuid.UUID:
@@ -123,92 +94,10 @@ async def _get_banner(db: AsyncSession, banner_id: str) -> StatusBanner:
 
 def _append_update(row: StatusBanner, text: str, at: datetime) -> None:
     # Reassign, don't mutate: SQLAlchemy doesn't track in-place JSONB changes.
-    # Capped here too, not just in add_banner_update's pre-check: the
-    # webhook/simulate path (_apply_incident) has no per-call quota of its own,
-    # so a monitor that keeps refreshing an open incident with varying text
-    # can't grow this without bound over a long-running outage.
+    # Capped here too, not just in add_banner_update's pre-check, so no
+    # caller can grow the list without bound.
     updates = [*(row.updates or []), {"at": status.iso(at), "text": text}]
     row.updates = updates[-_MAX_UPDATES:]
-
-
-async def _find_open_incident(db: AsyncSession, key: str) -> StatusBanner | None:
-    return (await db.execute(
-        select(StatusBanner)
-        .where(StatusBanner.incident_key == key, StatusBanner.ended_at.is_(None))
-        .order_by(StatusBanner.created_at.desc())
-        .limit(1)
-    )).scalars().first()
-
-
-async def _apply_incident(db: AsyncSession, body: IncidentBody, actor: str) -> dict:
-    key = f"webhook:{body.incident_key}"
-    row = await _find_open_incident(db, key)
-    now = datetime.utcnow()
-    title = f"Monitor externo · {body.incident_key}"
-
-    if body.action == "resolve":
-        if row is None:
-            return {"state": "not_open"}   # idempotent: monitors retry
-        row.ended_at = now
-        row.updated_at = now
-        if body.update:
-            _append_update(row, body.update, now)
-        await db.commit()
-        status.invalidate()
-        status.run_in_background(status.email_incident("resolve", title, row.message, body.update or "", row.starts_at))
-        return {"state": "resolved", "id": str(row.id)}
-
-    eta_at = now + timedelta(minutes=body.eta_minutes) if body.eta_minutes else None
-    if row is None:
-        row = StatusBanner(
-            id=uuid.uuid4(), message=body.message, severity=body.severity, blocks_chat=body.blocks_chat,
-            contact=body.contact or None, starts_at=now, eta_at=eta_at, updates=[], source="webhook",
-            incident_key=key, created_by=actor, created_at=now, updated_at=now,
-        )
-        if body.update:
-            _append_update(row, body.update, now)
-        db.add(row)
-        try:
-            await db.commit()
-        except IntegrityError:
-            # Another request opened this incident_key between our SELECT and
-            # this INSERT (e.g. a retried webhook, or two monitors firing
-            # together) — the partial unique index on (incident_key WHERE
-            # ended_at IS NULL) rejected ours. Fall through to the "already
-            # open" branch below and merge into the row that won the race,
-            # instead of erroring or leaving a duplicate banner behind.
-            await db.rollback()
-            row = await _find_open_incident(db, key)
-            if row is None:
-                raise
-        else:
-            status.invalidate()
-            status.run_in_background(status.email_incident("open", title, row.message, body.update or "", now))
-            return {"state": "opened", "id": str(row.id)}
-
-    # Already open: a repeated alert refreshes it. No second email.
-    row.message, row.severity, row.blocks_chat = body.message, body.severity, body.blocks_chat
-    if body.contact is not None:
-        row.contact = body.contact or None
-    if eta_at is not None:
-        row.eta_at = eta_at
-    last = (row.updates or [])[-1:]
-    if body.update and (not last or last[0].get("text") != body.update):
-        _append_update(row, body.update, now)
-    row.updated_at = now
-    await db.commit()
-    status.invalidate()
-    return {"state": "updated", "id": str(row.id)}
-
-
-def _require_webhook_key(x_status_key: str | None = Header(default=None)) -> None:
-    if not settings.status_webhook_key:
-        # Disabled: answer like an unknown route rather than advertising it.
-        raise HTTPException(status_code=404, detail="Not Found")
-    if not x_status_key or not secrets.compare_digest(
-        x_status_key.encode(), settings.status_webhook_key.encode()
-    ):
-        raise HTTPException(status_code=401, detail="Clave de monitoreo inválida")
 
 
 # ── Public ────────────────────────────────────────────────────────────────────
@@ -219,17 +108,6 @@ async def get_public_status(response: Response):
     session — see service_status for why it must keep answering without one."""
     response.headers["Cache-Control"] = "no-store"
     return await status.public_status()
-
-
-@router.post("/status/incidents")
-async def report_incident(
-    body: IncidentBody,
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_webhook_key),
-):
-    """Webhook for an external monitor. Authenticated by the shared
-    X-Status-Key header (STATUS_WEBHOOK_KEY), not a user token."""
-    return await _apply_incident(db, body, actor="webhook")
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
@@ -357,30 +235,3 @@ async def delete_banner(
 @router.get("/admin/status/checks")
 async def status_checks(_: dict = Depends(require_admin)):
     return status.checks_snapshot()
-
-
-_SIMULATED_KEY = "simulacion"
-_SIMULATED_MESSAGE = (
-    "Detectamos una falla en el servicio. Encontramos el error y ya trabajamos en "
-    "ello; mientras tanto, puede comunicarse con el equipo de soporte."
-)
-
-
-@router.post("/admin/status/simulate")
-async def simulate_incident(
-    body: SimulateBody,
-    db: AsyncSession = Depends(get_db),
-    admin: dict = Depends(require_admin),
-):
-    """Demo stand-in for an external monitor: the same code path a real
-    POST /api/status/incidents runs, authorized by the admin's session instead
-    of the shared key (which the browser must never hold)."""
-    opening = body.action == "open"
-    incident = IncidentBody(
-        incident_key=_SIMULATED_KEY,
-        action=body.action,
-        message=_SIMULATED_MESSAGE if opening else None,
-        eta_minutes=60 if opening else None,
-        update=None if opening else "Simulación finalizada: el servicio se restableció.",
-    )
-    return await _apply_incident(db, incident, actor=admin.get("email") or "admin")

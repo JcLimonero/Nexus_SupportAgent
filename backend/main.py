@@ -27,7 +27,6 @@ _RATE_RULES: dict[str, tuple[int, int]] = {
     "/api/auth/guest":   (30, 60),   # 30 guest tokens / 60 s per IP (mint-abuse guard)
     "/api/chat/stream":  (60, 60),   # 60 req / 60 s per IP (LLM cost guard)
     "/api/shared":       (120, 60),  # public share view (unguessable token; light guard)
-    "/api/status/incidents": (30, 60),  # external-monitor webhook (shared key)
     # Public banner poll: every open tab asks ~1/min and an office full of users
     # can share one NAT IP, so this is generous on purpose — the answer is cached.
     "/api/status":       (600, 60),

@@ -380,8 +380,6 @@ export interface StatusChecks {
   interval_s: number;
   fail_threshold: number;
   ok_threshold: number;
-  webhook_enabled: boolean;
-  email_enabled: boolean;
   checks: StatusCheck[];
 }
 
@@ -444,16 +442,5 @@ export async function deleteBanner(id: string): Promise<void> {
 export async function getStatusChecks(): Promise<StatusChecks> {
   const res = await apiFetch(`${API_URL}/api/admin/status/checks`, { headers: await headers() });
   if (!res.ok) throw new Error("Error al cargar el estado del sistema");
-  return res.json();
-}
-
-/** Demo stand-in for an external monitor (same code path as the webhook). */
-export async function simulateIncident(action: "open" | "resolve"): Promise<{ state: string; id?: string }> {
-  const res = await apiFetch(`${API_URL}/api/admin/status/simulate`, {
-    method: "POST",
-    headers: await headers(),
-    body: JSON.stringify({ action }),
-  });
-  if (!res.ok) throw new Error(await errorDetail(res, "No se pudo simular el incidente"));
   return res.json();
 }

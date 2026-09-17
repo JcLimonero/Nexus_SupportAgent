@@ -3,7 +3,6 @@
 Tests run in file order — later sections reuse state from earlier ones via S,
 and the rate-limit test runs last because it poisons the login window.
 """
-import os
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -633,51 +632,6 @@ def test_status_banner_admin_flow(api, admin_token, user_a):
     finally:
         for bid in created:
             api.delete(f"/api/admin/banners/{bid}", headers=admin)
-
-
-def test_status_simulated_external_monitor_blocks_chat(api, admin_token, user_a):
-    admin = bearer(admin_token)
-    assert api.post("/api/admin/status/simulate", headers=bearer(user_a["token"]), json={"action": "open"}).status_code == 403
-    api.post("/api/admin/status/simulate", headers=admin, json={"action": "resolve"})   # repeat-safe
-    opened = api.post("/api/admin/status/simulate", headers=admin, json={"action": "open"})
-    assert opened.status_code == 200 and opened.json()["state"] == "opened", opened.text
-    bid = opened.json()["id"]
-    try:
-        status = api.get("/api/status").json()
-        shown = next(b for b in status["banners"] if b["id"] == bid)
-        assert shown["source"] == "webhook" and shown["blocks_chat"] and shown["eta_at"]
-        assert status["chat_blocked"] is True
-        resolved = api.post("/api/admin/status/simulate", headers=admin, json={"action": "resolve"})
-        assert resolved.json()["state"] == "resolved"
-        assert bid not in _public_ids(api)
-    finally:
-        api.post("/api/admin/status/simulate", headers=admin, json={"action": "resolve"})
-        api.delete(f"/api/admin/banners/{bid}", headers=admin)
-
-
-def test_status_webhook_requires_the_shared_key(api, admin_token):
-    key = os.environ.get("STATUS_WEBHOOK_KEY", "")
-    body = {"incident_key": "e2e-monitor", "action": "open", "message": "Falla simulada desde la suite E2E"}
-    if not key:
-        assert api.post("/api/status/incidents", json=body).status_code == 404   # disabled
-        return
-    headers = {"X-Status-Key": key}
-    resolve = {"incident_key": "e2e-monitor", "action": "resolve"}
-    api.post("/api/status/incidents", headers=headers, json=resolve)   # repeat-safe
-    assert api.post("/api/status/incidents", json=body).status_code == 401
-    assert api.post("/api/status/incidents", headers={"X-Status-Key": "wrong"}, json=body).status_code == 401
-    opened = api.post("/api/status/incidents", headers=headers, json=body)
-    assert opened.status_code == 200 and opened.json()["state"] == "opened", opened.text
-    bid = opened.json()["id"]
-    try:
-        again = api.post("/api/status/incidents", headers=headers, json=body)
-        assert again.json() == {"state": "updated", "id": bid}
-        assert bid in _public_ids(api)
-        assert api.post("/api/status/incidents", headers=headers, json=resolve).json()["state"] == "resolved"
-        assert bid not in _public_ids(api)
-    finally:
-        api.post("/api/status/incidents", headers=headers, json=resolve)
-        api.delete(f"/api/admin/banners/{bid}", headers=bearer(admin_token))
 
 
 # ── 11. Rate limiting (last — poisons the login window for ~60s) ──────────────

@@ -77,33 +77,11 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat() + "Z"
 
 
-async def _noop():
-    return None
-
-
 @pytest.fixture(autouse=True)
 def _clean_status():
-    settings = get_settings()
-    saved = (settings.status_webhook_key, settings.emailjs_status_template_id,
-             settings.emailjs_service_id, settings.emailjs_public_key)
     service_status.reset_state()
     yield
-    (settings.status_webhook_key, settings.emailjs_status_template_id,
-     settings.emailjs_service_id, settings.emailjs_public_key) = saved
     service_status.reset_state()
-
-
-@pytest.fixture
-def emails():
-    """Records which incident emails would go out, without sending any."""
-    sent: list[str] = []
-
-    def _fake(kind, title, message, detail, started_at):
-        sent.append(kind)
-        return _noop()
-
-    with patch.object(service_status, "email_incident", _fake):
-        yield sent
 
 
 # ── Public endpoint ───────────────────────────────────────────────────────────
@@ -234,7 +212,7 @@ async def test_checks_run_concurrently_not_sequentially():
 
 
 @pytest.mark.anyio
-async def test_monitor_opens_after_the_threshold_and_clears_after_recovery(emails):
+async def test_monitor_opens_after_the_threshold_and_clears_after_recovery():
     db_ok = {"value": False}
 
     async def db_check():
@@ -262,11 +240,10 @@ async def test_monitor_opens_after_the_threshold_and_clears_after_recovery(email
 
         await service_status.run_checks_once()
         assert not chk.down and chk.incident is None and close.await_count == 1
-    assert emails == ["open", "resolve"]
 
 
 @pytest.mark.anyio
-async def test_monitor_incident_is_served_from_memory_when_the_db_is_down(emails):
+async def test_monitor_incident_is_served_from_memory_when_the_db_is_down():
     async def db_down():
         raise asyncio.TimeoutError()
 
@@ -283,7 +260,7 @@ async def test_monitor_incident_is_served_from_memory_when_the_db_is_down(emails
 
 
 @pytest.mark.anyio
-async def test_a_persisted_monitor_incident_defers_to_the_db(emails):
+async def test_a_persisted_monitor_incident_defers_to_the_db():
     """Once written, the row is the truth — an admin who ended it early must
     not see it pop back from the monitor's memory."""
     async def db_down():
@@ -300,7 +277,7 @@ async def test_a_persisted_monitor_incident_defers_to_the_db(emails):
 
 
 @pytest.mark.anyio
-async def test_disk_trouble_never_opens_a_user_banner(emails):
+async def test_disk_trouble_never_opens_a_user_banner():
     async def disk_low():
         raise RuntimeError("Solo 12 MB libres")
 
@@ -309,7 +286,6 @@ async def test_disk_trouble_never_opens_a_user_banner(emails):
         for _ in range(5):
             await service_status.run_checks_once()
     assert service_status._checks["disk"].ok is False and not service_status._checks["disk"].down
-    assert emails == []
 
 
 @pytest.mark.anyio
@@ -346,28 +322,6 @@ def test_llm_failures_age_out_of_the_window():
     assert not service_status.llm_failing(now=later)
 
 
-@pytest.mark.anyio
-async def test_status_email_is_skipped_without_its_template():
-    settings = get_settings()
-    settings.emailjs_service_id, settings.emailjs_public_key = "svc", "pub"
-    settings.emailjs_status_template_id = ""   # the escalation template must not be reused
-    with patch("routers.escalations._send_via_emailjs") as send:
-        await service_status.email_incident("open", "Base de datos", "msg", "detalle", datetime.utcnow())
-    send.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_status_email_uses_its_own_template():
-    settings = get_settings()
-    settings.emailjs_service_id, settings.emailjs_public_key = "svc", "pub"
-    settings.emailjs_status_template_id = "tpl_status"
-    with patch("routers.escalations._send_via_emailjs", return_value=True) as send:
-        await service_status.email_incident("resolve", "Base de datos", "msg", "", datetime.utcnow())
-    params, timeout, template_id = send.call_args.args
-    assert template_id == "tpl_status"
-    assert params["status"] == "Restablecido" and params["resolved_at"]
-
-
 # ── Admin: auth ───────────────────────────────────────────────────────────────
 
 _BID = str(uuid.uuid4())
@@ -378,7 +332,6 @@ _ADMIN_ROUTES = [
     ("POST", f"/api/admin/banners/{_BID}/updates", {"text": "Seguimos trabajando"}),
     ("DELETE", f"/api/admin/banners/{_BID}", None),
     ("GET", "/api/admin/status/checks", None),
-    ("POST", "/api/admin/status/simulate", {"action": "open"}),
 ]
 
 
@@ -565,143 +518,4 @@ async def test_admin_sees_the_monitor_checks(client):
     assert response.status_code == 200
     body = response.json()
     assert {c["key"] for c in body["checks"]} == {"db", "llm", "disk"}
-    assert "webhook_enabled" in body and "email_enabled" in body
-
-
-# ── External monitor webhook ──────────────────────────────────────────────────
-
-_OPEN = {"incident_key": "erp-api", "action": "open", "message": "El ERP no responde en este momento"}
-
-
-@pytest.mark.anyio
-async def test_webhook_is_hidden_when_no_key_is_configured(client):
-    get_settings().status_webhook_key = ""
-    response = await client.post("/api/status/incidents", json=_OPEN, headers={"X-Status-Key": "anything"})
-    assert response.status_code == 404
-
-
-@pytest.mark.anyio
-async def test_webhook_rejects_a_missing_or_wrong_key(client):
-    get_settings().status_webhook_key = "s3cret"
-    assert (await client.post("/api/status/incidents", json=_OPEN)).status_code == 401
-    assert (await client.post("/api/status/incidents", json=_OPEN, headers={"X-Status-Key": "nope"})).status_code == 401
-    # A user token is not a monitor key.
-    assert (await client.post("/api/status/incidents", json=_OPEN, headers=_admin())).status_code == 401
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("body", [
-    {"incident_key": "erp-api", "action": "open"},                             # open needs a message
-    {**_OPEN, "incident_key": "bad key!"},
-    {**_OPEN, "action": "explode"},
-    {**_OPEN, "eta_minutes": 0},
-    {**_OPEN, "severity": "urgent"},
-])
-async def test_webhook_validation(client, body):
-    get_settings().status_webhook_key = "s3cret"
-    response = await client.post("/api/status/incidents", json=body, headers={"X-Status-Key": "s3cret"})
-    assert response.status_code == 422
-
-
-@pytest.mark.anyio
-async def test_webhook_opens_an_incident_and_emails(client, emails):
-    get_settings().status_webhook_key = "s3cret"
-    response = await client.post(
-        "/api/status/incidents", headers={"X-Status-Key": "s3cret"},
-        json={**_OPEN, "eta_minutes": 30, "update": "Investigando la causa"},
-    )
-    assert response.status_code == 200 and response.json()["state"] == "opened"
-    assert emails == ["open"]
-
-
-@pytest.mark.anyio
-async def test_webhook_open_race_falls_back_to_updating_the_winner(client, emails):
-    """Regression: two near-simultaneous webhook opens for the same
-    incident_key (a retried alert, or two monitor instances) used to both pass
-    the "no existing row" SELECT and INSERT a duplicate banner. The partial
-    unique index now rejects the loser's INSERT; it must merge into the
-    winner's row instead of erroring or leaving a duplicate behind."""
-    get_settings().status_webhook_key = "s3cret"
-    from db.connection import get_db
-    from main import app
-    from sqlalchemy.exc import IntegrityError
-
-    winner = _banner(source="webhook", incident_key="webhook:erp-api", severity="critical", blocks_chat=True)
-
-    async def _override():
-        session = AsyncMock()
-        result = MagicMock()
-        # First SELECT (before the INSERT) finds nothing; the second, after the
-        # rollback, finds the row the concurrent request just committed.
-        result.scalars.return_value.first.side_effect = [None, winner]
-        session.execute = AsyncMock(return_value=result)
-        session.add = MagicMock()
-        session.commit = AsyncMock(side_effect=[IntegrityError("insert", {}, Exception("duplicate key")), None])
-        session.rollback = AsyncMock()
-        yield session
-    app.dependency_overrides[get_db] = _override
-
-    response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=_OPEN)
-    assert response.status_code == 200
-    body = response.json()
-    assert body["state"] == "updated" and body["id"] == str(winner.id)
-    # No stray "opened" email for the request that actually lost the race.
-    assert emails == []
-
-
-@pytest.mark.anyio
-async def test_webhook_update_text_is_capped_even_without_the_admin_precheck(client, emails):
-    """add_banner_update has an explicit _MAX_UPDATES pre-check; _apply_incident
-    (webhook/simulate) doesn't, so the cap has to live in _append_update itself
-    or a monitor that keeps refreshing an open incident can grow it forever."""
-    get_settings().status_webhook_key = "s3cret"
-    row = _banner(
-        source="webhook", incident_key="webhook:erp-api",
-        updates=[{"at": "2026-01-01T00:00:00Z", "text": f"update {i}"} for i in range(50)],
-    )
-    _use_row(row)
-    body = {**_OPEN, "update": "Una actualización más"}
-    response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=body)
-    assert response.status_code == 200
-    assert len(row.updates) == 50
-    assert row.updates[-1]["text"] == "Una actualización más"
-    assert row.updates[0]["text"] == "update 1"   # oldest entry dropped, not an error
-
-
-@pytest.mark.anyio
-async def test_a_repeated_alert_updates_in_place_without_another_email(client, emails):
-    get_settings().status_webhook_key = "s3cret"
-    row = _banner(source="webhook", incident_key="webhook:erp-api", severity="critical", blocks_chat=True)
-    _use_row(row)
-    body = {**_OPEN, "message": "El ERP sigue sin responder", "update": "Seguimos trabajando"}
-    for _ in range(2):   # the identical update is not stacked twice
-        response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=body)
-        assert response.status_code == 200 and response.json()["state"] == "updated"
-    assert row.message == "El ERP sigue sin responder"
-    assert [u["text"] for u in row.updates] == ["Seguimos trabajando"]
-    assert emails == []
-
-
-@pytest.mark.anyio
-async def test_webhook_resolves_and_is_idempotent(client, emails):
-    get_settings().status_webhook_key = "s3cret"
-    row = _banner(source="webhook", incident_key="webhook:erp-api")
-    _use_row(row)
-    resolve = {"incident_key": "erp-api", "action": "resolve"}
-    response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=resolve)
-    assert response.json()["state"] == "resolved" and row.ended_at is not None
-    assert emails == ["resolve"]
-
-    _use_row(None)
-    response = await client.post("/api/status/incidents", headers={"X-Status-Key": "s3cret"}, json=resolve)
-    assert response.status_code == 200 and response.json()["state"] == "not_open"
-
-
-@pytest.mark.anyio
-async def test_simulated_monitor_runs_the_webhook_path_without_the_key(client, emails):
-    get_settings().status_webhook_key = ""   # the demo works even with the webhook disabled
-    response = await client.post("/api/admin/status/simulate", headers=_admin(), json={"action": "open"})
-    assert response.status_code == 200 and response.json()["state"] == "opened"
-    assert emails == ["open"]
-    bad = await client.post("/api/admin/status/simulate", headers=_admin(), json={"action": "explode"})
-    assert bad.status_code == 422
+    assert "monitor_enabled" in body and "interval_s" in body

@@ -83,10 +83,6 @@ services:
       EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY:-}
       ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
       EMAILJS_MAX_ATTACH_KB: ${EMAILJS_MAX_ATTACH_KB:-350}
-      # Service status: shared key for the external-monitor webhook (empty
-      # disables it) and the EmailJS template for outage alerts (optional).
-      STATUS_WEBHOOK_KEY: ${STATUS_WEBHOOK_KEY:-}
-      EMAILJS_STATUS_TEMPLATE_ID: ${EMAILJS_STATUS_TEMPLATE_ID:-}
     volumes:
       - nexus_data:/data                                   # uploaded PDFs/MP4s (local storage)
       - ./gcp-credentials.json:/app/gcp-credentials.json:ro  # Gemini service account (never committed)
