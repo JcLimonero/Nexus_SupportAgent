@@ -18,6 +18,7 @@ from auth.local_auth import guest_label
 from retrieval.vector_search import search_chunks, embed_text
 from retrieval.context_builder import build_context
 from llm.gemini_client import ask_gemini, stream_gemini_response
+import service_status
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,9 @@ async def chat(
 ):
     user_id = user["uid"]
 
+    if await service_status.is_chat_blocked():
+        raise HTTPException(status_code=503, detail="El chat no está disponible en este momento por una interrupción del servicio.")
+
     # Get or create session
     if request.session_id:
         result = await db.execute(
@@ -155,7 +159,15 @@ async def chat(
     context, pdf_sources, video_sources = build_context(chunks)
 
     # Call Gemini (blocking SDK → thread)
-    gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    try:
+        gemini_result = await asyncio.to_thread(ask_gemini, history, request.message, context)
+    except Exception as exc:
+        logger.error("Gemini call error: %s", exc)
+        # Feeds the status monitor's Gemini check, same as the streaming path —
+        # quota/overload errors only surface while generating.
+        service_status.record_llm_result(False)
+        raise HTTPException(status_code=502, detail="Error al procesar la respuesta") from exc
+    service_status.record_llm_result(True)
     answer = gemini_result["answer"]
     follow_ups = gemini_result.get("follow_ups", [])
 
@@ -257,6 +269,9 @@ async def chat_stream(
 ):
     """SSE endpoint — streams Gemini tokens as they arrive."""
     user_id = user["uid"]
+
+    if await service_status.is_chat_blocked():
+        raise HTTPException(status_code=503, detail="El chat no está disponible en este momento por una interrupción del servicio.")
 
     if request.session_id:
         result = await db.execute(
@@ -373,8 +388,12 @@ async def chat_stream(
                         yielded = safe
         except Exception as exc:
             logger.error("Gemini stream error: %s", exc)
+            # Feeds the status monitor's Gemini check (quota/overload errors
+            # only surface while generating, never in its free probe).
+            service_status.record_llm_result(False)
             yield f"data: {_json.dumps({'error': 'Error al procesar la respuesta'})}\n\n"
             return
+        service_status.record_llm_result(True)
 
         # Finalize — split the answer from the trailer.
         answer = accumulated
@@ -502,11 +521,19 @@ async def get_suggestions(
         if samples:
             try:
                 generated = await asyncio.to_thread(generate_suggestion_questions, samples, 6)
+                # Successes are reported too: llm_failing() weighs the newest
+                # success against the newest failure, so reporting only the
+                # failures here would bias it toward false alarms.
+                service_status.record_llm_result(True)
                 if generated:
                     suggestions = generated
                     ttl = _SUGGESTION_TTL
             except Exception as exc:
                 logger.error("Suggestion generation failed, using fallback: %s", exc)
+                # Feeds the status monitor's Gemini check, same as the chat paths —
+                # this is a real generation, and in a quiet chat window it may be
+                # the only call able to see a quota/overload error.
+                service_status.record_llm_result(False)
 
         _suggestion_cache["value"] = suggestions
         _suggestion_cache["expiry"] = time.monotonic() + ttl

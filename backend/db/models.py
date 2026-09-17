@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Boolean, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from pgvector.sqlalchemy import Vector
@@ -115,4 +115,41 @@ class EscalationRequest(Base):
     attachments: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="new")  # new | in_progress | resolved
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StatusBanner(Base):
+    """A service notice shown to every visitor (login page included). Written by
+    admins or raised by the self-monitor. Live when starts_at has passed,
+    ends_at (if any) hasn't, and nobody ended it."""
+    __tablename__ = "status_banners"
+    __table_args__ = (
+        # Two concurrent "open" calls for the same incident_key (the monitor
+        # reopening after a restart, say) could otherwise both miss an
+        # existing-row SELECT and INSERT a duplicate. This lets the DB reject
+        # the loser so the request can fall back to updating the winner instead.
+        Index(
+            "ux_status_banners_open_incident_key", "incident_key", unique=True,
+            postgresql_where=text("ended_at IS NULL AND incident_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False, default="warning")  # info | warning | critical
+    # Disables the chat input while live — a "videos are slow" notice shouldn't.
+    blocks_chat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    contact: Mapped[str | None] = mapped_column(Text, nullable=True)   # e.g. a phone to call meanwhile
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)   # scheduled end; null = until ended
+    eta_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)    # estimated fix time shown to users
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # set when someone ends it
+    # News posted while it's live: [{at: ISO-8601 UTC, text}], oldest first.
+    updates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual")  # manual | monitor
+    # Dedupe key for automatic incidents ("monitor:db") so a
+    # repeated alert refreshes the open banner instead of stacking another.
+    incident_key: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    created_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

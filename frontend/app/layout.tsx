@@ -3,6 +3,7 @@ import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/AuthProvider";
 import { ToastProvider } from "@/components/Toast";
+import { ServiceStatusProvider, StatusBanner } from "@/components/ServiceStatus";
 
 // Self-hosted at build time (no render-blocking external request, no FOUC).
 // Exposed as CSS variables so every component references one source of truth.
@@ -36,7 +37,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="h-full">
-        <AuthProvider><ToastProvider>{children}</ToastProvider></AuthProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ServiceStatusProvider>
+              {/* The service-status strip sits in the layout flow above every
+                  page (login included) and pages scroll below it — a floating
+                  banner would cover the chat input. */}
+              <div className="flex flex-col h-full">
+                <StatusBanner />
+                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">{children}</div>
+              </div>
+            </ServiceStatusProvider>
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -24,6 +24,35 @@ _ahttp = httpx.AsyncClient(timeout=120)
 _token_cache: dict = {"value": None, "expiry": 0.0}
 _token_lock = threading.Lock()
 
+# The status monitor probes on a 60s cycle through asyncio.to_thread, which
+# cannot be cancelled: when its asyncio.wait_for fires the thread runs on and
+# keeps a slot in the default executor that ask_gemini, embed_text, warm_up and
+# the disk check all share. So bound every leg, and keep the legs adding up to
+# less than the monitor's outer budget (service_status._LLM_PROBE_TIMEOUT_S=15):
+# 5 + 8 = 13. google-auth's own default is ~120s, and _token_lock is a threading
+# lock, so an unbounded refresh parks every other thread needing a token behind
+# it — worst on a cache miss (hourly, or right after a restart).
+_TOKEN_TIMEOUT_S = 5
+_PROBE_TIMEOUT_S = 8
+
+
+class _BoundedRequest:
+    """google-auth transport that never waits longer than _TOKEN_TIMEOUT_S on
+    the token endpoint. Wraps rather than subclasses the real Request: the
+    unit-test conftest mocks google.auth.transport.requests, and a mock can't
+    be used as a base class."""
+
+    def __init__(self, timeout: float = _TOKEN_TIMEOUT_S):
+        self._inner = google.auth.transport.requests.Request()
+        self._timeout = timeout
+
+    def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        bound = self._timeout if timeout is None else min(timeout, self._timeout)
+        return self._inner(url, method=method, body=body, headers=headers, timeout=bound, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)   # google-auth also reads .session on some paths
+
 SYSTEM_PROMPT = """Eres Nexus, un asistente de soporte especializado en el sistema TotalDealer.
 
 Reglas que debes seguir siempre:
@@ -67,6 +96,11 @@ _STREAM_ENDPOINT = (
     "/locations/global/publishers/google/models/{model}:streamGenerateContent?alt=sse"
 )
 
+_COUNT_TOKENS_ENDPOINT = (
+    "https://aiplatform.googleapis.com/v1/projects/{project}"
+    "/locations/global/publishers/google/models/{model}:countTokens"
+)
+
 
 def _get_token() -> str:
     with _token_lock:
@@ -76,12 +110,33 @@ def _get_token() -> str:
         credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
-        credentials.refresh(google.auth.transport.requests.Request())
+        credentials.refresh(_BoundedRequest())
         _token_cache["value"] = credentials.token
         expiry = getattr(credentials, "expiry", None)
         _token_cache["expiry"] = expiry.timestamp() if expiry else now + 3600
         logger.debug("GCP token refreshed, expires in ~%.0fs", _token_cache["expiry"] - now)
         return _token_cache["value"]
+
+
+def probe_count_tokens(timeout: float = _PROBE_TIMEOUT_S) -> None:
+    """Free liveness probe for the status monitor. countTokens isn't billed, yet
+    it goes through the same credentials, endpoint and model name a real answer
+    needs — a revoked key, a renamed model or an unreachable Vertex all fail it.
+    It can't see generation-side trouble (quota, overload); the monitor covers
+    that by also watching real chat failures. Synchronous; raises on failure.
+    Its budget plus _TOKEN_TIMEOUT_S must stay under the caller's own timeout —
+    see the note on those constants."""
+    url = _COUNT_TOKENS_ENDPOINT.format(
+        project=settings.vertex_ai_project,
+        model=settings.gemini_model,
+    )
+    response = _http.post(
+        url,
+        headers={"Authorization": f"Bearer {_get_token()}"},
+        json={"contents": [{"role": "user", "parts": [{"text": "ping"}]}]},
+        timeout=timeout,
+    )
+    response.raise_for_status()
 
 
 def ask_gemini(history: list[dict], question: str, context: str) -> dict:

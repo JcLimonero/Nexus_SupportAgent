@@ -579,6 +579,56 @@ async def test_suggestions_fallback_on_generation_error(client):
     assert r.json() == _FALLBACK_SUGGESTIONS
 
 
+@pytest.mark.anyio
+async def test_suggestions_report_llm_failure_to_monitor(client):
+    """This path calls Gemini for real, so its failures have to reach the
+    self-monitor. A quota error during a quiet chat window used to be invisible:
+    /api/suggestions just served the generic fallback and no banner ever opened."""
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache, _FALLBACK_SUGGESTIONS
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "x.pdf"; row.source_type = "pdf"; row.content = "algo"
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+    with patch("llm.gemini_client.generate_suggestion_questions",
+               side_effect=RuntimeError("429 quota exceeded")), \
+         patch("service_status.record_llm_result") as record:
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+
+    record.assert_called_once_with(False)
+    # Fallback behaviour is unchanged — only the reporting was missing.
+    assert r.status_code == 200
+    assert r.json() == _FALLBACK_SUGGESTIONS
+
+
+@pytest.mark.anyio
+async def test_suggestions_report_llm_success_to_monitor(client):
+    """Successes are reported as well: llm_failing() compares the newest success
+    against the newest failure, so a failure-only signal would raise false alarms."""
+    from db.connection import get_db
+    from main import app
+    from routers.chat import clear_suggestions_cache
+    clear_suggestions_cache()
+
+    row = MagicMock()
+    row.file_name = "x.pdf"; row.source_type = "pdf"; row.content = "algo"
+    app.dependency_overrides[get_db] = _suggestions_db_override([row])
+    generated = [{"label": "Facturación", "prompt": "¿Cómo emito una factura?"}]
+    with patch("llm.gemini_client.generate_suggestion_questions", return_value=generated), \
+         patch("service_status.record_llm_result") as record:
+        r = await client.get("/api/suggestions", headers={"Authorization": f"Bearer {make_jwt()}"})
+    app.dependency_overrides.clear()
+    clear_suggestions_cache()
+
+    record.assert_called_once_with(True)
+    assert r.status_code == 200
+    assert r.json() == generated
+
+
 # ── Conversation sharing (public links) ───────────────────────────────────────
 
 import uuid as _uuid
@@ -663,3 +713,83 @@ async def test_shared_view_404_for_bad_token(client):
     r = await client.get("/api/shared/nope")
     app.dependency_overrides.clear()
     assert r.status_code == 404
+
+
+# ── Service-status gate ───────────────────────────────────────────────────────
+# Regression coverage: chat blocking used to be UI-only (the frontend disabled
+# the send button, but a direct API call sailed straight through to Gemini/DB
+# during a real outage). Both endpoints must now refuse the request themselves.
+
+@pytest.mark.anyio
+async def test_chat_blocked_returns_503_without_calling_gemini(client):
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("service_status.is_chat_blocked", new=AsyncMock(return_value=True)), \
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock) as gemini_call:
+        response = await client.post(
+            "/api/chat",
+            json={"message": "Que es TotalDealer?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 503
+    gemini_call.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_chat_stream_blocked_returns_503_without_calling_gemini(client):
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = _sessions_db()
+    with patch("service_status.is_chat_blocked", new=AsyncMock(return_value=True)), \
+         patch("routers.chat.stream_gemini_response") as gemini_stream:
+        response = await client.post(
+            "/api/chat/stream",
+            json={"message": "Que es TotalDealer?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 503
+    gemini_stream.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_chat_records_llm_failure_and_returns_502(client):
+    """The non-streaming endpoint used to let a Gemini error propagate as an
+    unhandled 500 and never told the self-monitor a real call had failed."""
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override()
+    with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
+         patch("routers.chat.build_context", return_value=("sin contexto", [], [])), \
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, side_effect=RuntimeError("quota exceeded")), \
+         patch("service_status.record_llm_result") as record:
+        response = await client.post(
+            "/api/chat",
+            json={"message": "Que es TotalDealer?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 502
+    record.assert_called_once_with(False)
+
+
+@pytest.mark.anyio
+async def test_chat_records_llm_success(client):
+    from db.connection import get_db
+    from main import app
+    token = make_jwt()
+    app.dependency_overrides[get_db] = make_db_override()
+    gemini_mock = {"answer": "Respuesta de prueba", "follow_ups": []}
+    with patch("routers.chat.search_chunks", new_callable=AsyncMock, return_value=[]), \
+         patch("routers.chat.build_context", return_value=("sin contexto", [], [])), \
+         patch("routers.chat.asyncio.to_thread", new_callable=AsyncMock, return_value=gemini_mock), \
+         patch("service_status.record_llm_result") as record:
+        response = await client.post(
+            "/api/chat",
+            json={"message": "Que es TotalDealer?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    record.assert_called_once_with(True)

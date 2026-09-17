@@ -11,7 +11,8 @@ RAG-based support chatbot for TotalDealer ERP. Users ask questions in Spanish an
 - **Follow-up suggestions** — each answer surfaces 3 related questions as one-click chips
 - **Source document viewer** — PDF chips open an in-app panel showing the exact excerpt used; VID chips stream the video via short-lived signed URLs with native Range seeking (no full download)
 - **Thumbs feedback** — users rate each answer up/down; admins view all feedback from the admin panel
-- **Admin dashboard** — system stats (users, sessions, messages, documents, cache hits, feedback ratio), document upload/delete, and user management
+- **Admin dashboard** — system stats (users, sessions, messages, documents, cache hits, feedback ratio), document upload/delete, and user management; every admin page shares a section tab bar with live counters (new escalations, active notices), and `/admin` opens with quick-access cards
+- **Service status banners** — admins publish or schedule notices at `/admin/avisos` (severity, estimated fix time, contact phone, live updates) that every visitor sees, login page included; an internal self-monitor (database, Gemini, disk) raises chat-blocking outage banners automatically. If the backend itself is unreachable, the frontend shows a built-in fallback
 - **User management** — create users, activate/deactivate, promote/demote admin role
 - **Toast notifications** — success/error feedback on all admin and user actions
 - **Theme toggle** — light / dark mode persisted via CSS variables
@@ -137,16 +138,16 @@ Both E2E tiers run against the **live local stack** — no mocks. They create th
 ```bash
 docker compose up -d          # stack must be running
 
-# Tier 1 — API E2E: every CRUD surface + full RAG flow (52 tests, ~20s)
+# Tier 1 — API E2E: every CRUD surface + full RAG flow (57 tests, ~40s)
 docker compose exec backend python -m pytest tests_e2e/ -v
 
-# Tier 2 — browser E2E with Playwright (13 tests, ~30s)
+# Tier 2 — browser E2E with Playwright (17 tests, ~45s)
 cd frontend
 npx playwright install chromium   # first time only
 npm run e2e
 ```
 
-Tier 1 covers auth, users/documents/sessions/feedback/sharing CRUD with ownership checks, semantic cache behavior, signed media streaming (Range/tampering/expiry), the admin panel APIs, and rate limiting. Tier 2 drives the real UI in Chromium: login/guest, streamed answers with citations, the source panel and signed document opening, sidebar rename/delete/search/collapse, public share links, admin upload/delete and user management, theme persistence, and the mobile overlay.
+Tier 1 covers auth, users/documents/sessions/feedback/sharing CRUD with ownership checks, semantic cache behavior, signed media streaming (Range/tampering/expiry), the admin panel APIs, service-status banners (publish/schedule/update/end), and rate limiting. Tier 2 drives the real UI in Chromium: login/guest, streamed answers with citations, the source panel and signed document opening, sidebar rename/delete/search/collapse, public share links, admin upload/delete and user management, service banners (outage on the login page pausing the guest chat, dismissible notices, the `/admin/avisos` flow), theme persistence, and the mobile overlay.
 
 > Note: the API tier's rate-limit test intentionally exhausts the login limiter at the end of the run — wait ~60 s (or restart the backend) before logging in from the same machine.
 

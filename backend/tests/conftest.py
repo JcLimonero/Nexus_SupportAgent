@@ -72,6 +72,16 @@ def _stub_account():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _chat_never_blocked():
+    """Both chat endpoints call service_status.is_chat_blocked() before doing
+    any work, which would otherwise reach the (mocked-away) status-banner
+    cache/DB on every chat test. Default it to False; tests exercising the
+    block itself override this patch locally."""
+    with patch("service_status.is_chat_blocked", new=AsyncMock(return_value=False)):
+        yield
+
+
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"

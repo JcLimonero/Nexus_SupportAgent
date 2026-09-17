@@ -10,11 +10,14 @@ import { SourcePanel } from "@/components/SourcePanel";
 import { SessionSidebar, type Session } from "@/components/SessionSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EscalateModal } from "@/components/EscalateModal";
+import { useServiceStatus } from "@/components/ServiceStatus";
 
 export default function ChatPage() {
   const { user, loading, refresh } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  // A live blocking banner (or an unreachable backend) pauses sending.
+  const { chatBlocked, reportServiceError } = useServiceStatus();
   const [sharing, setSharing] = useState(false);
   const [sessions, setSessions]               = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -154,7 +157,8 @@ export default function ChatPage() {
     text: string,
     opts?: { typewriter?: boolean; delayMs?: number },
   ) => {
-    if (!text || sending) return;
+    // Also guards suggestion / follow-up / retry clicks, which bypass the input.
+    if (!text || sending || chatBlocked) return;
     let typewriter = opts?.typewriter ?? false;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -213,6 +217,31 @@ export default function ChatPage() {
       })();
     };
 
+    // An `error` frame ends the stream without a `done`, and a dropped
+    // connection never reaches one either — so this is the only chance to stop
+    // the reveal loop (it polls forever otherwise) and fill the empty bubble.
+    const failLast = async (detail?: string) => {
+      streamDone = true;
+      if (revealPromise) await revealPromise;
+      const reason = detail?.trim().replace(/[.\s]+$/, "") || "Ocurrió un error";
+      const notice = `${reason}. Por favor intenta de nuevo.`;
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = {
+            ...last,
+            // Keep whatever already streamed — a partial answer the user watched
+            // arrive is less confusing than text that vanishes on failure.
+            content: last.content
+              ? `${last.content}\n\n*La respuesta quedó incompleta. ${notice}*`
+              : notice,
+          };
+        }
+        return updated;
+      });
+    };
+
     // Optional pause before answering so it feels like the assistant is composing.
     if (opts?.delayMs) {
       await new Promise((r) => setTimeout(r, opts.delayMs));
@@ -241,6 +270,10 @@ export default function ChatPage() {
           } else {
             appendToLast(event.token);
           }
+        } else if ("error" in event) {
+          reportServiceError();
+          await failLast(event.error);
+          break;
         } else if ("done" in event && event.done) {
           const aborted = controller.signal.aborted;
           if (typewriter) {
@@ -285,17 +318,9 @@ export default function ChatPage() {
           return updated;
         });
       } else {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
-              content: "Ocurrió un error. Por favor intenta de nuevo.",
-            };
-          }
-          return updated;
-        });
+        // Network drop or 5xx — have the status banner re-check right away.
+        reportServiceError();
+        await failLast();
       }
     } finally {
       abortRef.current = null;
@@ -337,7 +362,7 @@ export default function ChatPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
+      <div className="flex flex-1 items-center justify-center" style={{ backgroundColor: "var(--bg-page)" }}>
         <span className="gv-label">Cargando...</span>
       </div>
     );
@@ -346,6 +371,7 @@ export default function ChatPage() {
   // Support requests need a real account — there's no way to follow up with a
   // guest beyond what they type, and the backend rejects them anyway.
   const canEscalate = !!user && !user.is_anon;
+  const canSend = !!input.trim() && !chatBlocked;
   // Auto-offer human contact when the assistant just said it has no info.
   const lastMsg = messages[messages.length - 1];
   const showEscalateOffer =
@@ -368,7 +394,7 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
+    <div className="flex flex-1 min-h-0 overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
       <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
       <EscalateModal
         open={escalateOpen}
@@ -729,8 +755,8 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Escribe tu pregunta sobre TotalDealer..."
-              disabled={sending}
+              placeholder={chatBlocked ? "El envío está pausado mientras restablecemos el servicio" : "Escribe tu pregunta sobre TotalDealer..."}
+              disabled={sending || chatBlocked}
               rows={1}
               className="flex-1 px-3 py-2.5 text-sm font-light focus:outline-none resize-none transition-colors"
               style={{
@@ -774,7 +800,7 @@ export default function ChatPage() {
             ) : (
               <button
                 type="submit"
-                disabled={!input.trim()}
+                disabled={!canSend}
                 className="btn-send px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
                 style={{
                   fontFamily: "var(--font-condensed)",
@@ -786,9 +812,9 @@ export default function ChatPage() {
                   color: "var(--btn-primary-text)",
                   border: "none",
                   borderRadius: "var(--radius)",
-                  cursor: !input.trim() ? "not-allowed" : "pointer",
+                  cursor: !canSend ? "not-allowed" : "pointer",
                 }}
-                onMouseEnter={(e) => { if (input.trim()) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
+                onMouseEnter={(e) => { if (canSend) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
               >
                 Enviar
@@ -796,7 +822,11 @@ export default function ChatPage() {
             )}
           </form>
           <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
-            {sending ? "Generando respuesta · Detener para cancelar" : "Enter para enviar · Shift+Enter para nueva línea"}
+            {sending
+              ? "Generando respuesta · Detener para cancelar"
+              : chatBlocked
+                ? "Envío en pausa · consulta el aviso de servicio"
+                : "Enter para enviar · Shift+Enter para nueva línea"}
           </p>
         </div>
       </div>

@@ -122,6 +122,25 @@ def _cleanup_user(api: httpx.Client, admin_token: str, user: dict) -> None:
     api.delete(f"/api/users/{user['id']}", headers=bearer(admin_token))
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _clear_blocking_banners(api, admin_token):
+    """End any live chat-blocking status banner before the suite runs.
+
+    The backend rejects chat requests while one is up (service_status
+    .is_chat_blocked), so a banner left behind by someone testing
+    /admin/avisos — or opened by the self-monitor during a real outage — fails
+    ~20 tests that have nothing to do with banners. Repeat-safe, like the
+    leftover-user and leftover-document cleanups."""
+    active = api.get("/api/admin/banners", headers=bearer(admin_token)).json()["active"]
+    for banner in active:
+        if banner["blocks_chat"]:
+            api.patch(
+                f"/api/admin/banners/{banner['id']}",
+                headers=bearer(admin_token), json={"end_now": True},
+            )
+    yield
+
+
 @pytest.fixture(scope="session")
 def user_a(api, admin_token) -> dict:
     user = _make_user(api, admin_token, "e2e-user-a@nexus.local")

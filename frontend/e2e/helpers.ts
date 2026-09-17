@@ -55,6 +55,52 @@ export async function createSessionViaApi(
     data: { message },
     timeout: 120_000,
   });
-  if (!resp.ok()) throw new Error(`chat/stream failed: ${resp.status()}`);
+  if (!resp.ok()) throw new Error(`chat/stream failed: ${resp.status()}${chatBlockedHint(resp.status())}`);
   await resp.text(); // drain the stream so the session is fully persisted
+}
+
+/** A 503 from a chat endpoint means exactly one thing here — a live
+ * chat-blocking banner (service_status.is_chat_blocked) — so say so instead of
+ * leaving a bare status code. */
+export function chatBlockedHint(status: number): string {
+  if (status !== 503) return "";
+  return (
+    " — a live status banner is blocking the chat. End it at /admin/avisos; on a stack whose" +
+    " Gemini credentials are broken the self-monitor opens one by itself after ~3 failed checks."
+  );
+}
+
+/** End every live chat-blocking status banner.
+ *
+ * Mirrors backend/tests_e2e/conftest.py::_clear_blocking_banners, down to the
+ * scope: only `active` banners, and only the ones that block chat. Banners are
+ * global state and the backend refuses every chat call while one is live, so
+ * one left behind by someone testing /admin/avisos — or opened by the
+ * self-monitor during a real outage — breaks specs that have nothing to do
+ * with banners. Returns how many it ended.
+ *
+ * `manualOnly` skips the self-monitor's own incidents. Ending one only buys
+ * quiet until the check fails `status_fail_threshold` more times (ending it
+ * calls service_status.forget_incident, which resets that check's hysteresis
+ * on purpose), so on a genuinely broken stack it comes back mid-run — worth it
+ * before the run, since nothing can start otherwise, and pointless after it.
+ * The teardown sweep therefore only clears what this suite could have left. */
+export async function endBlockingBanners(
+  request: APIRequestContext,
+  adminToken: string,
+  manualOnly = false,
+): Promise<number> {
+  const auth = { Authorization: `Bearer ${adminToken}` };
+  const res = await request.get(`${API_URL}/api/admin/banners`, { headers: auth });
+  if (!res.ok()) throw new Error(`banner list failed: ${res.status()} ${await res.text()}`);
+  const { active } = (await res.json()) as { active: { id: string; blocks_chat: boolean; source: string }[] };
+
+  const blocking = active.filter((b) => b.blocks_chat && !(manualOnly && b.source === "monitor"));
+  for (const banner of blocking) {
+    await request.patch(`${API_URL}/api/admin/banners/${banner.id}`, {
+      headers: auth,
+      data: { end_now: true },
+    });
+  }
+  return blocking.length;
 }

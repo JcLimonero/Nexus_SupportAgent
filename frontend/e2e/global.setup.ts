@@ -8,6 +8,8 @@ import {
   UI_QUESTION,
   UI_USER_EMAIL,
   UI_USER_PASSWORD,
+  chatBlockedHint,
+  endBlockingBanners,
   writeState,
 } from "./helpers";
 
@@ -25,6 +27,15 @@ export default async function globalSetup() {
   if (!login.ok()) throw new Error(`admin login failed: ${await login.text()}`);
   const adminToken = (await login.json()).access_token as string;
   const auth = { Authorization: `Bearer ${adminToken}` };
+
+  // Before anything else: a live chat-blocking banner makes the backend answer
+  // 503 to every chat call, which would take the pre-warm below — and with it
+  // the whole run, before a single test — down over something no spec here is
+  // testing. Same guard the Python suite runs first (_clear_blocking_banners).
+  const ended = await endBlockingBanners(api, adminToken);
+  if (ended > 0) {
+    console.warn(`e2e setup: ended ${ended} live chat-blocking banner(s) left on this stack.`);
+  }
 
   // Knowledge doc (repeat-safe: replace any leftover copy), then wait for the
   // background indexer to publish it.
@@ -66,7 +77,12 @@ export default async function globalSetup() {
     data: { message: UI_QUESTION },
     timeout: 120_000,
   });
-  if (!warm.ok()) throw new Error(`cache pre-warm failed: ${warm.status()}`);
+  // A 503 here means a banner went live between the cleanup above and now —
+  // the self-monitor opening its own after ~3 failed checks. Don't fight that
+  // (the stack really is broken at that point), just say where to look.
+  if (!warm.ok()) {
+    throw new Error(`cache pre-warm failed: ${warm.status()}${chatBlockedHint(warm.status())}`);
+  }
   await warm.text();
 
   writeState({ adminToken, uiToken, uiUserId });

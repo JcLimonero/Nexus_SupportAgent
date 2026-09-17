@@ -1,4 +1,5 @@
 import { getBearerToken, clearLocalToken } from "./auth";
+import type { AdminBanner, BannerInput } from "./status";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -353,4 +354,97 @@ export async function getSignedMediaUrl(gcsUrl: string): Promise<string> {
   if (!res.ok) throw new Error("Error al obtener el documento");
   const { url } = await res.json();
   return url.startsWith("http") ? url : `${API_URL}${url}`;
+}
+
+// ── Service status (admin) ───────────────────────────────────────────────────
+// The public poll lives in lib/status.ts — it must work without a token.
+
+export interface BannerLists {
+  active: AdminBanner[];
+  scheduled: AdminBanner[];
+  past: AdminBanner[];
+}
+
+export interface StatusCheck {
+  key: string;
+  label: string;
+  ok: boolean | null;
+  down: boolean;
+  detail: string;
+  checked_at: string | null;
+  user_facing: boolean;
+}
+
+export interface StatusChecks {
+  monitor_enabled: boolean;
+  interval_s: number;
+  fail_threshold: number;
+  ok_threshold: number;
+  checks: StatusCheck[];
+}
+
+// FastAPI sends a string detail for HTTPException (always Spanish here) and a
+// list for validation errors. Pydantic tags our own validators' messages with
+// "Value error, "; everything else in that list is pydantic's own English
+// ("String should have at least 5 characters"), which must never reach an
+// all-Spanish UI — those fall back to the caller's Spanish text.
+async function errorDetail(res: Response, fallback: string): Promise<string> {
+  const ours = "Value error, ";
+  try {
+    const body = await res.json();
+    if (typeof body?.detail === "string") return body.detail;
+    const first = Array.isArray(body?.detail) ? body.detail[0]?.msg : null;
+    if (typeof first === "string" && first.startsWith(ours)) return first.slice(ours.length);
+  } catch { /* not JSON */ }
+  return fallback;
+}
+
+export async function getAdminBanners(): Promise<BannerLists> {
+  const res = await apiFetch(`${API_URL}/api/admin/banners`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al cargar los avisos");
+  return res.json();
+}
+
+export async function createBanner(input: BannerInput): Promise<AdminBanner> {
+  const res = await apiFetch(`${API_URL}/api/admin/banners`, {
+    method: "POST",
+    headers: await headers(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, "No se pudo publicar el aviso"));
+  return res.json();
+}
+
+export async function updateBanner(id: string, input: BannerInput): Promise<AdminBanner> {
+  const res = await apiFetch(`${API_URL}/api/admin/banners/${id}`, {
+    method: "PATCH",
+    headers: await headers(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, "No se pudo actualizar el aviso"));
+  return res.json();
+}
+
+export async function addBannerUpdate(id: string, text: string): Promise<AdminBanner> {
+  const res = await apiFetch(`${API_URL}/api/admin/banners/${id}/updates`, {
+    method: "POST",
+    headers: await headers(),
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, "No se pudo publicar la actualización"));
+  return res.json();
+}
+
+export async function deleteBanner(id: string): Promise<void> {
+  const res = await apiFetch(`${API_URL}/api/admin/banners/${id}`, {
+    method: "DELETE",
+    headers: await headers(false),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, "No se pudo eliminar el aviso"));
+}
+
+export async function getStatusChecks(): Promise<StatusChecks> {
+  const res = await apiFetch(`${API_URL}/api/admin/status/checks`, { headers: await headers() });
+  if (!res.ok) throw new Error("Error al cargar el estado del sistema");
+  return res.json();
 }
