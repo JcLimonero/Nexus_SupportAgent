@@ -373,6 +373,9 @@ export default function ChatPage() {
   // guest beyond what they type, and the backend rejects them anyway.
   const canEscalate = !!user && !user.is_anon;
   const canSend = !!input.trim() && !chatBlocked;
+  const hasActions = canEscalate || (!!currentSessionId && messages.length > 0);
+  // Desktop-only: the sidebar's own collapse button disappears with it.
+  const showReopen = !isGuest && sidebarCollapsed;
   // Auto-offer human contact when the assistant just said it has no info.
   const lastMsg = messages[messages.length - 1];
   const showEscalateOffer =
@@ -427,28 +430,6 @@ export default function ChatPage() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Reopen sidebar (desktop only, shown when collapsed) */}
-        {!isGuest && sidebarCollapsed && (
-          <button
-            onClick={toggleSidebarCollapsed}
-            aria-label="Mostrar barra lateral"
-            title="Mostrar barra lateral"
-            className="hidden md:flex"
-            style={{
-              position: "absolute", top: 10, left: 10, zIndex: 30,
-              alignItems: "center", justifyContent: "center", width: 34, height: 34,
-              borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-surface)",
-              border: "1px solid var(--border-default)", color: "var(--text-muted)",
-              boxShadow: "var(--shadow-sm)", cursor: "pointer",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent-fg)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-        )}
         {/* Guest top bar — shown on all sizes (guests have no sidebar) */}
         {isGuest ? (
           <div
@@ -494,12 +475,27 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Actions toolbar — help requests need an account; share needs a saved session */}
-        {(canEscalate || (currentSessionId && messages.length > 0)) && (
+        {/* Actions toolbar — help requests need an account; share needs a saved session.
+            With the sidebar collapsed it also holds the button that reopens it
+            (desktop only), in the flow rather than floating over the actions. */}
+        {(hasActions || showReopen) && (
         <div
-          className={`flex items-center gap-2 px-4 md:px-8 py-2.5 ${canEscalate ? "justify-between" : "justify-end"}`}
+          className={`${hasActions ? "flex" : "hidden md:flex"} items-center gap-2 px-4 md:px-8 py-2.5`}
           style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
         >
+          {showReopen && (
+            <button
+              onClick={toggleSidebarCollapsed}
+              aria-label="Mostrar barra lateral"
+              title="Mostrar barra lateral"
+              className="nqt-btn nqt-btn--sm nqt-btn--ghost hidden md:inline-flex"
+              style={{ padding: 7 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
           {canEscalate && (
           <button
             onClick={() => setEscalateOpen(true)}
@@ -518,7 +514,7 @@ export default function ChatPage() {
               onClick={handleShare}
               disabled={sharing}
               title="Copiar enlace público a esta conversación"
-              className="nqt-btn nqt-btn--sm nqt-btn--ghost"
+              className="nqt-btn nqt-btn--sm nqt-btn--ghost ml-auto"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
