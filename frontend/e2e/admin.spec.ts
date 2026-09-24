@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API_URL, UI_QUESTION, UI_USER_EMAIL, createSessionViaApi, injectToken, readState } from "./helpers";
+import { API_URL, UI_FACT_CODE, UI_USER_EMAIL, createSessionViaApi, injectToken, readState } from "./helpers";
 
 const BROWSER_DOC = "e2e_browser_upload.txt";
 const CREATED_EMAIL = "e2e-ui-created@nexus.local";
@@ -90,12 +90,16 @@ test.describe("admin panel", () => {
     const existing = await request.get(`${API_URL}/api/admin/conversations?user_id=${state.uiUserId}`, {
       headers: { Authorization: `Bearer ${state.adminToken}` },
     });
+    expect(existing.ok(), `conversation list failed: ${existing.status()}`).toBeTruthy();
     if (((await existing.json()) as unknown[]).length === 0) await createSessionViaApi(request, state.uiToken);
     await page.goto(`/admin/conversations?user=${state.uiUserId}`);
 
-    const first = page.getByRole("button", { name: new RegExp(UI_USER_EMAIL) }).first();
-    await expect(first).toBeVisible();
-    await first.click();
-    await expect(page.getByText(UI_QUESTION).first()).toBeVisible();
+    // Not the question: it is also the session title, so the list row itself
+    // would match it. The answer's code only exists in the opened thread.
+    const row = page.getByRole("button", { name: UI_USER_EMAIL }).first();
+    await expect(row).toBeVisible();
+    await expect(page.getByText(UI_FACT_CODE)).toHaveCount(0);
+    await row.click();
+    await expect(page.getByText(UI_FACT_CODE).first()).toBeVisible();
   });
 });

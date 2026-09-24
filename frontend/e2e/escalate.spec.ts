@@ -18,21 +18,32 @@ async function openModal(page: Page) {
   return dialog;
 }
 
+/** Answer the modal's POST in the browser and record what it sent. */
+async function stubSubmit(page: Page, reply: { status: number; body?: string }) {
+  const sent: Record<string, unknown>[] = [];
+  await page.route("**/api/escalations", (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    sent.push(route.request().postDataJSON());
+    return route.fulfill({ contentType: "application/json", body: "{}", ...reply });
+  });
+  return sent;
+}
+
 test.describe("escalation modal", () => {
   test.beforeEach(async ({ page }) => {
-    // Start from an empty saved contact so the prefill is the account email only.
-    await page.addInitScript(() => window.localStorage.removeItem("nexus.support-contact"));
+    // Fail-safe under stubSubmit (Playwright runs the latest matching route
+    // first): if the modal's URL ever drifts past that glob, the POST is
+    // aborted here — the test fails — instead of reaching the backend and
+    // emailing the support team.
+    await page.route(/escalation/i, (route) =>
+      route.request().method() === "POST" ? route.abort() : route.continue(),
+    );
     await injectToken(page, readState().uiToken);
     await page.goto("/chat");
   });
 
   test("validates the form, sends the right payload and confirms", async ({ page }) => {
-    let payload: Record<string, unknown> | null = null;
-    await page.route("**/api/escalations", async (route) => {
-      if (route.request().method() !== "POST") return route.continue();
-      payload = route.request().postDataJSON();
-      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ id: "e2e-fake" }) });
-    });
+    const sent = await stubSubmit(page, { status: 201, body: JSON.stringify({ id: "e2e-fake" }) });
 
     const dialog = await openModal(page);
     const send = dialog.getByRole("button", { name: "Enviar solicitud" });
@@ -54,7 +65,8 @@ test.describe("escalation modal", () => {
 
     await expect(page.getByText(SUBMIT_TOAST)).toBeVisible();
     await expect(dialog).toHaveCount(0);
-    expect(payload).toMatchObject({
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
       name: "Ana Prueba",
       email: UI_USER_EMAIL,
       phone: "5512345678", // normalized to digits
@@ -63,17 +75,14 @@ test.describe("escalation modal", () => {
   });
 
   test("the contact is remembered for the next request", async ({ page }) => {
-    await page.route("**/api/escalations", (route) =>
-      route.request().method() === "POST"
-        ? route.fulfill({ status: 201, contentType: "application/json", body: "{}" })
-        : route.continue(),
-    );
+    const sent = await stubSubmit(page, { status: 201 });
     let dialog = await openModal(page);
     await dialog.getByLabel("Nombre *").fill("Ana Recordada");
     await dialog.getByLabel("Teléfono (10 dígitos)").fill("5512345678");
     await dialog.getByLabel("¿En qué necesitas ayuda? *").fill("Necesito ayuda con el corte de caja.");
     await dialog.getByRole("button", { name: "Enviar solicitud" }).click();
     await expect(page.getByText(SUBMIT_TOAST)).toBeVisible();
+    expect(sent).toHaveLength(1);
 
     dialog = await openModal(page);
     await expect(dialog.getByLabel("Nombre *")).toHaveValue("Ana Recordada");
@@ -81,15 +90,14 @@ test.describe("escalation modal", () => {
   });
 
   test("a failed request keeps the form open and says so", async ({ page }) => {
-    await page.route("**/api/escalations", (route) =>
-      route.request().method() === "POST" ? route.fulfill({ status: 500, body: "boom" }) : route.continue(),
-    );
+    const sent = await stubSubmit(page, { status: 500, body: JSON.stringify({ detail: "boom" }) });
     const dialog = await openModal(page);
     await dialog.getByLabel("Nombre *").fill("Ana Prueba");
     await dialog.getByLabel("¿En qué necesitas ayuda? *").fill("No puedo facturar un pedido de mostrador.");
     await dialog.getByRole("button", { name: "Enviar solicitud" }).click();
 
     await expect(page.getByText("No se pudo enviar la solicitud. Intenta de nuevo.")).toBeVisible();
+    expect(sent).toHaveLength(1); // the stub's 500, not the fail-safe's abort
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel("Nombre *")).toHaveValue("Ana Prueba"); // nothing lost
   });

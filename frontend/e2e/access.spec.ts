@@ -39,16 +39,26 @@ test.describe("access control", () => {
     await expect(page.getByRole("button", { name: "Nueva conversación" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Solicitar ayuda" })).toHaveCount(0);
 
+    // /chat, not just "anywhere but /admin": a guest bounced to the login page
+    // (session lost on navigation) is a different bug that must not pass here.
     await page.goto("/admin");
-    await expect(page).not.toHaveURL(/\/admin/);
+    await expect(page).toHaveURL(/\/chat$/);
+    await expect(page.getByText("Modo invitado")).toBeVisible();
   });
 
   test("logging out clears the session", async ({ page }) => {
-    await injectToken(page, readState().uiToken);
+    // Set the token once instead of injectToken: its init script re-adds the
+    // token on every load, so a reload could never show the user signed out.
+    await page.goto("/");
+    await page.evaluate((t) => window.localStorage.setItem("nexus_token", t), readState().uiToken);
     await page.goto("/chat");
     await page.getByRole("button", { name: "Cerrar sesión" }).click();
     await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeVisible();
     expect(await page.evaluate(() => window.localStorage.getItem("nexus_token"))).toBeNull();
+
+    await page.goto("/chat");
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeVisible();
+    await expect(page).not.toHaveURL(/\/chat/);
   });
 
   test("an unknown shared link shows a clear message, not an error page", async ({ page }) => {
