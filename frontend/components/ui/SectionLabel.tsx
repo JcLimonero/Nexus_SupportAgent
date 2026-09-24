@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 
-/** Condensed uppercase section label (the recurring `.gv-label`-style heading). */
+/** Condensed uppercase section label (the recurring `.nqt-label`-style heading). */
 export function SectionLabel({
   children,
   count,
@@ -13,14 +13,13 @@ export function SectionLabel({
 }) {
   return (
     <span className={className}>
-      <span className="gv-label">{children}</span>
+      <span className="nqt-label">{children}</span>
       {count != null && (
         <span
           style={{
             marginLeft: 8,
             fontSize: 10,
             color: "var(--text-faint)",
-            fontFamily: "var(--font-condensed)",
           }}
         >
           ({count})

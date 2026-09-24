@@ -77,7 +77,7 @@ describe("AdminHeader", () => {
     mockBanners.mockRejectedValue(new Error("403"));
     render(<AdminHeader title="Panel" />);
     await waitFor(() => expect(mockBanners).toHaveBeenCalled());
-    expect(screen.getAllByRole("link")).toHaveLength(6);   // 5 sections + back to chat
+    expect(screen.getAllByRole("link")).toHaveLength(7);   // logo (admin home) + 5 sections + back to chat
   });
 
   // Regression: /admin/avisos loads the banner list for its own table, so the

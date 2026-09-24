@@ -47,16 +47,16 @@ test.describe("session sidebar", () => {
 
   test("collapse persists across reloads", async ({ page }) => {
     await page.goto("/chat");
-    await expect(page.getByText("+ NUEVA CONVERSACIÓN")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Nueva conversación" })).toBeVisible();
 
     await page.getByLabel("Ocultar barra lateral").click();
-    await expect(page.getByText("+ NUEVA CONVERSACIÓN")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Nueva conversación" })).toHaveCount(0);
 
     await page.reload();
     await expect(page.getByLabel("Mostrar barra lateral")).toBeVisible();
-    await expect(page.getByText("+ NUEVA CONVERSACIÓN")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Nueva conversación" })).toHaveCount(0);
 
     await page.getByLabel("Mostrar barra lateral").click();
-    await expect(page.getByText("+ NUEVA CONVERSACIÓN")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Nueva conversación" })).toBeVisible();
   });
 });

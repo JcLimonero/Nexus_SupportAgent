@@ -156,7 +156,7 @@ export default function UsersPage() {
     color: "var(--text-primary)",
     padding: "8px 12px",
     fontSize: 13,
-    fontWeight: 300,
+    fontWeight: 400,
     width: "100%",
     outline: "none",
   };
@@ -164,7 +164,7 @@ export default function UsersPage() {
   if (loading || fetching) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
@@ -176,33 +176,33 @@ export default function UsersPage() {
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 space-y-6">
 
         {/* Create user */}
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)" }}>
-          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)", borderLeft: "3px solid var(--nqt-blue, #0ea5e9)" }}>
-            <span className="gv-label">Nuevo usuario</span>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)" }}>
+          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
+            <span className="nqt-label">Nuevo usuario</span>
           </div>
           <div className="px-5 py-5">
             <form onSubmit={createUser} className="space-y-3">
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="gv-label block mb-1.5">Correo electrónico</label>
+                  <label className="nqt-label block mb-1.5">Correo electrónico</label>
                   <input type="email" placeholder="usuario@empresa.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
                     onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
                 </div>
                 <div className="flex-1">
-                  <label className="gv-label block mb-1.5">Contraseña</label>
+                  <label className="nqt-label block mb-1.5">Contraseña</label>
                   <input type="password" placeholder="Mínimo 8 caracteres" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
                     onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")} />
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase" }}>
+                <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600,}}>
                   <input type="checkbox" checked={newIsAdmin} onChange={(e) => setNewIsAdmin(e.target.checked)} style={{ accentColor: "var(--text-primary)", width: 14, height: 14 }} />
                   Administrador
                 </label>
                 <button type="submit" disabled={creating} className="transition-colors disabled:opacity-40"
-                  style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "2px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius)", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
+                  style={{ fontWeight: 600, fontSize: 11, backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius)", padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}
                   onMouseEnter={(e) => { if (!creating) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
                 >
@@ -214,18 +214,18 @@ export default function UsersPage() {
         </div>
 
         {/* Users table */}
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
-            <span className="gv-label">Usuarios registrados</span>
-            <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({users.length})</span>
+            <span className="nqt-label">Usuarios registrados</span>
+            <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)",}}>({users.length})</span>
           </div>
 
           <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 760 }}>
             <thead>
-              <tr style={{ borderBottom: "2px solid var(--nqt-blue, #0ea5e9)", backgroundColor: "var(--bg-muted)" }}>
+              <tr style={{ borderBottom: "2px solid var(--accent)", backgroundColor: "var(--bg-muted)" }}>
                 {["Email", "Rol", "Estado", "Acciones"].map((h) => (
-                  <th key={h} className="text-left px-5 py-3" style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                  <th key={h} className="text-left px-5 py-3" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)" }}>
                     {h}
                   </th>
                 ))}
@@ -235,41 +235,41 @@ export default function UsersPage() {
               {users.map((u, i) => (
                 <Fragment key={u.id}>
                 <tr style={{ borderTop: i === 0 ? "none" : `1px solid var(--border-default)` }}>
-                  <td className="px-5 py-3" style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>{u.email}</td>
+                  <td className="px-5 py-3" style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 400 }}>{u.email}</td>
                   <td className="px-5 py-3">
-                    <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: "1px solid var(--border-default)", color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)", backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent" }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", border: "1px solid var(--border-default)", color: u.is_admin ? "var(--text-primary)" : "var(--text-muted)", backgroundColor: u.is_admin ? "var(--bg-muted)" : "transparent" }}>
                       {u.is_admin ? "Admin" : "Usuario"}
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <span style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: `1px solid ${u.is_active ? "#4a7c4a" : "#c0392b"}`, color: u.is_active ? "#4a7c4a" : "#c0392b" }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", padding: "2px 8px", border: `1px solid ${u.is_active ? "var(--success)" : "var(--danger)"}`, color: u.is_active ? "var(--success)" : "var(--danger-fg)" }}>
                       {u.is_active ? "Activo" : "Inactivo"}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <button onClick={() => router.push(`/admin/conversations?user=${u.id}`)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
+                      <button onClick={() => router.push(`/admin/conversations?user=${u.id}`)} style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-fg)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Conversaciones
                       </button>
-                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--accent)" : "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = pwUserId === u.id ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)")}>
+                        onMouseLeave={(e) => (e.currentTarget.style.color = pwUserId === u.id ? "var(--accent)" : "var(--text-muted)")}>
                         Contraseña
                       </button>
-                      <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         {u.is_active ? "Desactivar" : "Activar"}
                       </button>
-                      <button onClick={() => toggleAdmin(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => toggleAdmin(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         {u.is_admin ? "Revocar admin" : "Hacer admin"}
                       </button>
-                      <button onClick={() => deleteUser(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "#c0392b")}
+                      <button onClick={() => deleteUser(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger-fg)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Eliminar
                       </button>
@@ -283,7 +283,7 @@ export default function UsersPage() {
                         onSubmit={(e) => { e.preventDefault(); savePassword(u); }}
                         className="flex items-center gap-3 flex-wrap"
                       >
-                        <span className="gv-label" style={{ whiteSpace: "nowrap" }}>Nueva contraseña</span>
+                        <span className="nqt-label" style={{ whiteSpace: "nowrap" }}>Nueva contraseña</span>
                         <input
                           type="password"
                           autoFocus
@@ -296,11 +296,11 @@ export default function UsersPage() {
                           onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
                         />
                         <button type="submit" disabled={savingPw}
-                          style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "1.5px", textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius-sm)", padding: "7px 16px", cursor: savingPw ? "not-allowed" : "pointer", opacity: savingPw ? 0.5 : 1 }}>
+                          style={{ fontWeight: 600, fontSize: 11, backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)", border: "none", borderRadius: "var(--radius-sm)", padding: "7px 16px", cursor: savingPw ? "not-allowed" : "pointer", opacity: savingPw ? 0.5 : 1 }}>
                           {savingPw ? "Guardando..." : "Guardar"}
                         </button>
                         <button type="button" onClick={cancelPw}
-                          style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "6px 12px", cursor: "pointer" }}>
+                          style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "6px 12px", cursor: "pointer" }}>
                           Cancelar
                         </button>
                       </form>
@@ -310,7 +310,7 @@ export default function UsersPage() {
                 </Fragment>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={4} className="px-5 py-10 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>No hay usuarios registrados.</td></tr>
+                <tr><td colSpan={4} className="px-5 py-10 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>No hay usuarios registrados.</td></tr>
               )}
             </tbody>
           </table>

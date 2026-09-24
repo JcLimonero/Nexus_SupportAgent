@@ -6,202 +6,248 @@ html, body {
   height: 100%;
 }
 
-/* ── Nexus Q Tech design tokens ────────────────────────────────────────────── */
+/* ── TotalDealer design tokens ─────────────────────────────────────────────
+   Taken from totaldealer.com.mx: orange accent, navy text, soft navy shadows,
+   rounded surfaces. Components reference the semantic tokens below, never the
+   raw palette, so light/dark only has to be redefined here.
+
+   Orange has two roles because #F04A1A only reaches 3.68:1 against white:
+   `--accent` is the fill behind white text (#D93D12, 4.54:1 — WCAG AA) and
+   `--accent-fg` is orange *text* on a surface. `--accent-bright` is the
+   brand orange itself, for decoration that carries no text (icons, glows,
+   underlines, focus rings). */
 :root {
+  /* palette */
+  --td-orange:      #F04A1A;
+  --td-orange-dark: #D93D12;
+  --td-navy:        #08243A;
+
+  /* accent */
+  --accent:        #D93D12;
+  --accent-hover:  #B8330E;
+  --accent-bright: #F04A1A;
+  --accent-fg:     #C2410C;
+  --accent-tint:   rgba(240, 74, 26, 0.10);
+  --accent-border: rgba(240, 74, 26, 0.35);
+
+  /* feedback — danger is rose, not red, so it can't be mistaken for the brand orange */
+  --danger:     #BE123C;
+  --danger-fg:  #BE123C;
+  --danger-bg:  rgba(190, 18, 60, 0.08);
+  --success:    #15803D;
+  --success-bg: rgba(21, 128, 61, 0.08);
+
   /* service-status banner label colors (readable on the tinted strip) */
-  --status-critical: #b91c1c;
-  --status-warning:  #b45309;
-  --status-info:     #0369a1;
+  --status-critical: #BE123C;
+  --status-warning:  #B45309;
+  --status-info:     #1D4F73;
 
   /* Accent (strip border, icon, card edge) and its tint for the same three
      severities, shared by every surface that shows one. `ok` is the neutral /
-     "info" severity. Each tint is its own accent at low alpha — change both. */
-  --status-critical-accent: #dc2626;
-  --status-warning-accent:  #f59e0b;
-  --status-ok-accent:       var(--nqt-blue, #0ea5e9);
-  --status-critical-bg:     rgba(220, 38, 38, 0.09);
+     "info" severity — navy, so a notice never reads as the brand orange. Each
+     tint is its own accent at low alpha — change both. */
+  --status-critical-accent: #E11D48;
+  --status-warning-accent:  #F59E0B;
+  --status-ok-accent:       #1D4F73;
+  --status-critical-bg:     rgba(225, 29, 72, 0.08);
   --status-warning-bg:      rgba(245, 158, 11, 0.12);
-  --status-ok-bg:           rgba(14, 165, 233, 0.09);
+  --status-ok-bg:           rgba(29, 79, 115, 0.08);
 
-  /* fonts — variables provided by next/font in layout.tsx, with web-safe fallbacks.
-     Reference these everywhere instead of repeating the family strings inline. */
-  --font-body:      var(--font-barlow), "Barlow", system-ui, sans-serif;
-  --font-condensed: var(--font-barlow-condensed), "Barlow Condensed", system-ui, sans-serif;
-
-  /* brand */
-  --nqt-blue:      #0ea5e9;
-  --nqt-blue-dark: #0284c7;
-  --nqt-navy:      #0a2540;
-  --nqt-cyan:      #06b6d4;
-  --nqt-navy-mid:  #1e3a5f;
+  /* font — Inter via next/font in layout.tsx */
+  --font-body: var(--font-inter), "Inter", system-ui, sans-serif;
 
   /* radius */
-  --radius-sm: 4px;
-  --radius:    6px;
-  --radius-lg: 10px;
+  --radius-sm:   8px;
+  --radius:      12px;
+  --radius-lg:   18px;
+  --radius-xl:   22px;
+  --radius-pill: 999px;
+
+  /* elevation — navy-tinted and soft, as on the TotalDealer site */
+  --shadow-sm:     0 1px 2px rgba(8, 36, 58, 0.04), 0 4px 12px rgba(8, 36, 58, 0.04);
+  --shadow:        0 10px 30px rgba(8, 36, 58, 0.06);
+  --shadow-lg:     0 24px 70px rgba(8, 36, 58, 0.18);
+  --shadow-accent: 0 10px 24px rgba(240, 74, 26, 0.28);
+  --overlay:       rgba(8, 36, 58, 0.45);
 
   /* semantic - light mode */
-  --bg-page:          #f0f4f8;
-  --bg-surface:       #ffffff;
-  --bg-muted:         #f1f5f9;
-  --bg-sidebar:       #0a2540;
-  --bg-sidebar-hover: #112d4e;
-  --bg-sidebar-active:#163660;
+  --bg-page:          #F6F9FB;
+  --bg-surface:       #FFFFFF;
+  --bg-muted:         #F1F5F8;
+  --bg-header:        rgba(255, 255, 255, 0.96);
+  --bg-sidebar:       #FFFFFF;
+  --bg-sidebar-hover: #F1F5F8;
+  --bg-sidebar-active:var(--accent-tint);
 
-  --text-primary:   #0f172a;
-  --text-secondary: #334155;
-  --text-muted:     #64748b;
-  --text-faint:     #94a3b8;
+  --text-primary:   #08243A;
+  --text-secondary: #33495A;
+  --text-muted:     #56697A;
+  --text-faint:     #8A9BA7;
 
-  --border-default: #e2e8f0;
-  --border-strong:  #cbd5e1;
+  --border-default: #DFE7EC;
+  --border-strong:  #B9C7D0;
 
-  --bubble-user-bg:   #0ea5e9;
-  --bubble-user-text: #ffffff;
-  --bubble-ai-bg:     #ffffff;
-  --bubble-ai-border: #e2e8f0;
-  --bubble-ai-text:   #0f172a;
+  --bubble-user-bg:   var(--accent);
+  --bubble-user-text: #FFFFFF;
+  --bubble-ai-bg:     #FFFFFF;
+  --bubble-ai-border: #DFE7EC;
+  --bubble-ai-text:   #08243A;
 
-  --input-bg:     #ffffff;
-  --input-border: #cbd5e1;
-  --input-focus:  #0ea5e9;
+  --input-bg:     #FFFFFF;
+  --input-border: #DFE7EC;
+  --input-focus:  var(--accent-bright);
 
-  --btn-primary-bg:    #0ea5e9;
-  --btn-primary-text:  #ffffff;
-  --btn-primary-hover: #0284c7;
+  --btn-primary-bg:    var(--accent);
+  --btn-primary-text:  #FFFFFF;
+  --btn-primary-hover: var(--accent-hover);
 }
 
 /* ── Admin navigation ──────────────────────────────────────────────────────────
-   The admin header is always dark, so these use fixed colors rather than the
-   theme tokens. Tabs are links styled as outlined buttons so they read as
-   clickable; the current page is filled. */
+   Styled after the totaldealer.com.mx top nav: plain navy links that turn
+   orange on hover, the current page marked by a 3px orange pill underline. */
 .admin-nav-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
-  border: 1px solid #1e3a5f;
-  border-radius: var(--radius-sm);
-  background-color: rgba(13, 33, 55, 0.6);
-  color: #cbd5e1;
-  font-family: var(--font-condensed);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  padding: 12px 2px 14px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 14px;
   white-space: nowrap;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
-.admin-nav-tab svg { color: var(--nqt-blue); }
-.admin-nav-tab:hover { border-color: var(--nqt-blue); background-color: rgba(14, 165, 233, 0.12); color: #ffffff; }
-.admin-nav-tab:focus-visible { outline: 2px solid var(--nqt-blue); outline-offset: 2px; }
-.admin-nav-tab[aria-current="page"] { border-color: var(--nqt-blue); background-color: var(--nqt-blue); color: #ffffff; }
-.admin-nav-tab[aria-current="page"] svg { color: #ffffff; }
+.admin-nav-tab svg { color: var(--text-faint); transition: color 0.15s; }
+.admin-nav-tab:hover, .admin-nav-tab:hover svg { color: var(--accent-fg); }
+.admin-nav-tab:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+.admin-nav-tab[aria-current="page"] { color: var(--text-primary); font-weight: 700; }
+.admin-nav-tab[aria-current="page"] svg { color: var(--accent-bright); }
+.admin-nav-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-bright);
+}
 
 .admin-nav-count {
   font-size: 11px;
   font-weight: 700;
   line-height: 18px;
-  letter-spacing: 0;
   padding: 0 7px;
-  border-radius: 999px;
-  background-color: #ef4444;
+  border-radius: var(--radius-pill);
+  background-color: var(--danger);
   color: #ffffff;
 }
-.admin-nav-count[data-tone="avisos"] { background-color: #f59e0b; color: #422006; }
+.admin-nav-count[data-tone="avisos"] { background-color: #F59E0B; color: #422006; }
 
 .admin-back-link {
-  font-family: var(--font-condensed);
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: #94a3b8;
-  border: 1px solid #1e3a5f;
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  padding: 8px 14px;
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s;
 }
-.admin-back-link:hover { color: #ffffff; border-color: var(--nqt-blue); }
-.admin-back-link:focus-visible { outline: 2px solid var(--nqt-blue); outline-offset: 2px; }
+.admin-back-link:hover { color: var(--accent-fg); border-color: var(--accent-border); }
+.admin-back-link:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 
 /* Quick-access cards on /admin (theme-aware: they sit on the page body). */
 .admin-quick-card {
   display: block;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-left: 3px solid var(--card-accent, var(--nqt-blue));
-  border-radius: 0 var(--radius) var(--radius) 0;
-  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
   transition: border-color 0.15s, transform 0.15s;
 }
-.admin-quick-card:hover { border-color: var(--card-accent, var(--nqt-blue)); transform: translateY(-1px); }
-.admin-quick-card:focus-visible { outline: 2px solid var(--nqt-blue); outline-offset: 2px; }
+.admin-quick-card:hover { border-color: var(--card-accent, var(--accent-border)); transform: translateY(-2px); }
+.admin-quick-card:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 
+/* Dark mode is graphite, not navy: neutral grays with the same orange accent. */
 html.dark {
-  --status-critical: #f87171;
-  --status-warning:  #fbbf24;
-  --status-info:     #38bdf8;
+  --accent-fg:     #FF7A45;
+  --accent-tint:   rgba(240, 74, 26, 0.14);
+  --accent-border: rgba(240, 74, 26, 0.45);
+
+  --danger-fg:  #FB7185;
+  --danger-bg:  rgba(251, 113, 133, 0.10);
+  --success:    #4ADE80;
+  --success-bg: rgba(74, 222, 128, 0.10);
+
+  --status-critical: #FB7185;
+  --status-warning:  #FBBF24;
+  --status-info:     #CBD5DD;
 
   /* Only the label colors above lighten for dark mode; the accents and tints
-     render at full strength on both themes. Restated here so a dark-only
-     contrast fix has one place to land. */
-  --status-critical-accent: #dc2626;
-  --status-warning-accent:  #f59e0b;
-  --status-ok-accent:       var(--nqt-blue, #0ea5e9);
-  --status-critical-bg:     rgba(220, 38, 38, 0.09);
+     render at full strength on both themes, except `ok`, whose navy would
+     vanish on graphite. Restated here so a dark-only contrast fix has one
+     place to land. */
+  --status-critical-accent: #E11D48;
+  --status-warning-accent:  #F59E0B;
+  --status-ok-accent:       #8B9DAB;
+  --status-critical-bg:     rgba(225, 29, 72, 0.12);
   --status-warning-bg:      rgba(245, 158, 11, 0.12);
-  --status-ok-bg:           rgba(14, 165, 233, 0.09);
+  --status-ok-bg:           rgba(139, 157, 171, 0.12);
 
-  --bg-page:          #071929;
-  --bg-surface:       #0d2137;
-  --bg-muted:         #0f2847;
-  --bg-sidebar:       #050f1a;
-  --bg-sidebar-hover: #0d2137;
-  --bg-sidebar-active:#112d4e;
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow:        0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-lg:     0 24px 70px rgba(0, 0, 0, 0.55);
+  --shadow-accent: 0 10px 24px rgba(240, 74, 26, 0.22);
+  --overlay:       rgba(0, 0, 0, 0.6);
 
-  --text-primary:   #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted:     #475569;
-  --text-faint:     #334155;
+  --bg-page:          #0F1113;
+  --bg-surface:       #181B1F;
+  --bg-muted:         #1F2328;
+  --bg-header:        rgba(24, 27, 31, 0.94);
+  --bg-sidebar:       #14171A;
+  --bg-sidebar-hover: #1F2328;
+  --bg-sidebar-active:var(--accent-tint);
 
-  --border-default: #1e3a5f;
-  --border-strong:  #2d5282;
+  --text-primary:   #ECEEF0;
+  --text-secondary: #B3B9C0;
+  --text-muted:     #8B929A;
+  --text-faint:     #6B727A;
 
-  --bubble-user-bg:   #0ea5e9;
-  --bubble-user-text: #ffffff;
-  --bubble-ai-bg:     #0d2137;
-  --bubble-ai-border: #1e3a5f;
-  --bubble-ai-text:   #e2e8f0;
+  --border-default: #2A2F35;
+  --border-strong:  #3A4048;
 
-  --input-bg:     #0d2137;
-  --input-border: #1e3a5f;
-  --input-focus:  #0ea5e9;
+  --bubble-ai-bg:     #181B1F;
+  --bubble-ai-border: #2A2F35;
+  --bubble-ai-text:   #ECEEF0;
 
-  --btn-primary-bg:    #0ea5e9;
-  --btn-primary-text:  #ffffff;
-  --btn-primary-hover: #0284c7;
+  --input-bg:     #1F2328;
+  --input-border: #2A2F35;
 }
 
 /* ── Custom scrollbar ──────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--nqt-navy-mid);
-  border-radius: 2px;
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--nqt-blue);
+  background: var(--text-faint);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--nqt-navy-mid) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 /* ── Keyframe animations ───────────────────────────────────────────────────── */
@@ -246,8 +292,8 @@ html.dark {
 }
 
 @keyframes nqt-glowPulse {
-  0%, 100% { box-shadow: 0 0 0 0   rgba(14, 165, 233, 0); }
-  50%       { box-shadow: 0 0 0 6px rgba(14, 165, 233, 0.22); }
+  0%, 100% { box-shadow: 0 0 0 0   rgba(240, 74, 26, 0); }
+  50%       { box-shadow: 0 0 0 6px rgba(240, 74, 26, 0.22); }
 }
 
 @keyframes nqt-toastIn {
@@ -283,40 +329,33 @@ html.dark {
 @layer base {
   body {
     font-family: var(--font-body);
-    font-weight: 300;
+    font-weight: 400;
     background-color: var(--bg-page);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
   }
 
-  .nqt-label {
-    font-family: var(--font-condensed);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  /* keep old alias so existing uses don't break */
-  .gv-label {
-    font-family: var(--font-condensed);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .gv-heading {
-    font-family: var(--font-condensed);
+  /* Eyebrow — the small uppercase orange kicker the TotalDealer site puts
+     above headings. `.nqt-label` is the muted variant for form and section
+     labels, where orange everywhere would drown the real accents. */
+  .td-eyebrow {
+    font-size: 11px;
     font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    letter-spacing: -0.5px;
+    color: var(--accent-fg);
+  }
+
+  .nqt-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
   }
 
   *:focus-visible {
-    outline: 2px solid var(--nqt-blue);
+    outline: 2px solid var(--accent-bright);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
@@ -326,33 +365,31 @@ html.dark {
    Shared classes for the React kit in components/ui/. Hover/focus live in CSS
    (not inline JS handlers) so they theme centrally and respect the cascade. */
 @layer components {
-  /* Condensed uppercase button label shared by every variant */
   .nqt-btn {
-    font-family: var(--font-condensed);
     font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
     border-radius: var(--radius);
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
+    white-space: nowrap;
   }
-  .nqt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .nqt-btn--sm { font-size: 10px; letter-spacing: 1.5px; padding: 6px 12px; }
-  .nqt-btn--md { font-size: 11px; padding: 10px 20px; }
+  .nqt-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .nqt-btn--sm { font-size: 13px; padding: 7px 14px; }
+  .nqt-btn--md { font-size: 14px; padding: 11px 20px; }
 
-  .nqt-btn--primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; }
-  .nqt-btn--primary:not(:disabled):hover { background-color: var(--btn-primary-hover); }
-  .nqt-btn--primary:active:not(:disabled) { transform: scale(0.97); }
+  .nqt-btn--primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; box-shadow: var(--shadow-accent); }
+  .nqt-btn--primary:disabled { box-shadow: none; }
+  .nqt-btn--primary:not(:disabled):hover { background-color: var(--btn-primary-hover); transform: translateY(-1px); }
+  .nqt-btn--primary:active:not(:disabled) { transform: scale(0.98); }
 
-  .nqt-btn--ghost { background-color: transparent; color: var(--text-secondary); border: 1px solid var(--input-border); }
-  .nqt-btn--ghost:not(:disabled):hover { border-color: var(--input-focus); color: var(--text-primary); }
+  .nqt-btn--ghost { background-color: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-default); }
+  .nqt-btn--ghost:not(:disabled):hover { border-color: var(--accent-border); color: var(--accent-fg); }
 
-  .nqt-btn--danger { background-color: #ef4444; color: #fff; border: none; }
-  .nqt-btn--danger:not(:disabled):hover { background-color: #dc2626; }
+  .nqt-btn--danger { background-color: var(--danger); color: #fff; border: none; }
+  .nqt-btn--danger:not(:disabled):hover { filter: brightness(0.9); }
 
   /* Icon-only button — inherits color, tints on hover */
   .nqt-iconbtn {
@@ -360,7 +397,7 @@ html.dark {
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    padding: 4px;
+    padding: 5px;
     line-height: 1;
     color: var(--text-faint);
     transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
@@ -368,22 +405,24 @@ html.dark {
     align-items: center;
     justify-content: center;
   }
-  .nqt-iconbtn:hover { color: var(--text-muted); }
-  .nqt-iconbtn--accent:hover { color: var(--nqt-blue); }
-  .nqt-iconbtn--danger:hover { color: #f87171; }
+  .nqt-iconbtn:hover { color: var(--text-secondary); background-color: var(--bg-muted); }
+  .nqt-iconbtn--accent:hover { color: var(--accent-fg); background-color: var(--accent-tint); }
+  .nqt-iconbtn--danger:hover { color: var(--danger-fg); background-color: var(--danger-bg); }
   /* Comfortable tap target on touch devices (WCAG 2.5.5) without enlarging
      the dense desktop layout. */
   @media (pointer: coarse) {
     .nqt-iconbtn { min-width: 40px; min-height: 40px; }
   }
 
-  /* Surface card with the signature 3px blue left-accent */
+  /* Rounded surface card with the soft TotalDealer shadow */
   .nqt-card {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
   }
-  .nqt-card--accent { border-left: 3px solid var(--nqt-blue); }
+  /* Accent variant: an orange-tinted edge instead of the old 3px left bar */
+  .nqt-card--accent { border-color: var(--accent-border); }
 
   /* Text input / textarea */
   .nqt-input {
@@ -391,11 +430,104 @@ html.dark {
     border: 1px solid var(--input-border);
     border-radius: var(--radius);
     color: var(--text-primary);
-    font-weight: 300;
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .nqt-input:focus { border-color: var(--input-focus); }
+  .nqt-input:focus { border-color: var(--input-focus); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .nqt-input::placeholder { color: var(--text-faint); }
+
+  /* Welcome-screen suggestion card: TotalDealer feature-card look — rounded,
+     soft shadow, lifts and picks up an orange edge on hover. */
+  .td-suggestion {
+    display: block;
+    padding: 16px 18px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    color: var(--text-primary);
+    cursor: pointer;
+    animation: nqt-slideUp 0.35s ease both;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .td-suggestion:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+  .td-suggestion__label { display: block; font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .td-suggestion:hover .td-suggestion__label { color: var(--accent-fg); }
+  .td-suggestion__prompt { display: block; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
+
+  /* Source citation pill under an assistant answer */
+  .td-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-pill);
+    padding: 4px 11px 4px 5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+  .td-chip:not([data-static]):hover { border-color: var(--accent-border); color: var(--accent-fg); background-color: var(--accent-tint); }
+  .td-chip[data-static] { cursor: default; }
+  .td-chip__tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-fg);
+    background-color: var(--accent-tint);
+    border-radius: var(--radius-pill);
+    padding: 2px 7px;
+  }
+  .td-chip__name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Follow-up question suggested after an answer */
+  .td-followup {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    padding: 9px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+  .td-followup svg { flex-shrink: 0; color: var(--text-faint); transition: color 0.15s ease, transform 0.15s ease; }
+  .td-followup:hover { border-color: var(--accent-border); color: var(--text-primary); background-color: var(--accent-tint); }
+  .td-followup:hover svg { color: var(--accent-fg); transform: translateX(2px); }
+
+  /* Chat composer: one rounded surface around the textarea and send button */
+  .td-composer {
+    padding: 6px;
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .td-composer:focus-within { border-color: var(--input-focus); box-shadow: var(--shadow), 0 0 0 3px var(--accent-tint); }
+  /* One line with an ellipsis — a wrapped placeholder would make the empty composer two rows tall on phones */
+  .td-composer textarea::placeholder { color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Markdown list items draw their own dot; ordered lists keep their numbers only. */
+  ol > li > .md-bullet { display: none !important; }
+
+  /* The TotalDealer hero backdrop: page color with a soft orange glow in one
+     corner and a faint cool one in the other. */
+  .td-hero-bg {
+    background:
+      radial-gradient(circle at 88% 10%, rgba(240, 74, 26, 0.14), transparent 34%),
+      radial-gradient(circle at 6% 90%, rgba(70, 95, 105, 0.10), transparent 32%),
+      var(--bg-page);
+  }
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────────

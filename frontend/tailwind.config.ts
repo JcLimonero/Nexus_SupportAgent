@@ -11,23 +11,16 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Backed by the next/font CSS variables defined in app/layout.tsx.
+        // Backed by the next/font CSS variable defined in app/layout.tsx.
         sans: ["var(--font-body)"],
-        condensed: ["var(--font-condensed)"],
       },
       colors: {
-        // Nexus Q Tech brand palette (mirrors the CSS variables in globals.css).
-        nqt: {
-          blue: "#0ea5e9",
-          "blue-dark": "#0284c7",
-          navy: "#0a2540",
-          "navy-mid": "#1e3a5f",
-          cyan: "#06b6d4",
+        // TotalDealer palette (mirrors the CSS variables in globals.css).
+        td: {
+          orange: "#F04A1A",
+          "orange-dark": "#D93D12",
+          navy: "#08243A",
         },
-      },
-      letterSpacing: {
-        label: "2px",
-        btn: "2px",
       },
     },
   },

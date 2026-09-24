@@ -42,8 +42,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), EXIT_MS);
   };
 
+  // Foreground + tint per kind, for the round icon badge.
   const accent = (k: ToastKind) =>
-    k === "success" ? "#22c55e" : k === "error" ? "#f87171" : "var(--nqt-blue, #0ea5e9)";
+    k === "success" ? "var(--success)" : k === "error" ? "var(--danger-fg)" : "var(--accent-fg)";
+  const tint = (k: ToastKind) =>
+    k === "success" ? "var(--success-bg)" : k === "error" ? "var(--danger-bg)" : "var(--accent-tint)";
   const icon = (k: ToastKind) =>
     k === "success" ? "✓" : k === "error" ? "✕" : "·";
 
@@ -59,24 +62,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               alignItems: "flex-start",
               gap: 10,
               border: "1px solid var(--border-default)",
-              borderLeftWidth: 3,
-              borderLeftColor: accent(t.kind),
               // Opaque surface so the message is readable over any page content
               // (the old translucent tint let 90% of the background bleed through).
               backgroundColor: "var(--bg-surface)",
               color: "var(--text-primary)",
-              padding: "10px 12px 10px 14px",
-              fontSize: 13,
-              fontWeight: 400,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
-              borderRadius: `0 var(--radius) var(--radius) 0`,
+              padding: "10px 12px",
+              fontSize: 14,
+              boxShadow: "var(--shadow-lg)",
+              borderRadius: "var(--radius)",
               animation: t.exiting
                 ? `nqt-toastOut ${EXIT_MS}ms ease forwards`
                 : "nqt-toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both",
               cursor: "default",
             }}
           >
-            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 1, color: accent(t.kind) }}>
+            <span style={{ fontWeight: 700, fontSize: 11, flexShrink: 0, width: 20, height: 20, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", color: accent(t.kind), backgroundColor: tint(t.kind) }}>
               {icon(t.kind)}
             </span>
             <span style={{ flex: 1, lineHeight: 1.5 }}>{t.text}</span>

@@ -131,7 +131,7 @@ export function SourcePanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40"
-        style={{ backgroundColor: "rgba(5,15,26,0.6)", backdropFilter: "blur(2px)", animation: "nqt-fadeIn 0.2s ease both" }}
+        style={{ backgroundColor: "var(--overlay)", backdropFilter: "blur(2px)", animation: "nqt-fadeIn 0.2s ease both" }}
         onClick={onClose}
       />
 
@@ -147,7 +147,7 @@ export function SourcePanel({
           width: "min(500px, 100vw)",
           backgroundColor: "var(--bg-surface)",
           borderLeft: "1px solid var(--border-default)",
-          boxShadow: "-8px 0 32px rgba(0,0,0,0.25)",
+          boxShadow: "var(--shadow-lg)",
           animation: "nqt-slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
           outline: "none",
         }}
@@ -155,35 +155,26 @@ export function SourcePanel({
         {/* Header */}
         <div
           className="px-5 py-4 shrink-0"
-          style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}
+          style={{ borderBottom: "1px solid var(--border-default)" }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <div style={{ width: 3, height: 16, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "2px" }}>
-                  {isAudio ? "Audio de referencia" : isVideo ? "Video de referencia" : "Fragmento de contexto"}
-                </p>
-              </div>
+              <p className="td-eyebrow" style={{ marginBottom: 4 }}>
+                {isAudio ? "Audio de referencia" : isVideo ? "Video de referencia" : "Fragmento de contexto"}
+              </p>
               <p
                 title={source.file_name}
-                style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 15, color: "#ffffff", letterSpacing: "0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                style={{ fontWeight: 700, fontSize: 16, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {source.file_name}
               </p>
               {source.page_number != null && (
-                <p style={{ fontSize: 11, color: "#475569", fontFamily: "var(--font-condensed)", letterSpacing: 1, marginTop: 3 }}>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
                   Página {source.page_number}
                 </p>
               )}
             </div>
-            <button
-              onClick={onClose}
-              aria-label="Cerrar panel"
-              style={{ color: "#475569", background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0, marginTop: 2, lineHeight: 1, borderRadius: "var(--radius-sm)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}
-            >
+            <button onClick={onClose} aria-label="Cerrar panel" className="nqt-iconbtn" style={{ flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="1" y1="1" x2="13" y2="13" />
                 <line x1="13" y1="1" x2="1" y2="13" />
@@ -198,7 +189,7 @@ export function SourcePanel({
           {videoUrl && isMedia && (
             <div style={{ marginBottom: 20 }}>
               {jumpLabel && (
-                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "var(--nqt-blue, #0ea5e9)", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>
+                <p style={{ fontWeight: 600, fontSize: 10, color: "var(--accent-fg)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
                   ▶ Reproduciendo desde {jumpLabel}
                 </p>
               )}
@@ -231,26 +222,26 @@ export function SourcePanel({
           )}
 
           {loading && (
-            <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", letterSpacing: "2px", textTransform: "uppercase" }}>
+            <p style={{ fontSize: 11, color: "var(--text-muted)",}}>
               Cargando...
             </p>
           )}
           {error && !loading && (
-            <p style={{ fontSize: 12, color: "#f87171", backgroundColor: "rgba(248,113,113,0.08)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(248,113,113,0.2)", fontWeight: 300 }}>
+            <p style={{ fontSize: 12, color: "var(--danger-fg)", backgroundColor: "rgba(225, 29, 72, 0.08)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(225, 29, 72, 0.2)", fontWeight: 400 }}>
               {error}
             </p>
           )}
           {!source.chunk_id && !loading && (
-            <p style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300, lineHeight: 1.65 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400, lineHeight: 1.65 }}>
               Este fragmento no tiene un ID registrado (respuesta anterior a Phase 7).
             </p>
           )}
           {data && !loading && (
             <>
-              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: 14 }}>
+              <p style={{ fontWeight: 600, fontSize: 10, color: "var(--text-faint)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>
                 Texto extraído por el modelo
               </p>
-              <p style={{ fontSize: 13, fontWeight: 300, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", borderLeft: "2px solid var(--nqt-blue, #0ea5e9)", paddingLeft: 14 }}>
+              <p style={{ fontSize: 13, fontWeight: 400, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", borderLeft: "3px solid var(--accent-border)", paddingLeft: 14 }}>
                 {data.content}
               </p>
             </>
@@ -267,11 +258,8 @@ export function SourcePanel({
               onClick={openDocument}
               disabled={opening}
               style={{
-                fontFamily: "var(--font-condensed)",
-                fontWeight: 700,
+                fontWeight: 600,
                 fontSize: 11,
-                letterSpacing: "1.5px",
-                textTransform: "uppercase",
                 backgroundColor: "var(--btn-primary-bg)",
                 color: "var(--btn-primary-text)",
                 border: "none",
@@ -291,7 +279,7 @@ export function SourcePanel({
           )}
           <button
             onClick={onClose}
-            style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
+            style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
           >

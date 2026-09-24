@@ -22,9 +22,9 @@ const STATUS_LABEL: Record<EscalationStatus, string> = {
 };
 
 const STATUS_COLOR: Record<EscalationStatus, string> = {
-  new: "var(--nqt-blue, #0ea5e9)",
-  in_progress: "#f59e0b",
-  resolved: "#22c55e",
+  new: "var(--accent)",
+  in_progress: "var(--status-warning-accent)",
+  resolved: "var(--success)",
 };
 
 function fmt(iso: string) {
@@ -68,7 +68,7 @@ function Attachments({ items }: { items: EscalationAttachment[] }) {
           <a key={a.url} href={src ?? "#"} target="_blank" rel="noopener noreferrer" title={a.file_name}
             style={{
               display: "flex", alignItems: "center", gap: 6, fontSize: 11,
-              color: src ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)",
+              color: src ? "var(--accent-fg)" : "var(--text-muted)",
               backgroundColor: "var(--bg-muted)", border: "1px solid var(--border-default)",
               borderRadius: "var(--radius-sm)", padding: "6px 10px", maxWidth: 220,
               pointerEvents: src ? "auto" : "none",
@@ -131,7 +131,7 @@ export default function EscalationsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
@@ -150,8 +150,7 @@ export default function EscalationsPage() {
         <div className="flex gap-1 mb-5">
           {FILTERS.map((f) => (
             <button key={f.key} onClick={() => setFilter(f.key)}
-              style={{
-                fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px",
+              style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
                 textTransform: "uppercase", padding: "6px 14px", cursor: "pointer", borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--border-default)",
                 backgroundColor: filter === f.key ? "var(--btn-primary-bg)" : "transparent",
@@ -162,10 +161,10 @@ export default function EscalationsPage() {
           ))}
         </div>
 
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden" }}>
-          {fetching && <p style={{ padding: 20, fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>Cargando...</p>}
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
+          {fetching && <p style={{ padding: 20, fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>Cargando...</p>}
           {!fetching && list.length === 0 && (
-            <p style={{ padding: "40px 20px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300, textAlign: "center" }}>
+            <p style={{ padding: "40px 20px", fontSize: 12, color: "var(--text-muted)", fontWeight: 400, textAlign: "center" }}>
               No hay solicitudes en esta vista.
             </p>
           )}
@@ -175,8 +174,7 @@ export default function EscalationsPage() {
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-                    <span style={{
-                      fontFamily: "var(--font-condensed)", fontSize: 9, fontWeight: 700, letterSpacing: "1px",
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
                       textTransform: "uppercase", padding: "1px 7px", borderRadius: "var(--radius-sm)",
                       border: `1px solid ${STATUS_COLOR[e.status]}`, color: STATUS_COLOR[e.status],
                     }}>
@@ -190,18 +188,18 @@ export default function EscalationsPage() {
                     <span style={{ color: "var(--text-muted)" }}>Contacto: </span>{e.contact}
                   </p>
                   {e.reason && (
-                    <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.5, marginTop: 3, whiteSpace: "pre-wrap" }}>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 400, lineHeight: 1.5, marginTop: 3, whiteSpace: "pre-wrap" }}>
                       {e.reason}
                     </p>
                   )}
                   {e.attachments && e.attachments.length > 0 && <Attachments items={e.attachments} />}
-                  <p style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", marginTop: 4 }}>
+                  <p style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 4 }}>
                     {fmt(e.created_at)}
                     {e.session_id && (
                       <>
                         {" · "}
                         <button onClick={() => router.push(`/admin/conversations?id=${e.session_id}`)}
-                          style={{ color: "var(--nqt-blue, #0ea5e9)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.5px", textDecoration: "underline", padding: 0 }}>
+                          style={{ color: "var(--accent-fg)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.5px", textDecoration: "underline", padding: 0 }}>
                           Ver conversación
                         </button>
                       </>
@@ -211,21 +209,21 @@ export default function EscalationsPage() {
                 <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                   {e.status !== "in_progress" && (
                     <button onClick={() => setStatus(e.id, "in_progress")}
-                      style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer" }}
-                      onMouseEnter={(e2) => (e2.currentTarget.style.borderColor = "#f59e0b")}
+                      style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer" }}
+                      onMouseEnter={(e2) => (e2.currentTarget.style.borderColor = "var(--status-warning-accent)")}
                       onMouseLeave={(e2) => (e2.currentTarget.style.borderColor = "var(--border-default)")}>
                       En proceso
                     </button>
                   )}
                   {e.status !== "resolved" && (
                     <button onClick={() => setStatus(e.id, "resolved")}
-                      style={{ fontSize: 10, color: "#22c55e", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #22c55e", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer" }}>
+                      style={{ fontSize: 10, color: "var(--success)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "1px solid var(--success)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer" }}>
                       Resolver
                     </button>
                   )}
                   {e.status === "resolved" && (
                     <button onClick={() => setStatus(e.id, "new")}
-                      style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer" }}>
+                      style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer" }}>
                       Reabrir
                     </button>
                   )}
