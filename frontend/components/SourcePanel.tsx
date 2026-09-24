@@ -131,7 +131,7 @@ export function SourcePanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40"
-        style={{ backgroundColor: "var(--overlay)", backdropFilter: "blur(2px)", animation: "nqt-fadeIn 0.2s ease both" }}
+        style={{ backgroundColor: "var(--overlay)", animation: "nqt-fadeIn 0.2s ease both" }}
         onClick={onClose}
       />
 
@@ -159,7 +159,7 @@ export function SourcePanel({
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="td-eyebrow" style={{ marginBottom: 4 }}>
+              <p className="nqt-label" style={{ marginBottom: 4 }}>
                 {isAudio ? "Audio de referencia" : isVideo ? "Video de referencia" : "Fragmento de contexto"}
               </p>
               <p

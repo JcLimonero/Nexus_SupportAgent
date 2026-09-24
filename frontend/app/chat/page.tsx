@@ -453,7 +453,7 @@ export default function ChatPage() {
         {isGuest ? (
           <div
             className="flex items-center gap-2 sm:gap-3 px-4 md:px-8 py-3"
-            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-header)", backdropFilter: "blur(16px)" }}
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-header)" }}
           >
             <BrandLogo height={26} className="sm:hidden" />
             <BrandLogo height={30} className="hidden sm:inline-flex" />
@@ -544,8 +544,7 @@ export default function ChatPage() {
             <div className="flex flex-col items-center justify-center min-h-full gap-8 py-4" style={{ maxWidth: 680, margin: "0 auto", width: "100%" }}>
               {/* Heading — TotalDealer pattern: navy headline, key word in orange */}
               <div className="text-center">
-                <p className="td-eyebrow">Asistente TotalDealer</p>
-                <h1 style={{ fontWeight: 700, fontSize: 34, letterSpacing: "-0.03em", color: "var(--text-primary)", lineHeight: 1.15, marginTop: 10 }}>
+                <h1 style={{ fontWeight: 700, fontSize: 34, letterSpacing: "-0.03em", color: "var(--text-primary)", lineHeight: 1.15 }}>
                   ¿En qué puedo <span style={{ color: "var(--accent-fg)" }}>ayudarte</span>?
                 </h1>
                 <p className="mt-3" style={{ fontSize: 15, color: "var(--text-muted)", lineHeight: 1.6 }}>
@@ -561,7 +560,6 @@ export default function ChatPage() {
                       key={i}
                       onClick={() => handleQuestionClick(s.prompt)}
                       className="td-suggestion text-left"
-                      style={{ animationDelay: `${i * 75}ms` }}
                     >
                       <span className="td-suggestion__label">{s.label}</span>
                       <span className="td-suggestion__prompt">{s.prompt}</span>
@@ -582,10 +580,7 @@ export default function ChatPage() {
                 // Key by message id once the server assigns it — index keys
                 // remount every bubble on retry/slice, defeating the memo.
                 key={msg.id ?? `idx-${i}`}
-                style={{
-                  animation: "nqt-slideUp 0.28s ease both",
-                  animationDelay: `${Math.min(i, 6) * 35}ms`,
-                }}
+                style={{ animation: "nqt-fadeIn 0.18s ease both" }}
               >
                 <MessageBubble
                   message={msg}
@@ -628,7 +623,7 @@ export default function ChatPage() {
           {showEscalateOffer && (
             <div
               className="flex justify-start"
-              style={{ animation: "nqt-slideUp 0.3s ease both" }}
+              style={{ animation: "nqt-fadeIn 0.18s ease both" }}
             >
               <div
                 className="px-5 py-4"
@@ -636,7 +631,6 @@ export default function ChatPage() {
                   backgroundColor: "var(--bg-surface)",
                   border: "1px solid var(--accent-border)",
                   borderRadius: "var(--radius-lg)",
-                  boxShadow: "var(--shadow)",
                   maxWidth: 420,
                 }}
               >

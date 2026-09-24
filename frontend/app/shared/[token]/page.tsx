@@ -33,7 +33,7 @@ export default function SharedConversationPage() {
         <div className="max-w-3xl mx-auto flex items-center gap-4">
           <BrandLogo height={32} />
           <div className="min-w-0 pl-4" style={{ borderLeft: "1px solid var(--border-default)" }}>
-            <p className="td-eyebrow">Conversación compartida</p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>Conversación compartida</p>
             {data?.title && (
               <p style={{ marginTop: 2, fontSize: 16, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.title}</p>
             )}

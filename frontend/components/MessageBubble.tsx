@@ -253,7 +253,6 @@ export const MessageBubble = memo(function MessageBubble({
                   fontSize: 14.5,
                   border: "1px solid var(--bubble-ai-border)",
                   borderRadius: "6px var(--radius-lg) var(--radius-lg) var(--radius-lg)",
-                  boxShadow: "var(--shadow-sm)",
                 }
           }
         >

@@ -51,14 +51,14 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen td-hero-bg">
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
         <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen relative px-4 py-10 td-hero-bg">
+    <div className="flex items-center justify-center min-h-screen relative px-4 py-10" style={{ backgroundColor: "var(--bg-page)" }}>
       {/* Theme toggle */}
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle className="nqt-iconbtn" />
@@ -70,19 +70,17 @@ export default function LoginPage() {
           backgroundColor: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-xl)",
-          boxShadow: "var(--shadow-lg)",
-          animation: "nqt-slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+          boxShadow: "var(--shadow)",
         }}
       >
         {/* Brand header */}
         <div className="px-8 pt-8 pb-2">
           <BrandLogo height={40} />
-          <p className="td-eyebrow" style={{ marginTop: 24 }}>Asistente de soporte</p>
-          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15, color: "var(--text-primary)", marginTop: 6 }}>
-            Bienvenido a tu <span style={{ color: "var(--accent-fg)" }}>asistente</span>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, color: "var(--text-primary)", marginTop: 28 }}>
+            Iniciar sesión
           </h1>
-          <p style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.55 }}>
-            Inicia sesión para resolver tus dudas sobre TotalDealer.
+          <p style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.55 }}>
+            Asistente de soporte para usuarios de TotalDealer.
           </p>
         </div>
 

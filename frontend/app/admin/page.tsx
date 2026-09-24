@@ -233,7 +233,7 @@ export default function AdminPage() {
                     : "sin valoraciones aún"}
                 />,
               ].map((card, i) => (
-                <div key={i} style={{ animation: "nqt-slideUp 0.3s ease both", animationDelay: `${i * 50}ms` }}>
+                <div key={i}>
                   {card}
                 </div>
               ))}
@@ -361,7 +361,7 @@ export default function AdminPage() {
       {pendingDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ backgroundColor: "var(--overlay)", backdropFilter: "blur(2px)" }}
+          style={{ backgroundColor: "var(--overlay)" }}
           onClick={() => setPendingDelete(null)}
         >
           <div

@@ -170,7 +170,7 @@ export function AdminHeader({
   return (
     <header
       className="sticky top-0 z-30"
-      style={{ backgroundColor: "var(--bg-header)", backdropFilter: "blur(16px)", borderBottom: "1px solid var(--border-default)" }}
+      style={{ backgroundColor: "var(--bg-header)", borderBottom: "1px solid var(--border-default)" }}
     >
       <div className={`${maxWidth} mx-auto px-4 md:px-8 pt-4`}>
         <div className="flex items-start justify-between gap-4">
@@ -179,7 +179,7 @@ export function AdminHeader({
               <BrandLogo height={34} />
             </Link>
             <div className="min-w-0 sm:pl-4" style={{ borderLeft: "1px solid var(--border-default)" }}>
-              <p className="td-eyebrow">Administración</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>Administración</p>
               <h1 style={{ fontWeight: 700, fontSize: 22, letterSpacing: "-0.02em", color: "var(--text-primary)", lineHeight: 1.2, marginTop: 2 }}>
                 {title}
               </h1>

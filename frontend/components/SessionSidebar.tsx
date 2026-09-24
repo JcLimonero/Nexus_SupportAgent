@@ -115,9 +115,6 @@ export function SessionSidebar({
       {/* Brand header */}
       <div className="px-5 pt-5 pb-4 relative">
         <BrandLogo height={34} />
-        <p className="td-eyebrow" style={{ marginTop: 12 }}>
-          Asistente de soporte
-        </p>
         {/* Collapse (desktop only — mobile closes via the overlay backdrop) */}
         <IconButton
           label="Ocultar barra lateral"
@@ -136,7 +133,6 @@ export function SessionSidebar({
         <button
           onClick={onNewChat}
           className="nqt-btn nqt-btn--md nqt-btn--primary w-full"
-          style={{ animation: sessions.length === 0 ? "nqt-glowPulse 2.2s ease-in-out infinite" : undefined }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
