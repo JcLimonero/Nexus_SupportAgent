@@ -269,7 +269,7 @@ export default function AdminPage() {
             onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
             style={{
               border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-strong)"}`,
-              backgroundColor: dragOver ? "rgba(240, 74, 26, 0.05)" : "var(--bg-surface)",
+              backgroundColor: dragOver ? "var(--accent-tint)" : "var(--bg-surface)",
               borderRadius: "var(--radius)",
               padding: "40px 24px",
               textAlign: "center",
@@ -427,8 +427,8 @@ export default function AdminPage() {
                   cursor: deleting ? "not-allowed" : "pointer",
                   opacity: deleting ? 0.6 : 1,
                 }}
-                onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.backgroundColor = "var(--danger)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--danger)")}
+                onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.filter = "brightness(0.9)"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
               >
                 {deleting ? "Eliminando..." : "Eliminar"}
               </button>

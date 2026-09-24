@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<EscalationStatus, string> = {
 };
 
 const STATUS_COLOR: Record<EscalationStatus, string> = {
-  new: "var(--accent)",
+  new: "var(--accent-fg)",
   in_progress: "var(--status-warning-accent)",
   resolved: "var(--success)",
 };

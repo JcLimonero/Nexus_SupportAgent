@@ -34,6 +34,7 @@ html, body {
   --danger:     #BE123C;
   --danger-fg:  #BE123C;
   --danger-bg:  rgba(190, 18, 60, 0.08);
+  --danger-border: rgba(190, 18, 60, 0.22);
   --success:    #15803D;
   --success-bg: rgba(21, 128, 61, 0.08);
 
@@ -183,6 +184,7 @@ html.dark {
 
   --danger-fg:  #FB7185;
   --danger-bg:  rgba(251, 113, 133, 0.10);
+  --danger-border: rgba(251, 113, 133, 0.30);
   --success:    #4ADE80;
   --success-bg: rgba(74, 222, 128, 0.10);
 
@@ -419,7 +421,7 @@ html.dark {
   .nqt-input::placeholder { color: var(--text-faint); }
 
   /* Welcome-screen suggestion card: TotalDealer feature-card look — rounded,
-     soft shadow, lifts and picks up an orange edge on hover. */
+     soft shadow; hover darkens the border and tints the label orange. */
   .td-suggestion {
     display: block;
     padding: 16px 18px;

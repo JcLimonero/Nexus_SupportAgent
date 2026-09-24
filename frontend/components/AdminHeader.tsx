@@ -178,7 +178,7 @@ export function AdminHeader({
             <Link href="/admin" aria-label="Inicio de administración" className="hidden sm:block shrink-0" style={{ paddingTop: 2 }}>
               <BrandLogo height={34} />
             </Link>
-            <div className="min-w-0 sm:pl-4" style={{ borderLeft: "1px solid var(--border-default)" }}>
+            <div className="min-w-0 sm:pl-4 sm:border-l" style={{ borderColor: "var(--border-default)" }}>
               <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>Administración</p>
               <h1 style={{ fontWeight: 700, fontSize: 22, letterSpacing: "-0.02em", color: "var(--text-primary)", lineHeight: 1.2, marginTop: 2 }}>
                 {title}

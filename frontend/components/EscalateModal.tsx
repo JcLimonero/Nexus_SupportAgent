@@ -47,7 +47,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 4,
 };
 
-const ERROR_COLOR = "var(--danger)";
+const ERROR_COLOR = "var(--danger-fg)";
 
 const errorHintStyle: React.CSSProperties = {
   display: "block", fontSize: 11, fontWeight: 400, color: ERROR_COLOR, marginTop: 4,

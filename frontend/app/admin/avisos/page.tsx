@@ -585,7 +585,7 @@ export default function AvisosPage() {
                 style={{ borderTop: i === 0 ? "none" : "1px solid var(--border-default)" }}
               >
                 <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 8 }}>
-                  <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--accent)")}>{SOURCE_LABEL[b.source] ?? b.source}</span>
+                  <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--accent-fg)")}>{SOURCE_LABEL[b.source] ?? b.source}</span>
                   {b.blocks_chat && <span style={badge("var(--status-critical-accent)")}>Bloquea el chat</span>}
                   <span style={hint}>{rowTimes(b, tab, now)}</span>
                 </div>
@@ -622,7 +622,7 @@ export default function AvisosPage() {
                       {tab === "active" && (
                         <button
                           type="button"
-                          style={actionButton("var(--accent)")}
+                          style={actionButton("var(--accent-fg)")}
                           onClick={() => {
                             setComposing(composing === b.id ? null : b.id);
                             setEditing(null);
@@ -653,7 +653,7 @@ export default function AvisosPage() {
                           Publicar ahora
                         </button>
                       )}
-                      <button type="button" style={actionButton("var(--danger)")} onClick={() => setConfirming(b.id)}>
+                      <button type="button" style={actionButton("var(--danger-fg)")} onClick={() => setConfirming(b.id)}>
                         {tab === "active" ? "Finalizar ahora" : "Eliminar"}
                       </button>
                     </>

@@ -129,7 +129,7 @@ export default function LoginPage() {
               <p
                 key={error}
                 className="text-xs"
-                style={{ color: "var(--danger-fg)", backgroundColor: "var(--danger-bg)", padding: "8px 12px", borderRadius: "var(--radius)", border: "1px solid rgba(225, 29, 72, 0.2)", animation: "nqt-shake 0.45s ease" }}
+                style={{ color: "var(--danger-fg)", backgroundColor: "var(--danger-bg)", padding: "8px 12px", borderRadius: "var(--radius)", border: "1px solid var(--danger-border)", animation: "nqt-shake 0.45s ease" }}
               >
                 {error}
               </p>

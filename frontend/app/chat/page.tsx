@@ -441,15 +441,21 @@ export default function ChatPage() {
             <span className="hidden md:inline" style={{ fontWeight: 600, fontSize: 14, color: "var(--text-secondary)", paddingLeft: 12, borderLeft: "1px solid var(--border-default)" }}>
               Asistente de soporte
             </span>
+            {/* The pill is the one item allowed to shrink: on very narrow phones it
+                truncates instead of pushing the row wider than the viewport. */}
             <span
+              className="min-w-0"
               style={{
                 fontWeight: 600, fontSize: 12, color: "var(--accent-fg)", backgroundColor: "var(--accent-tint)",
                 borderRadius: "var(--radius-pill)", padding: "3px 10px", whiteSpace: "nowrap",
+                overflow: "hidden", textOverflow: "ellipsis",
               }}
+              title="Modo invitado"
             >
-              Modo invitado
+              <span className="sm:hidden">Invitado</span>
+              <span className="hidden sm:inline">Modo invitado</span>
             </span>
-            <div className="flex items-center gap-2" style={{ marginLeft: "auto" }}>
+            <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: "auto" }}>
               <button onClick={handleLogout} className="nqt-btn nqt-btn--sm nqt-btn--ghost">
                 Iniciar sesión
               </button>

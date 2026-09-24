@@ -253,9 +253,9 @@ export default function UsersPage() {
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                         Conversaciones
                       </button>
-                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--accent)" : "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                      <button onClick={() => (pwUserId === u.id ? cancelPw() : startPw(u))} style={{ fontSize: 10, color: pwUserId === u.id ? "var(--accent-fg)" : "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = pwUserId === u.id ? "var(--accent)" : "var(--text-muted)")}>
+                        onMouseLeave={(e) => (e.currentTarget.style.color = pwUserId === u.id ? "var(--accent-fg)" : "var(--text-muted)")}>
                         Contraseña
                       </button>
                       <button onClick={() => toggleActive(u)} style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}

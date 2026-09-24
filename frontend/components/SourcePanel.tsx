@@ -227,7 +227,7 @@ export function SourcePanel({
             </p>
           )}
           {error && !loading && (
-            <p style={{ fontSize: 12, color: "var(--danger-fg)", backgroundColor: "rgba(225, 29, 72, 0.08)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(225, 29, 72, 0.2)", fontWeight: 400 }}>
+            <p style={{ fontSize: 12, color: "var(--danger-fg)", backgroundColor: "var(--danger-bg)", padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--danger-border)", fontWeight: 400 }}>
               {error}
             </p>
           )}

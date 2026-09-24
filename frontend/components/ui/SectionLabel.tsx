@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 
-/** Condensed uppercase section label (the recurring `.nqt-label`-style heading). */
+/** Small uppercase section label (the recurring `.nqt-label`-style heading). */
 export function SectionLabel({
   children,
   count,
