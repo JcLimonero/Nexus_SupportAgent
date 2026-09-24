@@ -26,6 +26,6 @@ test.describe("login", () => {
     await expect(page.getByText("Modo invitado")).toBeVisible();
     await expect(page.getByPlaceholder(CHAT_INPUT)).toBeVisible();
     // Guests have no history sidebar.
-    await expect(page.getByText("+ NUEVA CONVERSACIÓN")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Nueva conversación" })).toHaveCount(0);
   });
 });

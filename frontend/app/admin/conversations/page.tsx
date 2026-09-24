@@ -121,17 +121,16 @@ function ConversationsInner() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
 
   const badge = (anon: boolean) => (
-    <span style={{
-      fontFamily: "var(--font-condensed)", fontSize: 9, fontWeight: 600, letterSpacing: "1px",
+    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em",
       textTransform: "uppercase", padding: "1px 6px", borderRadius: "var(--radius-sm)",
-      border: `1px solid ${anon ? "var(--nqt-blue, #0ea5e9)" : "var(--border-default)"}`,
-      color: anon ? "var(--nqt-blue, #0ea5e9)" : "var(--text-muted)",
+      border: `1px solid ${anon ? "var(--accent)" : "var(--border-default)"}`,
+      color: anon ? "var(--accent-fg)" : "var(--text-muted)",
     }}>
       {anon ? "Invitado" : "Registrado"}
     </span>
@@ -157,8 +156,7 @@ function ConversationsInner() {
             <div className="flex gap-1">
               {FILTERS.map((f) => (
                 <button key={f.key} onClick={() => setFilter(f.key)}
-                  style={{
-                    fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px",
+                  style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
                     textTransform: "uppercase", padding: "6px 14px", cursor: "pointer", borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border-default)",
                     backgroundColor: filter === f.key ? "var(--btn-primary-bg)" : "transparent",
@@ -173,7 +171,7 @@ function ConversationsInner() {
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") load(); }}
               placeholder="Buscar por nombre o título..."
-              style={{ flex: 1, minWidth: 200, backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: "var(--radius)", color: "var(--text-primary)", padding: "8px 12px", fontSize: 13, fontWeight: 300, outline: "none" }}
+              style={{ flex: 1, minWidth: 200, backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: "var(--radius)", color: "var(--text-primary)", padding: "8px 12px", fontSize: 13, fontWeight: 400, outline: "none" }}
               onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
               onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
             />
@@ -182,22 +180,22 @@ function ConversationsInner() {
 
         <div className="grid gap-5 grid-cols-1 md:grid-cols-[minmax(280px,360px)_1fr]">
           {/* List */}
-          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden", alignSelf: "start" }}>
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden", alignSelf: "start" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
-              <span className="gv-label">Conversaciones</span>
-              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({list.length})</span>
+              <span className="nqt-label">Conversaciones</span>
+              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)",}}>({list.length})</span>
             </div>
             <div style={{ maxHeight: "65vh", overflowY: "auto" }}>
-              {fetching && <p style={{ padding: "16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>Cargando...</p>}
+              {fetching && <p style={{ padding: "16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>Cargando...</p>}
               {!fetching && list.length === 0 && (
-                <p style={{ padding: "24px 16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300, textAlign: "center" }}>No hay conversaciones.</p>
+                <p style={{ padding: "24px 16px", fontSize: 12, color: "var(--text-muted)", fontWeight: 400, textAlign: "center" }}>No hay conversaciones.</p>
               )}
               {list.slice(0, visible).map((c) => (
                 <button key={c.id} onClick={() => openDetail(c.id)}
                   className="w-full text-left px-4 py-3 transition-colors"
                   style={{
                     background: selectedId === c.id ? "var(--bg-muted)" : "none",
-                    borderLeft: selectedId === c.id ? "3px solid var(--nqt-blue, #0ea5e9)" : "3px solid transparent",
+                    borderLeft: selectedId === c.id ? "3px solid var(--accent)" : "3px solid transparent",
                     borderBottom: "1px solid var(--border-default)", cursor: "pointer", display: "block",
                   }}>
                   <div className="flex items-center gap-2" style={{ marginBottom: 3 }}>
@@ -206,10 +204,10 @@ function ConversationsInner() {
                       {c.user_label ?? c.user_id}
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {c.title ?? "(sin título)"}
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>
                     {c.message_count} mensajes · {fmt(c.last_message_at)}
                   </div>
                 </button>
@@ -218,7 +216,7 @@ function ConversationsInner() {
                 <button
                   onClick={() => setVisible((v) => v + 25)}
                   className="w-full text-center px-4 py-3"
-                  style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", background: "none", border: "none", borderTop: "1px solid var(--border-default)", cursor: "pointer" }}
+                  style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--accent-fg)", background: "none", border: "none", borderTop: "1px solid var(--border-default)", cursor: "pointer" }}
                 >
                   Cargar más ({list.length - visible})
                 </button>
@@ -227,14 +225,14 @@ function ConversationsInner() {
           </div>
 
           {/* Detail */}
-          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden", alignSelf: "start", minHeight: 200 }}>
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden", alignSelf: "start", minHeight: 200 }}>
             {!selectedId && (
-              <p style={{ padding: "40px 24px", fontSize: 13, color: "var(--text-muted)", fontWeight: 300, textAlign: "center" }}>
+              <p style={{ padding: "40px 24px", fontSize: 13, color: "var(--text-muted)", fontWeight: 400, textAlign: "center" }}>
                 Selecciona una conversación para ver el detalle.
               </p>
             )}
             {selectedId && detailLoading && (
-              <p style={{ padding: "24px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>Cargando conversación...</p>
+              <p style={{ padding: "24px", fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>Cargando conversación...</p>
             )}
             {detail && !detailLoading && (
               <>
@@ -244,15 +242,15 @@ function ConversationsInner() {
                       {badge(detail.is_anonymous)}
                       <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>{detail.user_label ?? detail.user_id}</span>
                     </div>
-                    <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300 }}>{detail.title ?? "(sin título)"}</p>
-                    <p style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: "0.5px", marginTop: 2 }}>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 400 }}>{detail.title ?? "(sin título)"}</p>
+                    <p style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>
                       Iniciada {fmt(detail.created_at)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                     <button onClick={() => handleShare(detail.id)} title="Copiar enlace a esta conversación"
-                      style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; }}
+                      style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent-fg)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
@@ -261,7 +259,7 @@ function ConversationsInner() {
                       Compartir
                     </button>
                     <button onClick={() => setPendingDelete(detail.id)} disabled={deleting}
-                      style={{ fontSize: 10, color: "#c0392b", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "1px solid #c0392b", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.5 : 1 }}>
+                      style={{ fontSize: 10, color: "var(--danger-fg)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "1px solid var(--danger)", borderRadius: "var(--radius-sm)", padding: "5px 10px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.5 : 1 }}>
                       Eliminar
                     </button>
                   </div>
@@ -285,25 +283,25 @@ function ConversationsInner() {
                           maxWidth: "82%", padding: "10px 14px",
                           backgroundColor: isUser ? "var(--bubble-user-bg)" : "var(--bubble-ai-bg)",
                           border: isUser ? "none" : "1px solid var(--bubble-ai-border)",
-                          borderLeft: isUser ? undefined : "3px solid var(--nqt-blue, #0ea5e9)",
+                          borderLeft: isUser ? undefined : "3px solid var(--accent)",
                           borderRadius: "var(--radius)",
                         }}>
-                          <p style={{ fontSize: 9, fontFamily: "var(--font-condensed)", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: labelColor, marginBottom: 4 }}>
+                          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: labelColor, marginBottom: 4 }}>
                             {isUser ? "Usuario" : "Asistente"} · {fmt(m.created_at)}
                           </p>
                           {isUser ? (
-                            <p style={{ fontSize: 13, color: textColor, fontWeight: 300, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                            <p style={{ fontSize: 13, color: textColor, fontWeight: 400, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
                               {m.content}
                             </p>
                           ) : (
-                            <div style={{ fontSize: 13, color: textColor, fontWeight: 300, lineHeight: 1.65 }}>
+                            <div style={{ fontSize: 13, color: textColor, fontWeight: 400, lineHeight: 1.65 }}>
                               <MarkdownContent>{m.content}</MarkdownContent>
                             </div>
                           )}
                           {srcs.length > 0 && (
                             <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
                               {srcs.map((f, i) => (
-                                <span key={i} title={f} style={{ fontSize: 9, fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "0.5px", color: chipColor, border: `1px solid ${chipBorder}`, borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span key={i} title={f} style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", color: chipColor, border: `1px solid ${chipBorder}`, borderRadius: "var(--radius-sm)", padding: "1px 6px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {f}
                                 </span>
                               ))}
@@ -314,7 +312,7 @@ function ConversationsInner() {
                     );
                   })}
                   {detail.messages.length === 0 && (
-                    <p style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300, textAlign: "center", padding: "20px 0" }}>Sin mensajes.</p>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400, textAlign: "center", padding: "20px 0" }}>Sin mensajes.</p>
                   )}
                 </div>
               </>
@@ -341,7 +339,7 @@ export default function ConversationsPage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     }>
       <ConversationsInner />

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/AuthProvider";
 import { getAdminBanners, getEscalations } from "@/lib/api";
 
@@ -117,8 +118,8 @@ export function AdminIcon({ name, size = 16 }: { name: AdminIconName; size?: num
 
 /**
  * Shared header for every admin page: title, theme toggle, a way back to the
- * chat, and the section tab bar. The tabs are links (they navigate) styled as
- * outlined buttons, with the current page highlighted and live counters.
+ * chat, and the section tab bar. The tabs are links styled like the
+ * totaldealer.com.mx top nav, with the current page underlined and live counters.
  *
  * Pass a number in `counts` when the page already knows it (e.g. after triaging
  * an escalation) so the badge updates immediately, and `null` for a count the
@@ -167,36 +168,39 @@ export function AdminHeader({
   };
 
   return (
-    <header style={{ background: "linear-gradient(135deg, #050f1a 0%, #0a2540 100%)", borderBottom: "1px solid #1e3a5f" }}>
-      <div className={`${maxWidth} mx-auto px-4 md:px-8 pt-5`}>
+    <header
+      className="sticky top-0 z-30"
+      style={{ backgroundColor: "var(--bg-header)", borderBottom: "1px solid var(--border-default)" }}
+    >
+      <div className={`${maxWidth} mx-auto px-4 md:px-8 pt-4`}>
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <div style={{ width: 3, height: 18, backgroundColor: "var(--nqt-blue, #0ea5e9)", borderRadius: 2 }} />
-              <h1 style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 22, color: "#ffffff", letterSpacing: "0.5px" }}>
+          <div className="flex items-start gap-4 min-w-0">
+            <Link href="/admin" aria-label="Inicio de administración" className="hidden sm:block shrink-0" style={{ paddingTop: 2 }}>
+              <BrandLogo height={34} />
+            </Link>
+            <div className="min-w-0 sm:pl-4 sm:border-l" style={{ borderColor: "var(--border-default)" }}>
+              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>Administración</p>
+              <h1 style={{ fontWeight: 700, fontSize: 22, letterSpacing: "-0.02em", color: "var(--text-primary)", lineHeight: 1.2, marginTop: 2 }}>
                 {title}
               </h1>
+              {subtitle && (
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{subtitle}</p>
+              )}
+              {children}
             </div>
-            {subtitle && (
-              <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 2, fontWeight: 300, paddingLeft: 11 }}>{subtitle}</p>
-            )}
-            {children}
           </div>
-          <div className="flex items-center gap-3 mt-1 shrink-0">
-            <ThemeToggle
-              className="p-1 transition-colors"
-              style={{ color: "#94a3b8", background: "none", border: "none", cursor: "pointer" } as React.CSSProperties}
-            />
+          <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle className="nqt-iconbtn" />
             <Link href="/chat" className="admin-back-link">
               ← Chat
             </Link>
           </div>
         </div>
 
-        {/* Whole buttons wrap onto a second row on narrow screens — no side
-            scroller, and labels never break mid-word. */}
-        <nav aria-label="Secciones de administración" style={{ marginTop: 16, paddingBottom: 14 }}>
-          <ul className="flex flex-wrap gap-2">
+        {/* Links wrap onto a second row on narrow screens — no side scroller,
+            and labels never break mid-word. */}
+        <nav aria-label="Secciones de administración" style={{ marginTop: 10 }}>
+          <ul className="flex flex-wrap gap-x-6 gap-y-0">
             {SECTIONS.map((s) => {
               const active = isActiveSection(pathname, s.href);
               const n = s.count ? merged[s.count] : 0;

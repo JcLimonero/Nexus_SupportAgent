@@ -52,22 +52,20 @@ const EMPTY_TEXT: Record<Tab, string> = {
 
 // ── Styles (same inline-token approach as the other admin pages) ─────────────
 
-const sectionLabel: React.CSSProperties = {
-  fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px",
+const sectionLabel: React.CSSProperties = { fontSize: 10, fontWeight: 600, letterSpacing: "0.06em",
   textTransform: "uppercase", color: "var(--text-muted)",
 };
 const card: React.CSSProperties = {
-  backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)",
+  backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)",
 };
 const inputStyle: React.CSSProperties = {
   width: "100%", backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)",
-  borderRadius: "var(--radius-sm)", color: "var(--text-primary)", fontSize: 13, fontWeight: 300, padding: "8px 10px",
+  borderRadius: "var(--radius-sm)", color: "var(--text-primary)", fontSize: 13, fontWeight: 400, padding: "8px 10px",
 };
-const hint: React.CSSProperties = { fontSize: 11, color: "var(--text-faint)", fontWeight: 300 };
+const hint: React.CSSProperties = { fontSize: 11, color: "var(--text-faint)", fontWeight: 400 };
 
 function chip(active: boolean): React.CSSProperties {
-  return {
-    fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1.5px",
+  return { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
     textTransform: "uppercase", padding: "6px 12px", cursor: "pointer", borderRadius: "var(--radius-sm)",
     border: "1px solid var(--border-default)",
     backgroundColor: active ? "var(--btn-primary-bg)" : "transparent",
@@ -76,8 +74,7 @@ function chip(active: boolean): React.CSSProperties {
 }
 
 function actionButton(color = "var(--text-muted)", filled = false, disabled = false): React.CSSProperties {
-  return {
-    fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 700, letterSpacing: "1px",
+  return { fontSize: 10, fontWeight: 700, letterSpacing: "1px",
     textTransform: "uppercase", padding: "5px 10px", borderRadius: "var(--radius-sm)",
     border: `1px solid ${filled ? color : "var(--border-default)"}`,
     backgroundColor: filled ? color : "transparent", color: filled ? "#fff" : color,
@@ -86,8 +83,7 @@ function actionButton(color = "var(--text-muted)", filled = false, disabled = fa
 }
 
 function badge(color: string): React.CSSProperties {
-  return {
-    fontFamily: "var(--font-condensed)", fontSize: 9, fontWeight: 700, letterSpacing: "1px",
+  return { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
     textTransform: "uppercase", padding: "1px 7px", borderRadius: "var(--radius-sm)",
     border: `1px solid ${color}`, color,
   };
@@ -309,7 +305,7 @@ function BannerForm({
       </div>
 
       {error && (
-        <p role="alert" style={{ fontSize: 12, color: "#ef4444" }}>
+        <p role="alert" style={{ fontSize: 12, color: "var(--danger-fg)" }}>
           {error}
         </p>
       )}
@@ -318,9 +314,7 @@ function BannerForm({
         <button
           type="submit"
           disabled={busy}
-          style={{
-            fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "1.5px",
-            textTransform: "uppercase", backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)",
+          style={{ fontWeight: 600, fontSize: 11, backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)",
             border: "none", borderRadius: "var(--radius-sm)", padding: "8px 18px",
             cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
           }}
@@ -368,7 +362,7 @@ function UpdateComposer({
         style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
       />
       <div className="flex gap-2">
-        <button type="submit" disabled={busy || tooShort} style={actionButton("var(--nqt-blue, #0ea5e9)", true, busy || tooShort)}>
+        <button type="submit" disabled={busy || tooShort} style={actionButton("var(--accent)", true, busy || tooShort)}>
           Publicar actualización
         </button>
         <button type="button" onClick={onCancel} style={actionButton()}>
@@ -384,7 +378,7 @@ function UpdateComposer({
 function checkState(c: StatusCheck): { label: string; color: string } {
   if (c.down) return { label: "Caído", color: "var(--status-critical-accent)" };
   if (c.ok === false) return { label: "Con fallas", color: "var(--status-warning-accent)" };
-  if (c.ok) return { label: "Operando", color: "#22c55e" };
+  if (c.ok) return { label: "Operando", color: "var(--success)" };
   return { label: "Sin datos", color: "var(--text-faint)" };
 }
 
@@ -393,7 +387,7 @@ function ChecksCard({ checks, now, error }: { checks: StatusChecks | null; now: 
     <section style={card} className="p-5 h-full">
       <p style={sectionLabel}>Estado del sistema</p>
       {!checks ? (
-        <p style={{ fontSize: 12, color: error ? "#ef4444" : "var(--text-muted)", marginTop: 8 }}>
+        <p style={{ fontSize: 12, color: error ? "var(--danger-fg)" : "var(--text-muted)", marginTop: 8 }}>
           {error ? "No se pudo cargar el estado del sistema. Reintentando..." : "Cargando..."}
         </p>
       ) : (
@@ -415,7 +409,7 @@ function ChecksCard({ checks, now, error }: { checks: StatusChecks | null; now: 
                     <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{c.label}</span>
                     <span style={badge(s.color)}>{s.label}</span>
                   </div>
-                  <p style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 300, marginTop: 4, lineHeight: 1.4 }}>{c.detail}</p>
+                  <p style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 400, marginTop: 4, lineHeight: 1.4 }}>{c.detail}</p>
                   <p style={{ ...hint, fontSize: 10, marginTop: 2 }}>
                     {c.checked_at ? `Revisado: ${formatWhen(c.checked_at, now)}` : "Aún sin revisar"}
                     {!c.user_facing && " · solo informativo"}
@@ -531,7 +525,7 @@ export default function AvisosPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
@@ -576,9 +570,9 @@ export default function AvisosPage() {
           </div>
 
           <div style={{ ...card, overflow: "hidden" }}>
-            {!lists && <p style={{ padding: 20, fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>Cargando...</p>}
+            {!lists && <p style={{ padding: 20, fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>Cargando...</p>}
             {lists && rows.length === 0 && (
-              <p style={{ padding: "40px 20px", fontSize: 12, color: "var(--text-muted)", fontWeight: 300, textAlign: "center" }}>
+              <p style={{ padding: "40px 20px", fontSize: 12, color: "var(--text-muted)", fontWeight: 400, textAlign: "center" }}>
                 {EMPTY_TEXT[tab]}
               </p>
             )}
@@ -591,7 +585,7 @@ export default function AvisosPage() {
                 style={{ borderTop: i === 0 ? "none" : "1px solid var(--border-default)" }}
               >
                 <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 8 }}>
-                  <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--nqt-blue, #0ea5e9)")}>{SOURCE_LABEL[b.source] ?? b.source}</span>
+                  <span style={badge(b.source === "manual" ? "var(--text-muted)" : "var(--accent-fg)")}>{SOURCE_LABEL[b.source] ?? b.source}</span>
                   {b.blocks_chat && <span style={badge("var(--status-critical-accent)")}>Bloquea el chat</span>}
                   <span style={hint}>{rowTimes(b, tab, now)}</span>
                 </div>
@@ -609,7 +603,7 @@ export default function AvisosPage() {
                       <button
                         type="button"
                         disabled={busy}
-                        style={actionButton("#ef4444", true, busy)}
+                        style={actionButton("var(--danger)", true, busy)}
                         onClick={async () => {
                           const ok = tab === "active"
                             ? await run(() => updateBanner(b.id, { end_now: true }), "Aviso finalizado.")
@@ -628,7 +622,7 @@ export default function AvisosPage() {
                       {tab === "active" && (
                         <button
                           type="button"
-                          style={actionButton("var(--nqt-blue, #0ea5e9)")}
+                          style={actionButton("var(--accent-fg)")}
                           onClick={() => {
                             setComposing(composing === b.id ? null : b.id);
                             setEditing(null);
@@ -653,13 +647,13 @@ export default function AvisosPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          style={actionButton("#22c55e", false, busy)}
+                          style={actionButton("var(--success)", false, busy)}
                           onClick={() => run(() => updateBanner(b.id, { starts_at: new Date().toISOString() }), "Aviso publicado.")}
                         >
                           Publicar ahora
                         </button>
                       )}
-                      <button type="button" style={actionButton("#ef4444")} onClick={() => setConfirming(b.id)}>
+                      <button type="button" style={actionButton("var(--danger-fg)")} onClick={() => setConfirming(b.id)}>
                         {tab === "active" ? "Finalizar ahora" : "Eliminar"}
                       </button>
                     </>

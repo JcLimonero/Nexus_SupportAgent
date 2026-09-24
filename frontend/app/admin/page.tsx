@@ -7,6 +7,7 @@ import { uploadFile, getDocuments, deleteDocument } from "@/lib/api";
 import { AdminHeader, AdminIcon, useAdminCounts, type AdminIconName } from "@/components/AdminHeader";
 import { useToast } from "@/components/Toast";
 import { getBearerToken } from "@/lib/auth";
+import { Badge } from "@/components/ui";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -37,19 +38,18 @@ function StatCard({ label, value, sub }: { label: string; value: number | string
     <div style={{
       backgroundColor: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
-      borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
-      borderRadius: "var(--radius)",
+      borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)",
       padding: "16px 20px",
     }}>
-      <p style={{ fontFamily: "var(--font-condensed)", fontSize: 9, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
-      <p style={{ fontFamily: "var(--font-condensed)", fontSize: 28, fontWeight: 700, color: "var(--nqt-blue, #0ea5e9)", lineHeight: 1 }}>{value}</p>
-      {sub && <p style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4, fontWeight: 300 }}>{sub}</p>}
+      <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
+      <p style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)", lineHeight: 1 }}>{value}</p>
+      {sub && <p style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4, fontWeight: 400 }}>{sub}</p>}
     </div>
   );
 }
 
 // Card accent follows what's waiting: red for untriaged requests, amber for live
-// notices, brand blue otherwise — the same --status-* tokens the banner strip
+// notices, neutral navy otherwise — the same --status-* tokens the banner strip
 // uses, so a severity renders one color everywhere.
 const QUICK_TONE = {
   neutral:  { accent: "var(--status-ok-accent)", text: "var(--text-muted)" },
@@ -71,13 +71,13 @@ function QuickLink({ href, icon, title, value, detail, tone = "neutral" }: {
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 min-w-0" style={{ color: t.accent }}>
           <AdminIcon name={icon} />
-          <span style={{ fontFamily: "var(--font-condensed)", fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>
             {title}
           </span>
         </span>
         <span aria-hidden="true" style={{ color: "var(--text-faint)" }}>→</span>
       </div>
-      <p style={{ fontFamily: "var(--font-condensed)", fontSize: 26, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1, marginTop: 10 }}>{value}</p>
+      <p style={{ fontSize: 26, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1, marginTop: 10 }}>{value}</p>
       <p style={{ fontSize: 11, color: t.text, marginTop: 4 }}>{detail}</p>
     </Link>
   );
@@ -166,7 +166,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
@@ -184,7 +184,7 @@ export default function AdminPage() {
 
         {/* Quick access — each section with what's waiting in it */}
         <div>
-          <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
             Accesos rápidos
           </p>
           <div data-testid="admin-quick-links" className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -215,7 +215,7 @@ export default function AdminPage() {
 
         {/* Stats grid */}
         <div>
-          <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
             Resumen del sistema
           </p>
           {stats ? (
@@ -233,7 +233,7 @@ export default function AdminPage() {
                     : "sin valoraciones aún"}
                 />,
               ].map((card, i) => (
-                <div key={i} style={{ animation: "nqt-slideUp 0.3s ease both", animationDelay: `${i * 50}ms` }}>
+                <div key={i}>
                   {card}
                 </div>
               ))}
@@ -246,7 +246,6 @@ export default function AdminPage() {
                   key={i}
                   style={{
                     border: "1px solid var(--border-default)",
-                    borderLeft: "3px solid var(--border-default)",
                     borderRadius: "var(--radius)",
                     padding: "16px 20px",
                   }}
@@ -261,7 +260,7 @@ export default function AdminPage() {
 
         {/* Upload zone */}
         <div>
-          <p style={{ fontFamily: "var(--font-condensed)", fontSize: 10, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
             Subir documentos
           </p>
           <div
@@ -269,8 +268,8 @@ export default function AdminPage() {
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
             style={{
-              border: `2px dashed ${dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--border-strong)"}`,
-              backgroundColor: dragOver ? "rgba(14,165,233,0.05)" : "var(--bg-surface)",
+              border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-strong)"}`,
+              backgroundColor: dragOver ? "var(--accent-tint)" : "var(--bg-surface)",
               borderRadius: "var(--radius)",
               padding: "40px 24px",
               textAlign: "center",
@@ -279,17 +278,17 @@ export default function AdminPage() {
           >
             <input id="file-input" type="file" accept=".pdf,.mp4,.mp3,.m4a,.wav,.ogg,.docx,.pptx,.txt,.md,.csv" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <label htmlFor="file-input" className="cursor-pointer block">
-              <div style={{ fontSize: 28, marginBottom: 12, color: dragOver ? "var(--nqt-blue, #0ea5e9)" : "var(--text-faint)" }}>
+              <div style={{ fontSize: 28, marginBottom: 12, color: dragOver ? "var(--accent-fg)" : "var(--text-faint)" }}>
                 {uploading ? "⏳" : "↑"}
               </div>
-              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-primary)" }}>
+              <p style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>
                 {uploading
                   ? uploadProgress
                     ? `Subiendo ${uploadProgress.current} de ${uploadProgress.total}...`
                     : "Subiendo y lanzando indexación..."
                   : "Arrastra archivos · o haz clic para seleccionar"}
               </p>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6,}}>
                 PDF · MP4 · MP3 · M4A · WAV · OGG · DOCX · PPTX · TXT · MD · CSV · máx. 100 MB
               </p>
             </label>
@@ -297,16 +296,16 @@ export default function AdminPage() {
         </div>
 
         {/* Documents list */}
-        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)" }}>
             <div>
-              <span className="gv-label">Documentos indexados</span>
-              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)" }}>({docs.length})</span>
+              <span className="nqt-label">Documentos indexados</span>
+              <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-faint)",}}>({docs.length})</span>
             </div>
             <button
               onClick={() => { loadDocs(); loadStats(); }}
-              style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1.5px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)")}
+              style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-fg)")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
             >
               Actualizar
@@ -314,7 +313,7 @@ export default function AdminPage() {
           </div>
 
           {docs.length === 0 ? (
-            <p className="py-12 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 300 }}>
+            <p className="py-12 text-center" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>
               No hay documentos indexados aún.
             </p>
           ) : (
@@ -325,44 +324,28 @@ export default function AdminPage() {
                   className="flex items-center justify-between px-5 py-3 transition-colors"
                   style={{
                     borderTop: i === 0 ? "none" : `1px solid var(--border-default)`,
-                    borderLeft: "3px solid transparent",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderLeftColor = "var(--nqt-blue, #0ea5e9)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderLeftColor = "transparent")}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-muted)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {(() => {
                       const badge = sourceBadge(doc.source_type);
-                      const isDoc = badge.accent === "doc";
                       return (
-                        <span
-                          className="shrink-0"
-                          style={{
-                            fontFamily: "var(--font-condensed)",
-                            fontSize: 9,
-                            fontWeight: 700,
-                            letterSpacing: "1.5px",
-                            textTransform: "uppercase",
-                            color: isDoc ? "var(--nqt-blue, #0ea5e9)" : "var(--nqt-cyan, #06b6d4)",
-                            backgroundColor: isDoc ? "rgba(14,165,233,0.1)" : "rgba(6,182,212,0.1)",
-                            border: `1px solid ${isDoc ? "rgba(14,165,233,0.3)" : "rgba(6,182,212,0.3)"}`,
-                            borderRadius: "3px",
-                            padding: "1px 5px",
-                          }}
-                        >
-                          {badge.label}
+                        <span className="shrink-0">
+                          <Badge tone={badge.accent === "doc" ? "accent" : "muted"}>{badge.label}</Badge>
                         </span>
                       );
                     })()}
-                    <p className="text-sm font-light truncate" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>
                       {doc.file_name}
                     </p>
                   </div>
                   <button
                     onClick={() => handleDelete(doc.file_name)}
                     className="shrink-0 ml-4 transition-colors"
-                    style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-condensed)", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+                    style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", background: "none", border: "none", cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger-fg)")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                   >
                     Eliminar
@@ -378,7 +361,7 @@ export default function AdminPage() {
       {pendingDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ backgroundColor: "rgba(5,15,26,0.7)", backdropFilter: "blur(2px)" }}
+          style={{ backgroundColor: "var(--overlay)" }}
           onClick={() => setPendingDelete(null)}
         >
           <div
@@ -386,9 +369,9 @@ export default function AdminPage() {
             style={{
               backgroundColor: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderTop: "3px solid #f87171",
+              borderTop: "3px solid var(--danger)",
               borderRadius: "var(--radius-lg)",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+              boxShadow: "var(--shadow-lg)",
               overflow: "hidden",
               animation: "nqt-modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both",
             }}
@@ -396,10 +379,10 @@ export default function AdminPage() {
           >
             {/* Modal header */}
             <div className="px-6 pt-6 pb-4">
-              <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 16, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              <p style={{ fontWeight: 600, fontSize: 16, color: "var(--text-primary)", marginBottom: 8 }}>
                 Eliminar documento
               </p>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.6 }}>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 400, lineHeight: 1.6 }}>
                 ¿Eliminar{" "}
                 <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
                   &quot;{pendingDelete}&quot;
@@ -416,11 +399,8 @@ export default function AdminPage() {
               <button
                 onClick={() => setPendingDelete(null)}
                 style={{
-                  fontFamily: "var(--font-condensed)",
                   fontWeight: 600,
                   fontSize: 11,
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
                   background: "none",
                   border: "1px solid var(--border-strong)",
                   borderRadius: "var(--radius-sm)",
@@ -437,12 +417,9 @@ export default function AdminPage() {
                 onClick={confirmDelete}
                 disabled={deleting}
                 style={{
-                  fontFamily: "var(--font-condensed)",
-                  fontWeight: 700,
+                  fontWeight: 600,
                   fontSize: 11,
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                  backgroundColor: "#ef4444",
+                  backgroundColor: "var(--danger)",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "var(--radius-sm)",
@@ -450,8 +427,8 @@ export default function AdminPage() {
                   cursor: deleting ? "not-allowed" : "pointer",
                   opacity: deleting ? 0.6 : 1,
                 }}
-                onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.backgroundColor = "#dc2626"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
+                onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.filter = "brightness(0.9)"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
               >
                 {deleting ? "Eliminando..." : "Eliminar"}
               </button>

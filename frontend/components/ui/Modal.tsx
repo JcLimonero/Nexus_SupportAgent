@@ -8,9 +8,9 @@ const FOCUSABLE =
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
-  /** Optional title rendered in the condensed uppercase style. */
+  /** Optional dialog title. */
   title?: string;
-  /** Accent color of the top border (defaults to brand blue). */
+  /** Optional accent color for a top border (used to flag destructive dialogs). */
   accentColor?: string;
   children: React.ReactNode;
   /** Footer content (buttons). Rendered in a muted footer bar when present. */
@@ -69,7 +69,7 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-      style={{ backgroundColor: "rgba(5,15,26,0.7)", backdropFilter: "blur(2px)" }}
+      style={{ backgroundColor: "var(--overlay)" }}
       onClick={onClose}
       onKeyDown={handleKeyDown}
     >
@@ -83,9 +83,9 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
         style={{
           backgroundColor: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
-          borderTop: `3px solid ${accentColor ?? "var(--nqt-blue, #0ea5e9)"}`,
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+          borderTop: accentColor ? `3px solid ${accentColor}` : undefined,
+          borderRadius: "var(--radius-xl)",
+          boxShadow: "var(--shadow-lg)",
           overflow: "hidden",
           // Cap at the padded container (so the backdrop's p-4/p-6 stays as a
           // real top/bottom margin) and lay out as a column so the body scrolls
@@ -103,19 +103,17 @@ export function Modal({ open, onClose, title, accentColor, children, footer }: M
           {title && (
             <p
               style={{
-                fontFamily: "var(--font-condensed)",
                 fontWeight: 700,
-                fontSize: 16,
+                fontSize: 18,
+                letterSpacing: "-0.01em",
                 color: "var(--text-primary)",
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
                 marginBottom: 8,
               }}
             >
               {title}
             </p>
           )}
-          <div style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6 }}>
             {children}
           </div>
         </div>
@@ -161,7 +159,7 @@ export function ConfirmDialog({
       open={open}
       onClose={onCancel}
       title={title}
-      accentColor={danger ? "#f87171" : undefined}
+      accentColor={danger ? "var(--danger)" : undefined}
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={loading}>

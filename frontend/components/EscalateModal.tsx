@@ -33,29 +33,28 @@ const inputStyle: React.CSSProperties = {
   color: "var(--text-primary)",
   padding: "8px 12px",
   fontSize: 13,
-  fontWeight: 300,
+  fontWeight: 400,
   outline: "none",
 };
 
 const labelStyle: React.CSSProperties = {
-  fontFamily: "var(--font-condensed)",
   fontSize: 10,
   fontWeight: 700,
-  letterSpacing: "1.5px",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
   color: "var(--text-muted)",
   display: "block",
   marginBottom: 4,
 };
 
-const ERROR_COLOR = "#ef4444";
+const ERROR_COLOR = "var(--danger-fg)";
 
 const errorHintStyle: React.CSSProperties = {
-  display: "block", fontSize: 11, fontWeight: 300, color: ERROR_COLOR, marginTop: 4,
+  display: "block", fontSize: 11, fontWeight: 400, color: ERROR_COLOR, marginTop: 4,
 };
 
 const noteStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 300, color: "var(--text-muted)", marginBottom: 12,
+  fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginBottom: 12,
 };
 
 const errorable = (base: React.CSSProperties, bad: boolean): React.CSSProperties =>
@@ -265,15 +264,14 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
           onClick={() => fileRef.current?.click()}
           disabled={atMax}
           style={{
-            display: "flex", alignItems: "center", gap: 6,
-            fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
-            letterSpacing: "1.5px", textTransform: "uppercase",
+            display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 10,
+            letterSpacing: "0.06em", textTransform: "uppercase",
             color: "var(--text-muted)", background: "none",
             border: "1px dashed var(--border-strong)", borderRadius: "var(--radius-sm)",
             padding: "7px 12px", cursor: atMax ? "not-allowed" : "pointer",
             width: "100%", justifyContent: "center", opacity: atMax ? 0.5 : 1,
           }}
-          onMouseEnter={(e) => { if (!atMax) e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; }}
+          onMouseEnter={(e) => { if (!atMax) e.currentTarget.style.borderColor = "var(--accent)"; }}
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-strong)")}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -304,7 +302,7 @@ export function EscalateModal({ open, onClose, sessionId, defaultEmail, defaultR
                 </span>
                 <button type="button" onClick={() => removeAttachment(a.url)} aria-label={`Quitar ${a.file_name}`}
                   style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", lineHeight: 1, padding: 0, fontSize: 14 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger-fg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>
                   ×
                 </button>

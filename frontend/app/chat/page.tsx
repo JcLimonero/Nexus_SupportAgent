@@ -9,6 +9,7 @@ import { MessageBubble, type Message, type PdfSource, type MediaSource } from "@
 import { SourcePanel } from "@/components/SourcePanel";
 import { SessionSidebar, type Session } from "@/components/SessionSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandLogo } from "@/components/BrandLogo";
 import { EscalateModal } from "@/components/EscalateModal";
 import { useServiceStatus } from "@/components/ServiceStatus";
 
@@ -363,7 +364,7 @@ export default function ChatPage() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center" style={{ backgroundColor: "var(--bg-page)" }}>
-        <span className="gv-label">Cargando...</span>
+        <span className="nqt-label">Cargando...</span>
       </div>
     );
   }
@@ -372,6 +373,9 @@ export default function ChatPage() {
   // guest beyond what they type, and the backend rejects them anyway.
   const canEscalate = !!user && !user.is_anon;
   const canSend = !!input.trim() && !chatBlocked;
+  const hasActions = canEscalate || (!!currentSessionId && messages.length > 0);
+  // Desktop-only: the sidebar's own collapse button disappears with it.
+  const showReopen = !isGuest && sidebarCollapsed;
   // Auto-offer human contact when the assistant just said it has no info.
   const lastMsg = messages[messages.length - 1];
   const showEscalateOffer =
@@ -413,12 +417,12 @@ export default function ChatPage() {
       {/* Sidebar — mobile overlay */}
       {!isGuest && sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-40 flex" style={{ animation: "nqt-fadeIn 0.2s ease both" }}>
-          <div className="flex flex-col h-full" style={{ width: 256, animation: "nqt-slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+          <div className="flex flex-col h-full" style={{ width: 272, animation: "nqt-slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
             {sidebar}
           </div>
           <div
             className="flex-1"
-            style={{ backgroundColor: "rgba(5,15,26,0.7)" }}
+            style={{ backgroundColor: "var(--overlay)" }}
             onClick={() => setSidebarOpen(false)}
           />
         </div>
@@ -426,104 +430,85 @@ export default function ChatPage() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Reopen sidebar (desktop only, shown when collapsed) */}
-        {!isGuest && sidebarCollapsed && (
-          <button
-            onClick={toggleSidebarCollapsed}
-            aria-label="Mostrar barra lateral"
-            title="Mostrar barra lateral"
-            className="hidden md:flex"
-            style={{
-              position: "absolute", top: 10, left: 10, zIndex: 30,
-              alignItems: "center", justifyContent: "center", width: 34, height: 34,
-              borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-surface)",
-              border: "1px solid var(--border-default)", color: "var(--text-muted)",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-        )}
         {/* Guest top bar — shown on all sizes (guests have no sidebar) */}
         {isGuest ? (
           <div
-            className="flex items-center gap-3 px-4 md:px-8 py-3 flex-wrap"
-            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+            className="flex items-center gap-2 sm:gap-3 px-4 md:px-8 py-3"
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-header)" }}
           >
-            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
-              NEXUS SUPPORT
+            <BrandLogo height={26} className="sm:hidden" />
+            <BrandLogo height={30} className="hidden sm:inline-flex" />
+            <span className="hidden md:inline" style={{ fontWeight: 600, fontSize: 14, color: "var(--text-secondary)", paddingLeft: 12, borderLeft: "1px solid var(--border-default)" }}>
+              Asistente de soporte
             </span>
+            {/* The pill is the one item allowed to shrink: on very narrow phones it
+                truncates instead of pushing the row wider than the viewport. */}
             <span
+              className="min-w-0"
               style={{
-                fontFamily: "var(--font-condensed)", fontWeight: 600, fontSize: 10, letterSpacing: "1.5px",
-                textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", border: "1px solid var(--border-default)",
-                borderRadius: "var(--radius-sm)", padding: "2px 8px",
+                fontWeight: 600, fontSize: 12, color: "var(--accent-fg)", backgroundColor: "var(--accent-tint)",
+                borderRadius: "var(--radius-pill)", padding: "3px 10px", whiteSpace: "nowrap",
+                overflow: "hidden", textOverflow: "ellipsis",
               }}
+              title="Modo invitado"
             >
-              Modo invitado
+              <span className="sm:hidden">Invitado</span>
+              <span className="hidden sm:inline">Modo invitado</span>
             </span>
-            <div className="flex items-center gap-3" style={{ marginLeft: "auto" }}>
-              <button
-                onClick={handleLogout}
-                style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-secondary)", background: "none", border: "1px solid var(--input-border)", borderRadius: "var(--radius-sm)", padding: "5px 12px", cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--input-focus)")}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--input-border)")}
-              >
+            <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: "auto" }}>
+              <button onClick={handleLogout} className="nqt-btn nqt-btn--sm nqt-btn--ghost">
                 Iniciar sesión
               </button>
-              <ThemeToggle
-                className="transition-colors p-1"
-                style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", lineHeight: 1 } as React.CSSProperties}
-              />
+              <ThemeToggle className="nqt-iconbtn" />
             </div>
           </div>
         ) : (
           /* Mobile top bar */
           <div
             className="md:hidden flex items-center gap-3 px-4 py-3"
-            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-header)" }}
           >
             <button
               onClick={() => setSidebarOpen(true)}
               aria-label="Abrir menú de conversaciones"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
+              className="nqt-iconbtn"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: "var(--text-primary)" }}>
-              NEXUS SUPPORT
-            </span>
+            <BrandLogo height={26} />
           </div>
         )}
 
-        {/* Actions toolbar — help requests need an account; share needs a saved session */}
-        {(canEscalate || (currentSessionId && messages.length > 0)) && (
+        {/* Actions toolbar — help requests need an account; share needs a saved session.
+            With the sidebar collapsed it also holds the button that reopens it
+            (desktop only), in the flow rather than floating over the actions. */}
+        {(hasActions || showReopen) && (
         <div
-          className={`flex items-center px-4 md:px-8 py-2 ${canEscalate ? "justify-between" : "justify-end"}`}
+          className={`${hasActions ? "flex" : "hidden md:flex"} items-center gap-2 px-4 md:px-8 py-2.5`}
           style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
         >
+          {showReopen && (
+            <button
+              onClick={toggleSidebarCollapsed}
+              aria-label="Mostrar barra lateral"
+              title="Mostrar barra lateral"
+              className="nqt-btn nqt-btn--sm nqt-btn--ghost hidden md:inline-flex"
+              style={{ padding: 7 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
           {canEscalate && (
           <button
             onClick={() => setEscalateOpen(true)}
             title="Solicitar ayuda de una persona del equipo de soporte"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
-              letterSpacing: "1.5px", textTransform: "uppercase",
-              color: "var(--text-muted)", background: "none",
-              border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
-              padding: "5px 12px", cursor: "pointer",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            className="nqt-btn nqt-btn--sm nqt-btn--ghost"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
@@ -535,18 +520,9 @@ export default function ChatPage() {
               onClick={handleShare}
               disabled={sharing}
               title="Copiar enlace público a esta conversación"
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
-                letterSpacing: "1.5px", textTransform: "uppercase",
-                color: "var(--text-muted)", background: "none",
-                border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
-                padding: "5px 12px", cursor: sharing ? "not-allowed" : "pointer", opacity: sharing ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => { if (!sharing) { e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)"; e.currentTarget.style.color = "var(--nqt-blue, #0ea5e9)"; } }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+              className="nqt-btn nqt-btn--sm nqt-btn--ghost ml-auto"
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
               </svg>
@@ -567,59 +543,34 @@ export default function ChatPage() {
           aria-relevant="additions text"
         >
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full gap-8" style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
-              {/* Heading */}
+            <div className="flex flex-col items-center justify-center min-h-full gap-8 py-4" style={{ maxWidth: 680, margin: "0 auto", width: "100%" }}>
+              {/* Heading — TotalDealer pattern: navy headline, key word in orange */}
               <div className="text-center">
-                <div style={{ width: 36, height: 3, background: "linear-gradient(90deg, #0ea5e9, #06b6d4)", margin: "0 auto 16px", borderRadius: 2 }} />
-                <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 28, textTransform: "uppercase", letterSpacing: "-0.5px", color: "var(--text-primary)", lineHeight: 1.1 }}>
-                  ¿EN QUÉ PUEDO<br />AYUDARTE?
-                </p>
-                <p className="mt-3 font-light" style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.65 }}>
+                <h1 style={{ fontWeight: 700, fontSize: 34, letterSpacing: "-0.03em", color: "var(--text-primary)", lineHeight: 1.15 }}>
+                  ¿En qué puedo <span style={{ color: "var(--accent-fg)" }}>ayudarte</span>?
+                </h1>
+                <p className="mt-3" style={{ fontSize: 15, color: "var(--text-muted)", lineHeight: 1.6 }}>
                   Pregunta sobre configuración, procesos o funciones de TotalDealer.
                 </p>
               </div>
 
               {/* Suggestion cards — cap at 4 so the welcome block stays vertically centered */}
               {suggestions.length > 0 && (
-                <div className="grid grid-cols-1 gap-2 w-full" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+                <div className="grid grid-cols-1 gap-3 w-full" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
                   {suggestions.slice(0, 4).map((s, i) => (
                     <button
                       key={i}
                       onClick={() => handleQuestionClick(s.prompt)}
-                      className="text-left px-4 py-3 transition-all"
-                      style={{
-                        backgroundColor: "var(--bg-surface)",
-                        border: "1px solid var(--border-default)",
-                        borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
-                        color: "var(--text-primary)",
-                        cursor: "pointer",
-                        borderRadius: "2px var(--radius) var(--radius) 2px",
-                        animation: "nqt-slideUp 0.35s ease both",
-                        animationDelay: `${i * 75}ms`,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "rgba(14,165,233,0.04)";
-                        e.currentTarget.style.borderColor = "var(--nqt-blue, #0ea5e9)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "var(--bg-surface)";
-                        e.currentTarget.style.borderColor = "var(--border-default)";
-                        e.currentTarget.style.borderLeftColor = "var(--nqt-blue, #0ea5e9)";
-                      }}
+                      className="td-suggestion text-left"
                     >
-                      <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: "var(--nqt-blue, #0ea5e9)", display: "block", marginBottom: 4 }}>
-                        {s.label}
-                      </span>
-                      <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.4, fontWeight: 300 }}>
-                        {s.prompt}
-                      </span>
+                      <span className="td-suggestion__label">{s.label}</span>
+                      <span className="td-suggestion__prompt">{s.prompt}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
           )}
-
           {messages.map((msg, i) => {
             if (sending && !isStreaming && msg.role === "assistant" && msg.content === "" && i === messages.length - 1) {
               return null;
@@ -631,10 +582,7 @@ export default function ChatPage() {
                 // Key by message id once the server assigns it — index keys
                 // remount every bubble on retry/slice, defeating the memo.
                 key={msg.id ?? `idx-${i}`}
-                style={{
-                  animation: "nqt-slideUp 0.28s ease both",
-                  animationDelay: `${Math.min(i, 6) * 35}ms`,
-                }}
+                style={{ animation: "nqt-fadeIn 0.18s ease both" }}
               >
                 <MessageBubble
                   message={msg}
@@ -656,8 +604,8 @@ export default function ChatPage() {
                 style={{
                   backgroundColor: "var(--bubble-ai-bg)",
                   border: "1px solid var(--bubble-ai-border)",
-                  borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
-                  borderRadius: "2px var(--radius) var(--radius) var(--radius)",
+                  borderRadius: "6px var(--radius-lg) var(--radius-lg) var(--radius-lg)",
+                  boxShadow: "var(--shadow-sm)",
                 }}
               >
                 <div className="flex space-x-1.5 items-center h-4">
@@ -665,7 +613,7 @@ export default function ChatPage() {
                     <span
                       key={d}
                       className="w-1.5 h-1.5 rounded-full animate-bounce"
-                      style={{ backgroundColor: "var(--nqt-blue, #0ea5e9)", animationDelay: `${d}ms`, opacity: 0.7 }}
+                      style={{ backgroundColor: "var(--accent-bright)", animationDelay: `${d}ms`, opacity: 0.8 }}
                     />
                   ))}
                 </div>
@@ -677,32 +625,21 @@ export default function ChatPage() {
           {showEscalateOffer && (
             <div
               className="flex justify-start"
-              style={{ animation: "nqt-slideUp 0.3s ease both" }}
+              style={{ animation: "nqt-fadeIn 0.18s ease both" }}
             >
               <div
-                className="px-4 py-3"
+                className="px-5 py-4"
                 style={{
                   backgroundColor: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  borderLeft: "3px solid var(--nqt-blue, #0ea5e9)",
-                  borderRadius: "2px var(--radius) var(--radius) var(--radius)",
+                  border: "1px solid var(--accent-border)",
+                  borderRadius: "var(--radius-lg)",
                   maxWidth: 420,
                 }}
               >
-                <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 300, lineHeight: 1.5, marginBottom: 10 }}>
+                <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 12 }}>
                   ¿Prefieres que te ayude una persona del equipo de soporte?
                 </p>
-                <button
-                  onClick={() => setEscalateOpen(true)}
-                  style={{
-                    fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10,
-                    letterSpacing: "1.5px", textTransform: "uppercase",
-                    backgroundColor: "var(--btn-primary-bg)", color: "var(--btn-primary-text)",
-                    border: "none", borderRadius: "var(--radius-sm)", padding: "6px 14px", cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
-                >
+                <button onClick={() => setEscalateOpen(true)} className="nqt-btn nqt-btn--sm nqt-btn--primary">
                   Solicitar ayuda
                 </button>
               </div>
@@ -719,20 +656,20 @@ export default function ChatPage() {
             title="Ir abajo"
             style={{
               position: "absolute",
-              bottom: 88,
+              bottom: 104,
               left: "50%",
               transform: "translateX(-50%)",
               zIndex: 20,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               borderRadius: "50%",
               backgroundColor: "var(--bg-surface)",
-              border: "1px solid var(--border-strong)",
-              color: "var(--nqt-blue, #0ea5e9)",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+              border: "1px solid var(--border-default)",
+              color: "var(--accent-fg)",
+              boxShadow: "var(--shadow)",
               cursor: "pointer",
               animation: "nqt-fadeIn 0.2s ease both",
             }}
@@ -744,12 +681,9 @@ export default function ChatPage() {
           </button>
         )}
 
-        {/* Input bar */}
-        <div
-          className="px-4 md:px-8 py-4"
-          style={{ borderTop: "1px solid var(--border-default)", backgroundColor: "var(--bg-surface)" }}
-        >
-          <form onSubmit={handleSend} className="flex gap-2 max-w-3xl mx-auto items-end">
+        {/* Input bar — one rounded composer holding the textarea and its action */}
+        <div className="px-4 md:px-8 pt-2 pb-4">
+          <form onSubmit={handleSend} className="td-composer flex gap-2 max-w-3xl mx-auto items-end">
             <textarea
               ref={inputRef}
               value={input}
@@ -758,17 +692,16 @@ export default function ChatPage() {
               placeholder={chatBlocked ? "El envío está pausado mientras restablecemos el servicio" : "Escribe tu pregunta sobre TotalDealer..."}
               disabled={sending || chatBlocked}
               rows={1}
-              className="flex-1 px-3 py-2.5 text-sm font-light focus:outline-none resize-none transition-colors"
+              className="flex-1 px-3 py-2.5 focus:outline-none resize-none"
               style={{
-                backgroundColor: "var(--input-bg)",
-                border: "1px solid var(--input-border)",
-                borderRadius: "var(--radius)",
+                background: "transparent",
+                border: "none",
                 color: "var(--text-primary)",
+                fontSize: 15,
+                minWidth: 0,
                 maxHeight: 120,
                 lineHeight: 1.5,
               }}
-              onFocus={(e) => (e.target.style.borderColor = "var(--input-focus)")}
-              onBlur={(e) => (e.target.style.borderColor = "var(--input-border)")}
               onInput={(e) => {
                 const t = e.currentTarget;
                 t.style.height = "auto";
@@ -776,52 +709,20 @@ export default function ChatPage() {
               }}
             />
             {sending ? (
-              <button
-                type="button"
-                onClick={stopStreaming}
-                className="px-5 py-2.5 shrink-0 transition-colors"
-                style={{
-                  fontFamily: "var(--font-condensed)",
-                  fontWeight: 700,
-                  fontSize: 11,
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  backgroundColor: "#0d2137",
-                  color: "#94a3b8",
-                  border: "1px solid #1e3a5f",
-                  borderRadius: "var(--radius)",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#112d4e"; e.currentTarget.style.color = "#e2e8f0"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#0d2137"; e.currentTarget.style.color = "#94a3b8"; }}
-              >
+              <button type="button" onClick={stopStreaming} className="nqt-btn nqt-btn--md nqt-btn--ghost shrink-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" /></svg>
                 Detener
               </button>
             ) : (
-              <button
-                type="submit"
-                disabled={!canSend}
-                className="btn-send px-5 py-2.5 transition-colors disabled:opacity-40 shrink-0"
-                style={{
-                  fontFamily: "var(--font-condensed)",
-                  fontWeight: 700,
-                  fontSize: 11,
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  backgroundColor: "var(--btn-primary-bg)",
-                  color: "var(--btn-primary-text)",
-                  border: "none",
-                  borderRadius: "var(--radius)",
-                  cursor: !canSend ? "not-allowed" : "pointer",
-                }}
-                onMouseEnter={(e) => { if (canSend) e.currentTarget.style.backgroundColor = "var(--btn-primary-hover)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--btn-primary-bg)")}
-              >
-                Enviar
+              <button type="submit" disabled={!canSend} aria-label="Enviar" className="btn-send nqt-btn nqt-btn--md nqt-btn--primary shrink-0">
+                <span className="hidden sm:inline">Enviar</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                </svg>
               </button>
             )}
           </form>
-          <p className="text-center mt-1.5" style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-condensed)", letterSpacing: 1 }}>
+          <p className="text-center mt-2" style={{ fontSize: 11, color: "var(--text-faint)" }}>
             {sending
               ? "Generando respuesta · Detener para cancelar"
               : chatBlocked

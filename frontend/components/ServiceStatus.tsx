@@ -175,7 +175,7 @@ function Frame({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-x-3 flex-wrap">
-              <span style={{ fontFamily: "var(--font-condensed)", fontWeight: 700, fontSize: 10, letterSpacing: "1.5px", textTransform: "uppercase", color: tone.text }}>
+              <span style={{ fontWeight: 700, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: tone.text }}>
                 {label}
               </span>
               {aside}

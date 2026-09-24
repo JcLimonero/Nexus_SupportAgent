@@ -16,7 +16,7 @@ RAG-based support chatbot for TotalDealer ERP. Users ask questions in Spanish an
 - **User management** — create users, activate/deactivate, promote/demote admin role
 - **Toast notifications** — success/error feedback on all admin and user actions
 - **Theme toggle** — light / dark mode persisted via CSS variables
-- **Grupo Vanguardia brand** — Barlow Condensed typeface, sharp corners, condensed uppercase labels
+- **TotalDealer brand** — Inter typeface, orange (`#F04A1A`) and navy (`#08243A`) on light surfaces, rounded cards with soft shadows; graphite dark mode. Tokens live in `frontend/app/globals.css`
 - **Security hardened** — OWASP Top 10 addressed: broken access control fixed, rate limiting, JWT TTL reduction, magic-bytes upload validation, CSP/HSTS headers, non-root Docker user, prompt injection markers
 
 ## Architecture
