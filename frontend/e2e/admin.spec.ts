@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { injectToken, readState } from "./helpers";
+import { API_URL, UI_QUESTION, UI_USER_EMAIL, createSessionViaApi, injectToken, readState } from "./helpers";
 
 const BROWSER_DOC = "e2e_browser_upload.txt";
 const CREATED_EMAIL = "e2e-ui-created@nexus.local";
@@ -80,5 +80,22 @@ test.describe("admin panel", () => {
     await expect(page.getByText("Eliminar usuario")).toBeVisible();
     await page.getByRole("dialog").getByRole("button", { name: "Eliminar", exact: true }).click();
     await expect(page.locator("tr", { hasText: CREATED_EMAIL })).toHaveCount(0);
+  });
+
+  test("the conversation viewer opens a user's conversation", async ({ page, request }) => {
+    const state = readState();
+    // Global setup's cache pre-warm already left the UI user a conversation.
+    // Reuse it: this spec's upload/delete test flushes the semantic cache, so
+    // asking again here would be a real (slow, quota-burning) Gemini call.
+    const existing = await request.get(`${API_URL}/api/admin/conversations?user_id=${state.uiUserId}`, {
+      headers: { Authorization: `Bearer ${state.adminToken}` },
+    });
+    if (((await existing.json()) as unknown[]).length === 0) await createSessionViaApi(request, state.uiToken);
+    await page.goto(`/admin/conversations?user=${state.uiUserId}`);
+
+    const first = page.getByRole("button", { name: new RegExp(UI_USER_EMAIL) }).first();
+    await expect(first).toBeVisible();
+    await first.click();
+    await expect(page.getByText(UI_QUESTION).first()).toBeVisible();
   });
 });
