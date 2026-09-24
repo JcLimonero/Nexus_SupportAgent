@@ -27,6 +27,6 @@ filetype==1.2.0
 # Testing
 pytest==8.3.2
 pytest-asyncio==0.23.8
-anyio==4.4.0
+anyio==4.14.2
 aiosqlite==0.20.0
 pip-audit==2.7.3

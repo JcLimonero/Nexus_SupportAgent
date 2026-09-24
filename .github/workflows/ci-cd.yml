@@ -52,7 +52,7 @@ jobs:
             pymupdf==1.26.7 \
             pytest==8.3.2 \
             pytest-asyncio==0.23.8 \
-            anyio==4.4.0 \
+            anyio==4.14.2 \
             pip-audit==2.7.3
 
       - name: Run tests
