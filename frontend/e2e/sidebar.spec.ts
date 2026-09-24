@@ -32,6 +32,24 @@ test.describe("session sidebar", () => {
     await expect(page.locator("aside").getByText("Sesión renombrada UI")).toHaveCount(0);
   });
 
+  test("cancelling a delete keeps the session", async ({ page, request }) => {
+    await createSessionViaApi(request, readState().uiToken);
+    await page.goto("/chat");
+    const rows = page.locator("aside .group");
+    await expect(rows.first()).toBeVisible();
+    const before = await rows.count();
+
+    await rows.first().hover();
+    await rows.first().getByLabel("Eliminar conversación").click();
+    const confirming = rows.filter({ hasText: "¿Eliminar conversación?" });
+    await confirming.getByRole("button", { name: "Cancelar" }).click();
+
+    await expect(confirming).toHaveCount(0);
+    await expect(rows).toHaveCount(before);
+    await page.reload();
+    await expect(rows).toHaveCount(before); // nothing was deleted server-side either
+  });
+
   test("search filter appears past 4 sessions and filters", async ({ page, request }) => {
     const token = readState().uiToken;
     for (let i = 0; i < 5; i++) await createSessionViaApi(request, token);

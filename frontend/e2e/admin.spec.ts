@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { injectToken, readState } from "./helpers";
+import { API_URL, UI_FACT_CODE, UI_USER_EMAIL, createSessionViaApi, injectToken, readState } from "./helpers";
 
 const BROWSER_DOC = "e2e_browser_upload.txt";
 const CREATED_EMAIL = "e2e-ui-created@nexus.local";
@@ -80,5 +80,26 @@ test.describe("admin panel", () => {
     await expect(page.getByText("Eliminar usuario")).toBeVisible();
     await page.getByRole("dialog").getByRole("button", { name: "Eliminar", exact: true }).click();
     await expect(page.locator("tr", { hasText: CREATED_EMAIL })).toHaveCount(0);
+  });
+
+  test("the conversation viewer opens a user's conversation", async ({ page, request }) => {
+    const state = readState();
+    // Global setup's cache pre-warm already left the UI user a conversation.
+    // Reuse it: this spec's upload/delete test flushes the semantic cache, so
+    // asking again here would be a real (slow, quota-burning) Gemini call.
+    const existing = await request.get(`${API_URL}/api/admin/conversations?user_id=${state.uiUserId}`, {
+      headers: { Authorization: `Bearer ${state.adminToken}` },
+    });
+    expect(existing.ok(), `conversation list failed: ${existing.status()}`).toBeTruthy();
+    if (((await existing.json()) as unknown[]).length === 0) await createSessionViaApi(request, state.uiToken);
+    await page.goto(`/admin/conversations?user=${state.uiUserId}`);
+
+    // Not the question: it is also the session title, so the list row itself
+    // would match it. The answer's code only exists in the opened thread.
+    const row = page.getByRole("button", { name: UI_USER_EMAIL }).first();
+    await expect(row).toBeVisible();
+    await expect(page.getByText(UI_FACT_CODE)).toHaveCount(0);
+    await row.click();
+    await expect(page.getByText(UI_FACT_CODE).first()).toBeVisible();
   });
 });
