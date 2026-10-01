@@ -163,8 +163,13 @@ Ok "http://127.0.0.1:$nginxPort/health responde"
 
 try {
     # nginx solo reenvía `= /health`; /health/db se consulta desde dentro del
-    # contenedor del backend.
-    $db = docker compose -f $compose exec -T backend python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8000/health/db', timeout=10).status)" 2>&1 | Select-Object -Last 1
+    # contenedor del backend. Con "Stop", PS 5.1 convierte cualquier stderr de un
+    # comando nativo (2>&1) en excepción; se baja a "Continue" solo aquí y python
+    # imprime el código HTTP también cuando la respuesta es un error.
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    $pyCode = "import urllib.request as u, urllib.error as e`nr = None`ntry: r = u.urlopen('http://127.0.0.1:8000/health/db', timeout=10).status`nexcept e.HTTPError as x: r = x.code`nprint(r)"
+    $db = docker compose -f $compose exec -T backend python -c $pyCode 2>&1 | Where-Object { $_ -is [string] -or $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" } | Select-Object -Last 1
+    $ErrorActionPreference = $prevEap
     if ($db -eq "200") { Ok "Base de datos alcanzable" } else { Warn "/health/db no devolvió 200: $db" }
 } catch { Warn "/health/db falló: $_" }
 
