@@ -207,11 +207,8 @@ Cost model for this deployment: [`COSTOS.md`](COSTOS.md).
 
 Every push/PR runs: backend tests → pip-audit → frontend tests → Docker build check.
 
-The workflow also carries a **legacy Cloud Run deploy job** (`workflow_dispatch`
-with `deploy=true`) from the original GCP deployment. It is not the production
-path anymore and stays only as a fallback; it needs the `WIF_PROVIDER` and
-`GCP_SERVICE_ACCOUNT` secrets. Production deploys are done on the server with
-`docker compose -f docker-compose.prod.yml` as shown above.
+The workflow has no deploy job: production deploys are done on the server with
+`scripts/deploy-prod.ps1` / `docker compose -f docker-compose.prod.yml` as shown above.
 
 ## Adding documents
 
