@@ -63,6 +63,10 @@ jobs:
           # PYSEC-2026-3929 is a path traversal in save_pretrained() via
           # chat_template keys, reachable only when loading AND saving an
           # attacker-controlled Hub repo — this app never calls save_pretrained().
+          # PYSEC-2026-4164 (sentence-transformers) and PYSEC-2026-4174
+          # (transformers) are in the same class: no fix without the major
+          # sentence-transformers bump below, and only reachable by loading an
+          # untrusted model, which this app never does.
           # sentence-transformers 5.2.3 (2026-02) now requires transformers>=5.0.0,
           # which would clear most of this list. Tracked as its own dependency
           # bump: it changes the library behind every embedding, so it needs its
@@ -77,7 +81,7 @@ jobs:
             --ignore-vuln GHSA-rrmf-rvhw-rf47 \
             --ignore-vuln PYSEC-2026-2289 \
             --ignore-vuln PYSEC-2026-2290 \
-            --ignore-vuln PYSEC-2026-3929
+            --ignore-vuln PYSEC-2026-3929 \n            --ignore-vuln PYSEC-2026-4164 \n            --ignore-vuln PYSEC-2026-4174
 
   # ── Frontend tests (every push / PR) ────────────────────────────────────────
   frontend-test:
