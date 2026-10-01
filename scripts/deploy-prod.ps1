@@ -162,8 +162,10 @@ if (-not $healthy) {
 Ok "http://127.0.0.1:$nginxPort/health responde"
 
 try {
-    $db = Invoke-WebRequest -Uri "http://127.0.0.1:$nginxPort/health/db" -TimeoutSec 10 -UseBasicParsing
-    if ($db.StatusCode -eq 200) { Ok "Base de datos alcanzable" }
+    # nginx solo reenvía `= /health`; /health/db se consulta desde dentro del
+    # contenedor del backend.
+    $db = docker compose -f $compose exec -T backend python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8000/health/db', timeout=10).status)" 2>&1 | Select-Object -Last 1
+    if ($db -eq "200") { Ok "Base de datos alcanzable" } else { Warn "/health/db no devolvió 200: $db" }
 } catch { Warn "/health/db falló: $_" }
 
 Step "Verificando OCR"

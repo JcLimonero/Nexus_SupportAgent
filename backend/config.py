@@ -53,6 +53,8 @@ class Settings(BaseSettings):
 
     # ── GCP / Vertex AI (production only) ───────────────────────────────────
     vertex_ai_project: str = ""
+    # Not used by Gemini: llm/gemini_client.py hardcodes `locations/global`
+    # (gemini-3.7-flash 404s in regional endpoints). Do not "fix" this.
     vertex_ai_location: str = "us-central1"
     gcs_bucket_name: str = ""
 
