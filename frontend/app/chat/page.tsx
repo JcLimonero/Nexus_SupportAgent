@@ -32,8 +32,8 @@ export default function ChatPage() {
   const [escalateOpen, setEscalateOpen]       = useState(false);
   const [atBottom, setAtBottom]               = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLTextAreaElement>(null);
+  const logRef     = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLTextAreaElement>(null);
   const abortRef   = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -53,8 +53,16 @@ export default function ChatPage() {
   // Auto-scroll only when the user is already at the bottom, so a stream never
   // yanks them down while they're reading earlier content.
   useEffect(() => {
-    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (atBottom) scrollLogToEnd();
   }, [messages, sending, atBottom]);
+
+  // Scroll the message list itself, never scrollIntoView: that also scrolls every
+  // ancestor, including overflow-hidden ones the user can't scroll back, which
+  // shoved the whole page up a bit more with each message.
+  function scrollLogToEnd() {
+    const el = logRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }
 
   const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -63,7 +71,7 @@ export default function ChatPage() {
 
   const scrollToBottom = () => {
     setAtBottom(true);
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollLogToEnd();
   };
 
   // Desktop sidebar collapse preference (persisted; mobile uses the overlay).
@@ -398,7 +406,8 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden" style={{ backgroundColor: "var(--bg-page)" }}>
+    // overflow-clip, not hidden: hidden boxes can still be scrolled by script.
+    <div className="flex flex-1 min-h-0 overflow-clip" style={{ backgroundColor: "var(--bg-page)" }}>
       <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
       <EscalateModal
         open={escalateOpen}
@@ -534,8 +543,12 @@ export default function ChatPage() {
 
         {/* Messages — live region so screen readers announce streamed replies
             (polite + non-atomic so only new content is read, not the whole log) */}
+        {/* `relative` makes this the containing block of the absolutely positioned
+            sr-only labels inside the bubbles; without it they escape this box's
+            clipping and inflate the scrollable height of the row around it. */}
         <div
-          className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3"
+          ref={logRef}
+          className="relative flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-3"
           onScroll={handleMessagesScroll}
           role="log"
           aria-live="polite"
@@ -645,7 +658,6 @@ export default function ChatPage() {
               </div>
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
         {/* Scroll-to-bottom — shown when the user has scrolled up from the latest reply */}
