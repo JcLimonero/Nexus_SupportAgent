@@ -73,6 +73,9 @@ if (-not (Test-Path "gcp-credentials.json")) {
     throw "Falta gcp-credentials.json (la cuenta de servicio de Vertex AI). El backend no arrancará sin ella."
 }
 Ok ".env y credenciales presentes"
+# Vida máxima de 90 días de la clave de GCP (ops/credentials.json). Solo avisa.
+& (Join-Path $PSScriptRoot "check-credential-age.ps1")
+if ($LASTEXITCODE -ne 0) { Warn "Rota la clave de GCP: ver ops\ROTATE_GCP_KEY.md" }
 
 try { docker info 2>&1 | Out-Null } catch { throw "Docker no responde en el servidor." }
 if ($LASTEXITCODE -ne 0) { throw "Docker no responde en el servidor." }
