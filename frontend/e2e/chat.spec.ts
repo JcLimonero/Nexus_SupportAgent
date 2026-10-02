@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { UI_DOC_NAME, UI_FACT_CODE, UI_QUESTION, injectToken, readState } from "./helpers";
+import { APIRequestContext, Page, expect, test } from "@playwright/test";
+import { API_URL, UI_DOC_NAME, UI_FACT_CODE, UI_QUESTION, injectToken, readState } from "./helpers";
 
 test.describe("chat flow", () => {
   test.beforeEach(async ({ page }) => {
@@ -43,6 +43,62 @@ test.describe("chat flow", () => {
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
   });
+
+  for (const [label, viewport] of [
+    ["desktop", { width: 1200, height: 560 }],
+    ["mobile", { width: 390, height: 640 }],
+  ] as const) {
+    // Regression: auto-scroll used scrollIntoView, which also scrolled the
+    // overflow-hidden page row (inflated by absolutely positioned sr-only labels),
+    // so each message shoved the whole UI further up with no way to scroll back.
+    test(`the page never scrolls as messages pile up (${label})`, async ({ page, request }) => {
+      // Leave no session behind: more than 4 makes the sidebar grow a search input,
+      // which breaks the rename spec's `aside input` locator.
+      const before = await listSessionIds(request);
+      try {
+        await runScrollCheck(page, viewport);
+      } finally {
+        const after = await listSessionIds(request);
+        for (const id of after.filter((s) => !before.includes(s))) {
+          await request.delete(`${API_URL}/api/sessions/${id}`, {
+            headers: { Authorization: `Bearer ${readState().uiToken}` },
+          });
+        }
+      }
+    });
+  }
+
+  async function listSessionIds(request: APIRequestContext): Promise<string[]> {
+    const res = await request.get(`${API_URL}/api/sessions`, {
+      headers: { Authorization: `Bearer ${readState().uiToken}` },
+    });
+    return ((await res.json()) as { id: string }[]).map((s) => s.id);
+  }
+
+  async function runScrollCheck(page: Page, viewport: { width: number; height: number }) {
+    await page.setViewportSize(viewport);
+    const input = page.getByPlaceholder("Escribe tu pregunta sobre TotalDealer...");
+    // The same question again is a semantic-cache hit: fast, and no extra Gemini call.
+    for (let i = 0; i < 3; i++) {
+      await input.fill(UI_QUESTION);
+      await input.press("Enter");
+      await expect(page.getByText(UI_FACT_CODE).nth(i)).toBeVisible({ timeout: 90_000 });
+      await expect(input).toBeEnabled({ timeout: 30_000 });
+    }
+
+    const scrolled = await page.evaluate(() => {
+      const log = document.querySelector('[role="log"]') as HTMLElement;
+      const offenders: string[] = [];
+      for (let el = log.parentElement; el; el = el.parentElement) {
+        if (el.scrollTop !== 0) offenders.push(`${el.tagName}.${el.className}=${el.scrollTop}`);
+      }
+      return { offenders, composerBottom: document.querySelector("form")!.getBoundingClientRect().bottom, vh: innerHeight };
+    });
+    expect(scrolled.offenders).toEqual([]);
+    expect(scrolled.composerBottom).toBeLessThanOrEqual(scrolled.vh);
+    // The list itself does scroll (and the composer stays on screen).
+    expect(await page.locator('[role="log"]').evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  }
 
   test("Enter sends, Shift+Enter makes a new line", async ({ page }) => {
     const input = page.getByPlaceholder("Escribe tu pregunta sobre TotalDealer...");
