@@ -1,0 +1,141 @@
+# -- Nexus Support Agent -- Coolify stack (Docker Compose resource) ----------
+#
+# Same services as docker-compose.prod.yml. Differences:
+#   * nginx is NOT bound to the host. Coolify's Traefik terminates TLS and
+#     routes the public domain to the `nginx` service (port 80). Chain is
+#     Traefik -> nginx -> backend, same depth as IIS -> nginx -> backend, so
+#     TRUSTED_PROXY_HOPS stays 2 and nginx's rate-limit key is unchanged.
+#   * gcp-credentials.json is bind-mounted from a host path (see
+#     MIGRATION_COOLIFY.md) instead of the repo checkout.
+#
+# In Coolify: set the domain on the `nginx` service (https://your.domain:80).
+# PUBLIC_ORIGIN must be the exact public origin and be marked "Build Variable"
+# too -- it is baked into the frontend bundle.
+# -----------------------------------------------------------------------------
+
+services:
+
+  # ── App database (pgvector) — isolated to this project ─────────────────────
+  db:
+    image: pgvector/pgvector:0.8.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexus_agent
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No host port — only the backend reaches it on the internal network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      # Marks this as a production deploy: disables /docs, enforces the
+      # insecure-JWT-secret guard, and switches CORS to FRONTEND_URL-only.
+      # Needed because storage is local (no GCS bucket to infer prod from).
+      ENVIRONMENT: production
+      AUTH_PROVIDER: local
+      STORAGE_PROVIDER: local
+      EMBEDDING_PROVIDER: local
+      EMBEDDING_DIMENSIONS: "384"
+      DATABASE_URL: postgresql+asyncpg://nexus:${DB_PASSWORD}@db:5432/nexus_agent
+      LOCAL_JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      LOCAL_STORAGE_PATH: /data
+      INITIAL_ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      INITIAL_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ALLOW_ANONYMOUS: ${ALLOW_ANONYMOUS:-true}
+      # Gemini (the LLM) runs on Vertex AI — required even with local embeddings.
+      VERTEX_AI_PROJECT: ${VERTEX_AI_PROJECT:?set VERTEX_AI_PROJECT in .env}
+      VERTEX_AI_LOCATION: ${VERTEX_AI_LOCATION:-us-central1}
+      GEMINI_MODEL: gemini-3.7-flash
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
+      RATE_LIMIT_ENABLED: "true"
+      # Chain is IIS(ARR) → nginx → backend, so the real client sits 2 hops deep
+      # in X-Forwarded-For. Makes per-IP rate limits key on the real client
+      # (requires ARR to forward the client IP in XFF, which it does by default).
+      TRUSTED_PROXY_HOPS: "2"
+      # Escalation abuse guards (tunable; sensible defaults if unset).
+      MIN_FREE_DISK_MB: ${MIN_FREE_DISK_MB:-500}
+      ATTACHMENT_RETENTION_DAYS: ${ATTACHMENT_RETENTION_DAYS:-90}
+      # Human-escalation email via EmailJS (optional). Empty ids disable email —
+      # requests still land in the admin panel.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
+      EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID:-}
+      EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID:-}
+      EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY:-}
+      EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY:-}
+      ESCALATION_NOTIFY_EMAIL: ${ESCALATION_NOTIFY_EMAIL:-}
+      EMAILJS_MAX_ATTACH_KB: ${EMAILJS_MAX_ATTACH_KB:-350}
+    volumes:
+      - nexus_data:/data                                   # uploaded PDFs/MP4s (local storage)
+      - ${GCP_CREDENTIALS_HOST_PATH:-/opt/nexus/gcp-credentials.json}:/app/gcp-credentials.json:ro  # Gemini service account
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000   # no --reload in prod
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    expose:
+      - "8000"
+
+  # ── Next.js frontend (standalone) ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle at build time. Must equal the public
+        # origin users hit through IIS, e.g. https://app-nexusqtech.com:8443
+        # (omit the port only if IIS serves it on 443). Same-origin → no CORS.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/.next/cache:size=128m,mode=1777
+    depends_on:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    expose:
+      - "3000"
+
+  # ── Internal reverse proxy (the only host-bound service) ───────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+  nexus_data:
+
+networks:
+  internal:
+    driver: bridge

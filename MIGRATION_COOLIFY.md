@@ -1,0 +1,44 @@
+# Migración a Coolify
+
+Estado a mover: volumen `pgdata` (Postgres), volumen `nexus_data` (PDFs/MP4), `.env` y `gcp-credentials.json`. Todo lo demás sale de git.
+
+Archivos: `docker-compose.coolify.yml`, `scripts/migrate/backup-for-migration.ps1`, `scripts/migrate/restore-coolify.sh`.
+
+## Reglas que no se rompen
+
+- **Mismo `JWT_SECRET`** que en prod. Firma sesiones y URLs de media; si cambia, todos tienen que volver a iniciar sesión.
+- **Mismo `DB_PASSWORD` no es necesario** (el restore usa el del stack nuevo), pero `EMBEDDING_DIMENSIONS=384` y la imagen `pgvector/pgvector:0.8.2-pg16` sí.
+- **No re-indexar.** Los embeddings viajan dentro del dump.
+- El servidor viejo se queda **apagado pero intacto** 1–2 semanas (rollback).
+
+## Preparación (una vez)
+
+1. En el servidor Coolify crea `/opt/nexus/gcp-credentials.json` (el mismo archivo de prod, `chmod 600`). Otra ruta: variable `GCP_CREDENTIALS_HOST_PATH`.
+2. Coolify → New Resource → Docker Compose → repo, rama `main` (tras mergear), archivo `docker-compose.coolify.yml`.
+3. Variables (copiar de `.env` de prod): `DB_PASSWORD`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `VERTEX_AI_PROJECT`, `VERTEX_AI_LOCATION`, `ALLOW_ANONYMOUS`, `EMAILJS_*`, `ESCALATION_NOTIFY_EMAIL`, `MIN_FREE_DISK_MB`, `ATTACHMENT_RETENTION_DAYS`.
+4. `PUBLIC_ORIGIN=https://<dominio-nuevo>` marcada también como **Build Variable** (se hornea en el frontend; si luego cambia el dominio hay que reconstruir, no reiniciar).
+5. Dominio en el servicio **nginx**: `https://<dominio-nuevo>:80`. Sin puerto en la URL pública.
+6. Apunta el DNS del dominio nuevo al servidor Coolify y deja que Traefik emita el certificado.
+
+## Ensayo (el viejo sigue sirviendo)
+
+1. En el servidor viejo: `.\scripts\migrate\backup-for-migration.ps1`
+2. Copia la carpeta resultante al servidor Coolify.
+3. Despliega en Coolify y espera a que `db` y `backend` estén healthy.
+4. `./scripts/migrate/restore-coolify.sh <carpeta>` — debe terminar en `RESTORE VERIFIED`.
+5. Prueba: login admin, chat con streaming (tokens llegan en vivo), abrir un PDF y un video citados, `/admin/avisos`, y
+   `docker exec <backend> python rag_eval.py` (debe dar lo mismo que en prod).
+
+## Corte
+
+1. Banner `blocks_chat` en `/admin/avisos` del viejo (o simplemente avisar: no suban documentos).
+2. Backup final + restore (mismos pasos del ensayo).
+3. Verificar, cambiar el DNS/enlaces al dominio nuevo, apagar el stack viejo (`docker compose -f docker-compose.prod.yml stop`, **nunca `down -v`**).
+4. Actualizar en EmailJS/correos cualquier link con el dominio viejo (`share_link` usa `PUBLIC_ORIGIN`).
+
+## Después
+
+- Programar backups: Coolify → Scheduled Tasks (pg_dump) o backups nativos a S3; los PDFs/MP4 aparte.
+- Rotar la key de Gemini (`ops/ROTATE_GCP_KEY.md`) ya que el archivo se copió.
+- Límites que Traefik no replica: HSTS (agregarlo en Coolify o nginx si se quiere).
+- `deploy-prod.ps1` e `iis/` quedan obsoletos; borrarlos cuando el viejo se dé de baja.
