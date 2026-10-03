@@ -16,9 +16,14 @@ Archivos: `docker-compose.coolify.yml`, `scripts/migrate/backup-for-migration.ps
 1. En el servidor Coolify crea `/opt/nexus/gcp-credentials.json` (el mismo archivo de prod, `chmod 600`). Otra ruta: variable `GCP_CREDENTIALS_HOST_PATH`.
 2. Coolify → New Resource → Docker Compose → repo, rama `main` (tras mergear), archivo `docker-compose.coolify.yml`.
 3. Variables (copiar de `.env` de prod): `DB_PASSWORD`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `VERTEX_AI_PROJECT`, `VERTEX_AI_LOCATION`, `ALLOW_ANONYMOUS`, `EMAILJS_*`, `ESCALATION_NOTIFY_EMAIL`, `MIN_FREE_DISK_MB`, `ATTACHMENT_RETENTION_DAYS`.
-4. `PUBLIC_ORIGIN=https://<dominio-nuevo>` marcada también como **Build Variable** (se hornea en el frontend; si luego cambia el dominio hay que reconstruir, no reiniciar).
-5. Dominio en el servicio **nginx**: `https://<dominio-nuevo>:80`. Sin puerto en la URL pública.
-6. Apunta el DNS del dominio nuevo al servidor Coolify y deja que Traefik emita el certificado.
+4. `PUBLIC_ORIGIN=https://soporte.nexusqtech.com` marcada también como **Build Variable** (se hornea en el frontend; si luego cambia el dominio hay que reconstruir, no reiniciar).
+5. Dominio en el servicio **nginx**: `https://soporte.nexusqtech.com:80`. Sin puerto en la URL pública.
+6. DNS: registro **A** `soporte.nexusqtech.com` → `74.208.151.19` (servidor Coolify). Traefik emite el certificado cuando resuelve. No hay comodín en `nexusqtech.com`, así que el registro hay que crearlo.
+
+### Dominio
+El dominio definitivo es `soporte.nexusqtech.com` (elegido 2026-10-03). Sigue el patrón de las otras apps en Coolify (`crm.`, `support.` ya está ocupado por GLPI Nexus). Como es un nombre nuevo, distinto de `app-nexusqtech.com`, **el ensayo se hace ya con el dominio final**: el viejo sigue sirviendo en su dominio y no hace falta reconstruir el frontend en el corte.
+
+Los enlaces viejos (`app-nexusqtech.com`) dejan de funcionar al apagar el servidor viejo. Avisar a los usuarios del dominio nuevo y actualizar marcadores y correos.
 
 ## Ensayo (el viejo sigue sirviendo)
 
@@ -33,7 +38,7 @@ Archivos: `docker-compose.coolify.yml`, `scripts/migrate/backup-for-migration.ps
 
 1. Banner `blocks_chat` en `/admin/avisos` del viejo (o simplemente avisar: no suban documentos).
 2. Backup final + restore (mismos pasos del ensayo).
-3. Verificar, cambiar el DNS/enlaces al dominio nuevo, apagar el stack viejo (`docker compose -f docker-compose.prod.yml stop`, **nunca `down -v`**).
+3. Verificar, avisar del dominio nuevo (`soporte.nexusqtech.com`; el DNS ya apunta a Coolify desde el ensayo), apagar el stack viejo (`docker compose -f docker-compose.prod.yml stop`, **nunca `down -v`**).
 4. Actualizar en EmailJS/correos cualquier link con el dominio viejo (`share_link` usa `PUBLIC_ORIGIN`).
 
 ## Después
