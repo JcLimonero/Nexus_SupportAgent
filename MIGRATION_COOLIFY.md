@@ -42,3 +42,12 @@ Archivos: `docker-compose.coolify.yml`, `scripts/migrate/backup-for-migration.ps
 - Rotar la key de Gemini (`ops/ROTATE_GCP_KEY.md`) ya que el archivo se copió.
 - Límites que Traefik no replica: HSTS (agregarlo en Coolify o nginx si se quiere).
 - `deploy-prod.ps1` e `iis/` quedan obsoletos; borrarlos cuando el viejo se dé de baja.
+
+## Probado en local (2026-10-03)
+
+Se levantó `docker-compose.coolify.yml` dos veces (origen y destino, con distinto `DB_PASSWORD`), se sembró un documento real (2 chunks con embeddings), una sesión con mensajes con acentos y un archivo en `/data`, y se corrió backup → restore. Resultado: conteos iguales en las 8 tablas, hash idéntico de embeddings+contenido, archivo idéntico, y un JWT emitido en el origen fue aceptado por el destino. Por nginx: `/health` 200, `/api/status` 200, `/docs` 404, headers de seguridad presentes.
+
+Notas:
+- Si pruebas el restore desde **Git Bash en Windows**, exporta `MSYS_NO_PATHCONV=1` (reescribe las rutas `/tmp`). En el servidor Linux no aplica.
+- Con credenciales de Gemini inválidas, el monitor abre un banner `blocks_chat` solo a los ~3 min y viaja en el dump. Si el destino arranca con el banner, termínalo en `/admin/avisos` después de comprobar la key.
+- No probado aquí: Traefik/TLS reales y el streaming SSE a través de Traefik (no hay Coolify local). Verifícalo en el ensayo.

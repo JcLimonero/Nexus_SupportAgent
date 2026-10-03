@@ -12,7 +12,8 @@ set -euo pipefail
 
 DIR="${1:?usage: $0 <backup-dir>}"
 cd "$DIR"
-sha256sum -c SHA256SUMS
+# tr: tolerate CRLF if the files were edited/created on Windows
+tr -d '' < SHA256SUMS | sha256sum -c -
 
 DB="${DB_CONTAINER:-$(docker ps --format '{{.Names}}' | grep -E '^db-' | head -1)}"
 BE="${BACKEND_CONTAINER:-$(docker ps --format '{{.Names}}' | grep -E '^backend-' | head -1)}"
@@ -35,7 +36,9 @@ docker exec "$DB" rm -f /tmp/nexus_agent.dump
 echo "== restore uploaded files"
 docker start "$BE" >/dev/null
 docker cp nexus_data.tgz "$BE":/tmp/nexus_data.tgz
-docker exec "$BE" sh -c "tar xzf /tmp/nexus_data.tgz -C /data && rm /tmp/nexus_data.tgz"
+docker exec "$BE" tar xzf /tmp/nexus_data.tgz -C /data
+# docker cp leaves the temp file owned by root in a sticky /tmp
+docker exec -u root "$BE" rm -f /tmp/nexus_data.tgz
 
 echo "== verify against manifest"
 fail=0
@@ -47,7 +50,7 @@ while IFS='=' read -r key want; do
   esac
   want=$(echo "$want" | tr -d '[:space:]\r')
   if [[ "$got" == "$want" ]]; then echo "  ok   $key = $got"; else echo "  FAIL $key: expected $want, got $got"; fail=1; fi
-done < manifest.txt
+done < <(tr -d '' < manifest.txt)
 
 # response_cache may legitimately differ if the app flushed it on start.
 [[ $fail -eq 0 ]] && echo "RESTORE VERIFIED" || { echo "MISMATCH - do not cut over"; exit 1; }

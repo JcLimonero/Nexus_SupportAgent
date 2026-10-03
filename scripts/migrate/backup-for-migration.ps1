@@ -40,15 +40,18 @@ foreach ($t in $tables) {
 }
 $files = (Dc exec -T backend sh -c "find /data -type f | wc -l").Trim()
 $lines += "files:data=$files"
-$lines | Set-Content -Encoding ascii (Join-Path $OutDir "manifest.txt")
+# LF endings: these files are read by bash on the Linux host; CRLF breaks sha256sum.
+[IO.File]::WriteAllText((Join-Path $OutDir "manifest.txt"), (($lines -join "`n") + "`n"))
 
 Write-Host "== 4/4 checksums + sanity"
 $sums = foreach ($f in "nexus_agent.dump","nexus_data.tgz") {
     $p = Join-Path $OutDir $f
-    if ((Get-Item $p).Length -lt 1024) { throw "$f is suspiciously small" }
+    # Only the dump has a meaningful floor: a fresh install can have a tiny /data.
+    if ($f -eq "nexus_agent.dump" -and (Get-Item $p).Length -lt 1024) { throw "$f is suspiciously small" }
+    if ((Get-Item $p).Length -eq 0) { throw "$f is empty" }
     "$((Get-FileHash $p -Algorithm SHA256).Hash.ToLower())  $f"
 }
-$sums | Set-Content -Encoding ascii (Join-Path $OutDir "SHA256SUMS")
+[IO.File]::WriteAllText((Join-Path $OutDir "SHA256SUMS"), (($sums -join "`n") + "`n"))
 # The dump must be a readable archive, not just a non-empty file.
 Dc cp (Join-Path $OutDir "nexus_agent.dump") db:/tmp/check.dump
 Dc exec -T db sh -c "pg_restore --list /tmp/check.dump > /dev/null && rm /tmp/check.dump"
